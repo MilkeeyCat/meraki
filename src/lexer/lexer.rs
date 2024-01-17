@@ -57,9 +57,16 @@ impl Lexer {
                 }
             }
             b'-' => {
-                let end = self.lc();
+                if self.peek() == b'>' {
+                    self.read_char();
+                    let end = self.lc();
 
-                Token::new(TokenType::Minus, Span::new(start, end))
+                    Token::new(TokenType::Arrow, Span::new(start, end))
+                } else {
+                    let end = self.lc();
+
+                    Token::new(TokenType::Minus, Span::new(start, end))
+                }
             }
             b'+' => {
                 let end = self.lc();
@@ -70,6 +77,16 @@ impl Lexer {
                 let end = self.lc();
 
                 Token::new(TokenType::Slash, Span::new(start, end))
+            }
+            b'.' => {
+                let end = self.lc();
+
+                Token::new(TokenType::Period, Span::new(start, end))
+            }
+            b'&' => {
+                let end = self.lc();
+
+                Token::new(TokenType::Ampersand, Span::new(start, end))
             }
             b'!' => {
                 if self.peek() == b'=' {
@@ -242,5 +259,169 @@ impl Lexer {
 
             self.read_char();
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::lexer::TokenType;
+
+    use super::Lexer;
+
+    #[test]
+    fn source_into_tokens() -> Result<(), Box<dyn std::error::Error>> {
+        let input = r#"
+            [>.<] ->
+
+            let five: u8 = 5;
+            let p_five: *u8 = &five;
+            let mafs = 69 + 420 / 20 * 11;
+            let str: StrRef = "literal";
+            let uwu: bool = 1 == 1;
+            const ddnet: bool = true;
+
+            if five != mafs {
+                return true;
+            } else {
+                return false;
+            }
+
+            fn foo(a: u32, b: bool) {
+
+            }
+
+            struct Foo {
+
+            }
+
+            impl Foo  {
+
+            }
+
+            enum Bar {
+
+            }
+        "#;
+
+        let tokens = vec![
+            TokenType::LBracket,
+            TokenType::GreaterThan,
+            TokenType::Period,
+            TokenType::LessThan,
+            TokenType::RBracket,
+
+            TokenType::Arrow,
+
+            TokenType::Let,
+            TokenType::Ident(String::from("five")),
+            TokenType::Colon,
+            TokenType::Ident(String::from("u8")),
+            TokenType::Assign,
+            TokenType::Int(String::from("5")),
+            TokenType::Semicolon,
+
+            TokenType::Let,
+            TokenType::Ident(String::from("p_five")),
+            TokenType::Colon,
+            TokenType::Asterisk,
+            TokenType::Ident(String::from("u8")),
+            TokenType::Assign,
+            TokenType::Ampersand,
+            TokenType::Ident(String::from("five")),
+            TokenType::Semicolon,
+
+            TokenType::Let,
+            TokenType::Ident(String::from("mafs")),
+            TokenType::Assign,
+            TokenType::Int(String::from("69")),
+            TokenType::Plus,
+            TokenType::Int(String::from("420")),
+            TokenType::Slash,
+            TokenType::Int(String::from("20")),
+            TokenType::Asterisk,
+            TokenType::Int(String::from("11")),
+            TokenType::Semicolon,
+
+            TokenType::Let,
+            TokenType::Ident(String::from("str")),
+            TokenType::Colon,
+            TokenType::Ident(String::from("StrRef")),
+            TokenType::Assign,
+            TokenType::String(String::from("literal")),
+            TokenType::Semicolon,
+
+            TokenType::Let,
+            TokenType::Ident(String::from("uwu")),
+            TokenType::Colon,
+            TokenType::Ident(String::from("bool")),
+            TokenType::Assign,
+            TokenType::Int(String::from("1")),
+            TokenType::Equal,
+            TokenType::Int(String::from("1")),
+            TokenType::Semicolon,
+
+            TokenType::Const,
+            TokenType::Ident(String::from("ddnet")),
+            TokenType::Colon,
+            TokenType::Ident(String::from("bool")),
+            TokenType::Assign,
+            TokenType::True,
+            TokenType::Semicolon,
+
+            TokenType::If,
+            TokenType::Ident(String::from("five")),
+            TokenType::NotEqual,
+            TokenType::Ident(String::from("mafs")),
+            TokenType::LBrace,
+            TokenType::Return,
+            TokenType::True,
+            TokenType::Semicolon,
+            TokenType::RBrace,
+            TokenType::Else,
+            TokenType::LBrace,
+            TokenType::Return,
+            TokenType::False,
+            TokenType::Semicolon,
+            TokenType::RBrace,
+
+            TokenType::Function,
+            TokenType::Ident(String::from("foo")),
+            TokenType::LParen,
+            TokenType::Ident(String::from("a")),
+            TokenType::Colon,
+            TokenType::Ident(String::from("u32")),
+            TokenType::Comma,
+            TokenType::Ident(String::from("b")),
+            TokenType::Colon,
+            TokenType::Ident(String::from("bool")),
+            TokenType::RParen,
+            TokenType::LBrace,
+            TokenType::RBrace,
+
+            TokenType::Struct,
+            TokenType::Ident(String::from("Foo")),
+            TokenType::LBrace,
+            TokenType::RBrace,
+
+            TokenType::Impl,
+            TokenType::Ident(String::from("Foo")),
+            TokenType::LBrace,
+            TokenType::RBrace,
+
+            TokenType::Enum,
+            TokenType::Ident(String::from("Bar")),
+            TokenType::LBrace,
+            TokenType::RBrace,
+        ];
+
+        let mut lexer = Lexer::new(input.to_string());
+
+        for token in tokens {
+            let next_token = lexer.next_token()?.token_type;
+            println!("expected: {:?}, received: {:?}", token, next_token);
+            assert_eq!(token, next_token);
+        }
+
+        return Ok(());
     }
 }
