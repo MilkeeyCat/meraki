@@ -32,12 +32,9 @@ pub enum TokenType {
     LBracket,
     RBracket,
 
-    Function,
-    Let,
     Const,
     True,
     Enum,
-    Impl,
     Struct,
     False,
     If,

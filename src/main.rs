@@ -6,7 +6,7 @@ use lexer::{Lexer, TokenType};
 fn main() {
     let mut lexer = Lexer::new(
         r#"
-let a: u8 = 10;
+int a = 10;
         "#
         .to_string(),
     );

@@ -171,12 +171,9 @@ impl Lexer {
                 let end = self.lc();
 
                 return Ok(match ident.as_str() {
-                    "fn" => Token::new(TokenType::Function, Span::new(start, end)),
-                    "let" => Token::new(TokenType::Let, Span::new(start, end)),
                     "const" => Token::new(TokenType::Const, Span::new(start, end)),
                     "true" => Token::new(TokenType::True, Span::new(start, end)),
                     "enum" => Token::new(TokenType::Enum, Span::new(start, end)),
-                    "impl" => Token::new(TokenType::Impl, Span::new(start, end)),
                     "struct" => Token::new(TokenType::Struct, Span::new(start, end)),
                     "false" => Token::new(TokenType::False, Span::new(start, end)),
                     "if" => Token::new(TokenType::If, Span::new(start, end)),
@@ -271,36 +268,26 @@ mod test {
     #[test]
     fn source_into_tokens() -> Result<(), Box<dyn std::error::Error>> {
         let input = r#"
-            [>.<] ->
+            [>.<]->!-+/==!=:true,false
 
-            let five: u8 = 5;
-            let p_five: *u8 = &five;
-            let mafs = 69 + 420 / 20 * 11;
-            let str: StrRef = "literal";
-            let uwu: bool = 1 == 1;
-            const ddnet: bool = true;
+            const int a = 5;
+            int *b = &a;
+            char *str = "ddnet";
 
-            if five != mafs {
-                return true;
+            if(false) {
             } else {
-                return false;
             }
 
-            fn foo(a: u32, b: bool) {
-
+            int foo() {
+                return 69;
             }
 
             struct Foo {
-
-            }
-
-            impl Foo  {
-
             }
 
             enum Bar {
-
             }
+
         "#;
 
         let tokens = vec![
@@ -309,105 +296,58 @@ mod test {
             TokenType::Period,
             TokenType::LessThan,
             TokenType::RBracket,
-
             TokenType::Arrow,
-
-            TokenType::Let,
-            TokenType::Ident(String::from("five")),
+            TokenType::Bang,
+            TokenType::Minus,
+            TokenType::Plus,
+            TokenType::Slash,
+            TokenType::Equal,
+            TokenType::NotEqual,
             TokenType::Colon,
-            TokenType::Ident(String::from("u8")),
+            TokenType::True,
+            TokenType::Comma,
+            TokenType::False,
+            TokenType::Const,
+            TokenType::Ident(String::from("int")),
+            TokenType::Ident(String::from("a")),
             TokenType::Assign,
             TokenType::Int(String::from("5")),
             TokenType::Semicolon,
-
-            TokenType::Let,
-            TokenType::Ident(String::from("p_five")),
-            TokenType::Colon,
+            TokenType::Ident(String::from("int")),
             TokenType::Asterisk,
-            TokenType::Ident(String::from("u8")),
+            TokenType::Ident(String::from("b")),
             TokenType::Assign,
             TokenType::Ampersand,
-            TokenType::Ident(String::from("five")),
-            TokenType::Semicolon,
-
-            TokenType::Let,
-            TokenType::Ident(String::from("mafs")),
-            TokenType::Assign,
-            TokenType::Int(String::from("69")),
-            TokenType::Plus,
-            TokenType::Int(String::from("420")),
-            TokenType::Slash,
-            TokenType::Int(String::from("20")),
-            TokenType::Asterisk,
-            TokenType::Int(String::from("11")),
-            TokenType::Semicolon,
-
-            TokenType::Let,
-            TokenType::Ident(String::from("str")),
-            TokenType::Colon,
-            TokenType::Ident(String::from("StrRef")),
-            TokenType::Assign,
-            TokenType::String(String::from("literal")),
-            TokenType::Semicolon,
-
-            TokenType::Let,
-            TokenType::Ident(String::from("uwu")),
-            TokenType::Colon,
-            TokenType::Ident(String::from("bool")),
-            TokenType::Assign,
-            TokenType::Int(String::from("1")),
-            TokenType::Equal,
-            TokenType::Int(String::from("1")),
-            TokenType::Semicolon,
-
-            TokenType::Const,
-            TokenType::Ident(String::from("ddnet")),
-            TokenType::Colon,
-            TokenType::Ident(String::from("bool")),
-            TokenType::Assign,
-            TokenType::True,
-            TokenType::Semicolon,
-
-            TokenType::If,
-            TokenType::Ident(String::from("five")),
-            TokenType::NotEqual,
-            TokenType::Ident(String::from("mafs")),
-            TokenType::LBrace,
-            TokenType::Return,
-            TokenType::True,
-            TokenType::Semicolon,
-            TokenType::RBrace,
-            TokenType::Else,
-            TokenType::LBrace,
-            TokenType::Return,
-            TokenType::False,
-            TokenType::Semicolon,
-            TokenType::RBrace,
-
-            TokenType::Function,
-            TokenType::Ident(String::from("foo")),
-            TokenType::LParen,
             TokenType::Ident(String::from("a")),
-            TokenType::Colon,
-            TokenType::Ident(String::from("u32")),
-            TokenType::Comma,
-            TokenType::Ident(String::from("b")),
-            TokenType::Colon,
-            TokenType::Ident(String::from("bool")),
+            TokenType::Semicolon,
+            TokenType::Ident(String::from("char")),
+            TokenType::Asterisk,
+            TokenType::Ident(String::from("str")),
+            TokenType::Assign,
+            TokenType::String(String::from("ddnet")),
+            TokenType::Semicolon,
+            TokenType::If,
+            TokenType::LParen,
+            TokenType::False,
             TokenType::RParen,
             TokenType::LBrace,
             TokenType::RBrace,
-
+            TokenType::Else,
+            TokenType::LBrace,
+            TokenType::RBrace,
+            TokenType::Ident(String::from("int")),
+            TokenType::Ident(String::from("foo")),
+            TokenType::LParen,
+            TokenType::RParen,
+            TokenType::LBrace,
+            TokenType::Return,
+            TokenType::Int(String::from("69")),
+            TokenType::Semicolon,
+            TokenType::RBrace,
             TokenType::Struct,
             TokenType::Ident(String::from("Foo")),
             TokenType::LBrace,
             TokenType::RBrace,
-
-            TokenType::Impl,
-            TokenType::Ident(String::from("Foo")),
-            TokenType::LBrace,
-            TokenType::RBrace,
-
             TokenType::Enum,
             TokenType::Ident(String::from("Bar")),
             TokenType::LBrace,
