@@ -92,18 +92,18 @@ let heap_foo: *Foo = malloc(sizeof(Foo)) as Foo;
 ### Enums
 
 ```rust
-    enum Foo {
-        Bar,
-        Baz(Str),
-    }
+enum Foo {
+    Bar,
+    Baz(Str),
+}
 
-    impl Foo {
-        fn new_bar(): Self {
-            return Self::Bar;
-        }
+impl Foo {
+    fn new_bar(): Self {
+        return Self::Bar;
     }
+}
 
-    let bar: Foo = Foo::Bar;
-    let baz: Foo = Foo::Baz("value");
-    let new_bar: Foo = Foo::new_bar();
+let bar: Foo = Foo::Bar;
+let baz: Foo = Foo::Baz("value");
+let new_bar: Foo = Foo::new_bar();
 ```
