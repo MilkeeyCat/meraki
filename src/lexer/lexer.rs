@@ -287,7 +287,6 @@ mod test {
 
             enum Bar {
             }
-
         "#;
 
         let tokens = vec![
