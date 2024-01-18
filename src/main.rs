@@ -1,24 +1,16 @@
+mod codegen;
 mod lexer;
 mod parser;
 mod span;
 
+use codegen::CodeGen;
 use lexer::Lexer;
 use parser::Parser;
 
 fn main() {
-    let lexer = Lexer::new(
-        r#"
-        2 * 4 + 5 / 2
-        "#
-        .to_string(),
-    );
+    let lexer = Lexer::new("2 + 4 * 5 - 10 / 2".to_string());
 
     let mut parser = Parser::new(lexer);
-    dbg!(parser.bin_expr());
-
-    //let mut tok = lexer.next_token().unwrap();
-    //while tok.clone().token_type != TokenType::Eof {
-    //    dbg!(&tok);
-    //    tok = lexer.next_token().unwrap();
-    //}
+    let ast = parser.bin_expr(0);
+    CodeGen::new("./nasm/main.nasm", ast).generate();
 }

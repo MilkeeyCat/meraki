@@ -1,12 +1,27 @@
 use crate::lexer::{Lexer, Token, TokenType};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ASTNodeType {
     Add,
     Sub,
     Mult,
     Div,
     IntLit(String),
+}
+
+impl TokenType {
+    pub fn precedence(&self) -> u8 {
+        match self {
+            Self::Int(_) | Self::Eof => {
+                panic!("cant use it {:?}", self);
+            }
+            Self::Plus => 1,
+            Self::Minus => 1,
+            Self::Asterisk => 2,
+            Self::Slash => 2,
+            t => unreachable!("unknown type type {:?}", t),
+        }
+    }
 }
 
 impl From<&TokenType> for ASTNodeType {
@@ -22,11 +37,11 @@ impl From<&TokenType> for ASTNodeType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ASTNode {
-    op: ASTNodeType,
-    left: Option<Box<ASTNode>>,
-    right: Option<Box<ASTNode>>,
+    pub op: ASTNodeType,
+    pub left: Option<Box<ASTNode>>,
+    pub right: Option<Box<ASTNode>>,
 }
 
 impl ASTNode {
@@ -38,8 +53,8 @@ impl ASTNode {
 pub struct Parser {
     lexer: Lexer,
 
-    cur_token: Token,
-    peek_token: Token,
+    pub cur_token: Token,
+    pub peek_token: Token,
 }
 
 impl Parser {
@@ -74,19 +89,54 @@ impl Parser {
         };
     }
 
-    pub fn bin_expr(&mut self) -> ASTNode {
-        let left = self.primary();
+    pub fn bin_expr(&mut self, precedence: u8) -> ASTNode {
+        let mut left = self.primary();
 
         if self.cur_token_is(TokenType::Eof) {
             return left;
         }
 
-        let op = ASTNodeType::from(&self.cur_token.token_type);
+        // opration token: + - / * etc.
+        let mut token = self.cur_token.clone();
 
-        self.next_token();
+        while token.token_type.precedence() > precedence {
+            self.next_token();
+            let right = self.bin_expr(token.token_type.precedence());
 
-        let right = self.bin_expr();
+            left = ASTNode::new(
+                ASTNodeType::from(&token.token_type),
+                Some(Box::new(left)),
+                Some(Box::new(right)),
+            );
 
-        return ASTNode::new(op, Some(Box::new(left)), Some(Box::new(right)));
+            if self.cur_token_is(TokenType::Eof) {
+                return left;
+            }
+
+            token = self.cur_token.clone();
+        }
+
+        return left;
     }
+}
+
+pub fn interpret_ast(node: ASTNode) -> i32 {
+    let mut left: i32 = 0;
+    let mut right: i32 = 0;
+
+    if node.left.is_some() {
+        left = interpret_ast(*node.left.unwrap());
+    }
+
+    if node.right.is_some() {
+        right = interpret_ast(*node.right.unwrap());
+    }
+
+    return match node.op {
+        ASTNodeType::Add => left + right,
+        ASTNodeType::Sub => left - right,
+        ASTNodeType::Mult => left * right,
+        ASTNodeType::Div => left / right,
+        ASTNodeType::IntLit(int) => int.parse().unwrap(),
+    };
 }
