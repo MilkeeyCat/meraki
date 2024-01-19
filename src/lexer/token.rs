@@ -6,7 +6,7 @@ pub enum TokenType {
     Eof,
 
     Ident(String),
-    Int(String),
+    Integer(String),
     String(String),
 
     Assign,
@@ -22,6 +22,8 @@ pub enum TokenType {
     NotEqual,
     LessThan,
     GreaterThan,
+    LessEqual,
+    GreaterEqual,
     Comma,
     Semicolon,
     Colon,
@@ -40,6 +42,12 @@ pub enum TokenType {
     If,
     Else,
     Return,
+
+    Int,
+    Char,
+    Bool,
+    Float,
+    Double,
 }
 
 #[derive(Debug, Clone, PartialEq)]

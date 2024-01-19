@@ -106,14 +106,28 @@ impl Lexer {
                 Token::new(TokenType::Asterisk, Span::new(start, end))
             }
             b'<' => {
-                let end = self.lc();
+                if self.peek() == b'=' {
+                    self.read_char();
+                    let end = self.lc();
 
-                Token::new(TokenType::LessThan, Span::new(start, end))
+                    Token::new(TokenType::LessEqual, Span::new(start, end))
+                } else {
+                    let end = self.lc();
+
+                    Token::new(TokenType::LessThan, Span::new(start, end))
+                }
             }
             b'>' => {
-                let end = self.lc();
+                if self.peek() == b'=' {
+                    self.read_char();
+                    let end = self.lc();
 
-                Token::new(TokenType::GreaterThan, Span::new(start, end))
+                    Token::new(TokenType::GreaterEqual, Span::new(start, end))
+                } else {
+                    let end = self.lc();
+
+                    Token::new(TokenType::GreaterThan, Span::new(start, end))
+                }
             }
             b';' => {
                 let end = self.lc();
@@ -179,6 +193,11 @@ impl Lexer {
                     "if" => Token::new(TokenType::If, Span::new(start, end)),
                     "else" => Token::new(TokenType::Else, Span::new(start, end)),
                     "return" => Token::new(TokenType::Return, Span::new(start, end)),
+                    "int" => Token::new(TokenType::Int, Span::new(start, end)),
+                    "char" => Token::new(TokenType::Char, Span::new(start, end)),
+                    "bool" => Token::new(TokenType::Bool, Span::new(start, end)),
+                    "float" => Token::new(TokenType::Float, Span::new(start, end)),
+                    "double" => Token::new(TokenType::Double, Span::new(start, end)),
                     _ => Token::new(TokenType::Ident(ident), Span::new(start, end)),
                 });
             }
@@ -186,7 +205,7 @@ impl Lexer {
                 let int = self.read_int();
                 let end = self.lc();
 
-                return Ok(Token::new(TokenType::Int(int), Span::new(start, end)));
+                return Ok(Token::new(TokenType::Integer(int), Span::new(start, end)));
             }
             0 => {
                 let end = self.lc();
@@ -268,7 +287,7 @@ mod test {
     #[test]
     fn source_into_tokens() -> Result<(), Box<dyn std::error::Error>> {
         let input = r#"
-            [>.<]->!-+/==!=:true,false
+            [>.<]->!-+/==!=:true,false<=>=
 
             const int a = 5;
             int *b = &a;
@@ -306,20 +325,22 @@ mod test {
             TokenType::True,
             TokenType::Comma,
             TokenType::False,
+            TokenType::LessEqual,
+            TokenType::GreaterEqual,
             TokenType::Const,
-            TokenType::Ident(String::from("int")),
+            TokenType::Int,
             TokenType::Ident(String::from("a")),
             TokenType::Assign,
-            TokenType::Int(String::from("5")),
+            TokenType::Integer(String::from("5")),
             TokenType::Semicolon,
-            TokenType::Ident(String::from("int")),
+            TokenType::Int,
             TokenType::Asterisk,
             TokenType::Ident(String::from("b")),
             TokenType::Assign,
             TokenType::Ampersand,
             TokenType::Ident(String::from("a")),
             TokenType::Semicolon,
-            TokenType::Ident(String::from("char")),
+            TokenType::Char,
             TokenType::Asterisk,
             TokenType::Ident(String::from("str")),
             TokenType::Assign,
@@ -334,13 +355,13 @@ mod test {
             TokenType::Else,
             TokenType::LBrace,
             TokenType::RBrace,
-            TokenType::Ident(String::from("int")),
+            TokenType::Int,
             TokenType::Ident(String::from("foo")),
             TokenType::LParen,
             TokenType::RParen,
             TokenType::LBrace,
             TokenType::Return,
-            TokenType::Int(String::from("69")),
+            TokenType::Integer(String::from("69")),
             TokenType::Semicolon,
             TokenType::RBrace,
             TokenType::Struct,
