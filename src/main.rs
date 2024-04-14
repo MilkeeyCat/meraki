@@ -1,7 +1,6 @@
 mod codegen;
 mod lexer;
 mod parser;
-mod span;
 mod symtable;
 
 use lexer::Lexer;

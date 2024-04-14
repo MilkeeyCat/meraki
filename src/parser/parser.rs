@@ -1,6 +1,6 @@
 use crate::{
     codegen::CodeGen,
-    lexer::{Lexer, Token, TokenType},
+    lexer::{Lexer, Token},
     symtable::SymbolTable,
 };
 
@@ -23,7 +23,7 @@ pub enum ASTNodeType {
     DeclareVariable(String),
 }
 
-impl TokenType {
+impl Token {
     pub fn precedence(&self) -> u8 {
         match self {
             Self::Integer(_) | Self::Eof => {
@@ -38,20 +38,21 @@ impl TokenType {
     }
 }
 
-impl From<&TokenType> for ASTNodeType {
-    fn from(value: &TokenType) -> Self {
+impl From<&Token> for ASTNodeType {
+    fn from(value: &Token) -> Self {
+        use Token::*;
         return match value {
-            TokenType::Asterisk => Self::Mult,
-            TokenType::Plus => Self::Add,
-            TokenType::Minus => Self::Sub,
-            TokenType::Slash => Self::Div,
-            TokenType::Equal => Self::Equal,
-            TokenType::NotEqual => Self::NotEqual,
-            TokenType::LessThan => Self::LessThan,
-            TokenType::GreaterThan => Self::GreaterThan,
-            TokenType::LessEqual => Self::LessEqual,
-            TokenType::GreaterEqual => Self::GreaterEqual,
-            TokenType::Integer(int) => Self::IntLit(int.to_owned()),
+            Asterisk => Self::Mult,
+            Plus => Self::Add,
+            Minus => Self::Sub,
+            Slash => Self::Div,
+            Equal => Self::Equal,
+            NotEqual => Self::NotEqual,
+            LessThan => Self::LessThan,
+            GreaterThan => Self::GreaterThan,
+            LessEqual => Self::LessEqual,
+            GreaterEqual => Self::GreaterEqual,
+            Integer(int) => Self::IntLit(int.to_owned()),
             t => unreachable!("unknown token type {:?}", t),
         };
     }
@@ -93,61 +94,58 @@ impl Parser {
         self.peek_token = self.lexer.next_token().unwrap();
     }
 
-    fn cur_token_is(&self, token: TokenType) -> bool {
-        return self.cur_token.token_type == token;
+    fn cur_token_is(&self, token: Token) -> bool {
+        return self.cur_token == token;
     }
 
-    fn peek_token_is(&self, token: TokenType) -> bool {
-        return self.peek_token.token_type == token;
+    fn peek_token_is(&self, token: Token) -> bool {
+        return self.peek_token == token;
     }
 
     fn primary(&mut self) -> ASTNode {
         let token = self.cur_token.clone();
         self.next_token();
 
-        return match token.token_type {
-            TokenType::Integer(int) => ASTNode::new(ASTNodeType::IntLit(int), None, None),
-            TokenType::Ident(ident) => ASTNode::new(
+        return match token {
+            Token::Integer(int) => ASTNode::new(ASTNodeType::IntLit(int), None, None),
+            Token::Ident(ident) => ASTNode::new(
                 ASTNodeType::Ident(self.symtable.find(&ident).unwrap()),
                 None,
                 None,
             ),
-            t => unreachable!("syntax error on {:?}, got: {:?}", token.span, t),
+            t => unreachable!("syntax error, token: {:?}", t),
         };
     }
 
-    fn expect_peek(&mut self, token: TokenType) {
+    fn expect_peek(&mut self, token: Token) {
         if self.peek_token_is(token.clone()) {
             self.next_token();
         } else {
-            panic!(
-                "expected {:?}, got: {:?}",
-                token, self.peek_token.token_type
-            );
+            panic!("expected {:?}, got: {:?}", token, self.peek_token);
         }
     }
 
     pub fn bin_expr(&mut self, precedence: u8) -> ASTNode {
         let mut left = self.primary();
 
-        if self.cur_token_is(TokenType::Semicolon) {
+        if self.cur_token_is(Token::Semicolon) {
             return left;
         }
 
         // opration token: + - / * etc.
         let mut token = self.cur_token.clone();
 
-        while token.token_type.precedence() > precedence {
+        while token.precedence() > precedence {
             self.next_token();
-            let right = self.bin_expr(token.token_type.precedence());
+            let right = self.bin_expr(token.precedence());
 
             left = ASTNode::new(
-                ASTNodeType::from(&token.token_type),
+                ASTNodeType::from(&token),
                 Some(Box::new(left)),
                 Some(Box::new(right)),
             );
 
-            if self.cur_token_is(TokenType::Semicolon) {
+            if self.cur_token_is(Token::Semicolon) {
                 return left;
             }
 
@@ -161,16 +159,16 @@ impl Parser {
         let mut nodes: Vec<ASTNode> = vec![];
 
         loop {
-            match self.cur_token.token_type.clone() {
-                TokenType::Eof => break,
-                TokenType::Ident(ident) => {
+            match self.cur_token.clone() {
+                Token::Eof => break,
+                Token::Ident(ident) => {
                     if ident == "print" {
                         self.print_statement(&mut nodes);
                     } else {
                         self.assign_statement(&mut nodes);
                     }
                 }
-                TokenType::Int => {
+                Token::Int => {
                     self.var_declaration(&mut nodes);
                 }
                 t => {
@@ -185,31 +183,31 @@ impl Parser {
     }
 
     fn print_statement(&mut self, nodes: &mut Vec<ASTNode>) {
-        if !self.cur_token_is(TokenType::Ident(String::from("print"))) {
-            panic!("expected print, got: {:?}", self.peek_token.token_type);
+        if !self.cur_token_is(Token::Ident(String::from("print"))) {
+            panic!("expected print, got: {:?}", self.peek_token);
         }
         self.next_token();
 
         nodes.push(self.bin_expr(0));
 
-        //self.expect_peek(TokenType::Semicolon);
-        if !self.cur_token_is(TokenType::Semicolon) {
-            panic!("expected semi, got: {:?}", self.peek_token.token_type);
+        //self.expect_peek(Token::Semicolon);
+        if !self.cur_token_is(Token::Semicolon) {
+            panic!("expected semi, got: {:?}", self.peek_token);
         }
         self.next_token();
 
-        if self.cur_token_is(TokenType::Eof) {
+        if self.cur_token_is(Token::Eof) {
             return;
         }
     }
 
     fn var_declaration(&mut self, nodes: &mut Vec<ASTNode>) {
-        if !self.cur_token_is(TokenType::Int) {
-            panic!("expected int, got: {:?}", self.peek_token.token_type);
+        if !self.cur_token_is(Token::Int) {
+            panic!("expected int, got: {:?}", self.peek_token);
         }
         self.next_token();
 
-        if let TokenType::Ident(ident) = self.cur_token.token_type.clone() {
+        if let Token::Ident(ident) = self.cur_token.clone() {
             self.symtable.push(ident.clone());
             self.next_token();
 
@@ -217,22 +215,22 @@ impl Parser {
 
             nodes.push(node);
         } else {
-            panic!("expected ident, got: {:?}", self.peek_token.token_type);
+            panic!("expected ident, got: {:?}", self.peek_token);
         }
 
-        if !self.cur_token_is(TokenType::Semicolon) {
-            panic!("expected semi, got: {:?}", self.peek_token.token_type);
+        if !self.cur_token_is(Token::Semicolon) {
+            panic!("expected semi, got: {:?}", self.peek_token);
         }
         self.next_token();
     }
 
     fn assign_statement(&mut self, nodes: &mut Vec<ASTNode>) {
-        if let TokenType::Ident(ident) = self.cur_token.token_type.clone() {
+        if let Token::Ident(ident) = self.cur_token.clone() {
             let id = self.symtable.find(&ident).unwrap();
 
             let right = ASTNode::new(ASTNodeType::LvIdent(id), None, None);
 
-            self.expect_peek(TokenType::Assign);
+            self.expect_peek(Token::Assign);
             self.next_token();
 
             let left = self.bin_expr(0);
@@ -243,7 +241,7 @@ impl Parser {
                 Some(Box::new(right)),
             );
 
-            if let TokenType::Semicolon = self.cur_token.token_type {
+            if let Token::Semicolon = self.cur_token {
                 self.next_token()
             } else {
                 panic!("expected semmi");

@@ -1,7 +1,5 @@
-use crate::span::Span;
-
 #[derive(Debug, PartialEq, Clone)]
-pub enum TokenType {
+pub enum Token {
     Illegal,
     Eof,
 
@@ -48,16 +46,4 @@ pub enum TokenType {
     Bool,
     Float,
     Double,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Token {
-    pub token_type: TokenType,
-    pub span: Span,
-}
-
-impl Token {
-    pub fn new(token_type: TokenType, span: Span) -> Self {
-        return Self { token_type, span };
-    }
 }

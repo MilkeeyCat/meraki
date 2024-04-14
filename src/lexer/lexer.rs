@@ -1,6 +1,4 @@
-use crate::span::{LineColumn, Span};
-
-use super::{Token, TokenType};
+use super::Token;
 
 #[derive(Debug)]
 pub struct Lexer {
@@ -8,7 +6,6 @@ pub struct Lexer {
     position: usize,
     read_position: usize,
     ch: u8,
-    line_column: LineColumn,
 }
 
 impl Lexer {
@@ -18,7 +15,6 @@ impl Lexer {
             ch: 0,
             read_position: 0,
             position: 0,
-            line_column: LineColumn::default(),
         };
 
         lexer.read_char();
@@ -35,183 +31,90 @@ impl Lexer {
 
         self.position = self.read_position;
         self.read_position += 1;
-
-        self.line_column.column += 1;
     }
 
     pub fn next_token(&mut self) -> Result<Token, Box<dyn std::error::Error>> {
         self.skip_whitespace();
-        let start = self.lc();
-
         let tok = match self.ch {
             b'=' => {
                 if self.peek() == b'=' {
                     self.read_char();
-                    let end = self.lc();
-
-                    Token::new(TokenType::Equal, Span::new(start, end))
+                    Token::Equal
                 } else {
-                    let end = self.lc();
-
-                    Token::new(TokenType::Assign, Span::new(start, end))
+                    Token::Assign
                 }
             }
             b'-' => {
                 if self.peek() == b'>' {
                     self.read_char();
-                    let end = self.lc();
-
-                    Token::new(TokenType::Arrow, Span::new(start, end))
+                    Token::Arrow
                 } else {
-                    let end = self.lc();
-
-                    Token::new(TokenType::Minus, Span::new(start, end))
+                    Token::Minus
                 }
             }
-            b'+' => {
-                let end = self.lc();
-
-                Token::new(TokenType::Plus, Span::new(start, end))
-            }
-            b'/' => {
-                let end = self.lc();
-
-                Token::new(TokenType::Slash, Span::new(start, end))
-            }
-            b'.' => {
-                let end = self.lc();
-
-                Token::new(TokenType::Period, Span::new(start, end))
-            }
-            b'&' => {
-                let end = self.lc();
-
-                Token::new(TokenType::Ampersand, Span::new(start, end))
-            }
+            b'+' => Token::Plus,
+            b'/' => Token::Slash,
+            b'.' => Token::Period,
+            b'&' => Token::Ampersand,
             b'!' => {
                 if self.peek() == b'=' {
                     self.read_char();
-                    let end = self.lc();
-
-                    Token::new(TokenType::NotEqual, Span::new(start, end))
+                    Token::NotEqual
                 } else {
-                    let end = self.lc();
-
-                    Token::new(TokenType::Bang, Span::new(start, end))
+                    Token::Bang
                 }
             }
-            b'*' => {
-                let end = self.lc();
-
-                Token::new(TokenType::Asterisk, Span::new(start, end))
-            }
+            b'*' => Token::Asterisk,
             b'<' => {
                 if self.peek() == b'=' {
                     self.read_char();
-                    let end = self.lc();
-
-                    Token::new(TokenType::LessEqual, Span::new(start, end))
+                    Token::LessEqual
                 } else {
-                    let end = self.lc();
-
-                    Token::new(TokenType::LessThan, Span::new(start, end))
+                    Token::LessThan
                 }
             }
             b'>' => {
                 if self.peek() == b'=' {
                     self.read_char();
-                    let end = self.lc();
-
-                    Token::new(TokenType::GreaterEqual, Span::new(start, end))
+                    Token::GreaterEqual
                 } else {
-                    let end = self.lc();
-
-                    Token::new(TokenType::GreaterThan, Span::new(start, end))
+                    Token::GreaterThan
                 }
             }
-            b';' => {
-                let end = self.lc();
-
-                Token::new(TokenType::Semicolon, Span::new(start, end))
-            }
-            b'(' => {
-                let end = self.lc();
-
-                Token::new(TokenType::LParen, Span::new(start, end))
-            }
-            b')' => {
-                let end = self.lc();
-
-                Token::new(TokenType::RParen, Span::new(start, end))
-            }
-            b'{' => {
-                let end = self.lc();
-
-                Token::new(TokenType::LBrace, Span::new(start, end))
-            }
-            b'}' => {
-                let end = self.lc();
-
-                Token::new(TokenType::RBrace, Span::new(start, end))
-            }
-            b'[' => {
-                let end = self.lc();
-
-                Token::new(TokenType::LBracket, Span::new(start, end))
-            }
-            b']' => {
-                let end = self.lc();
-
-                Token::new(TokenType::RBracket, Span::new(start, end))
-            }
-            b',' => {
-                let end = self.lc();
-
-                Token::new(TokenType::Comma, Span::new(start, end))
-            }
-            b':' => {
-                let end = self.lc();
-
-                Token::new(TokenType::Colon, Span::new(start, end))
-            }
-            b'"' => {
-                let token_type = TokenType::String(self.read_string());
-                let end = self.lc();
-
-                Token::new(token_type, Span::new(start, end))
-            }
+            b';' => Token::Semicolon,
+            b'(' => Token::LParen,
+            b')' => Token::RParen,
+            b'{' => Token::LBrace,
+            b'}' => Token::RBrace,
+            b'[' => Token::LBracket,
+            b']' => Token::RBracket,
+            b',' => Token::Comma,
+            b':' => Token::Colon,
+            b'"' => Token::String(self.read_string()),
             b'a'..=b'z' | b'A'..=b'Z' | b'_' => {
                 let ident = self.read_ident();
-                let end = self.lc();
 
                 return Ok(match ident.as_str() {
-                    "const" => Token::new(TokenType::Const, Span::new(start, end)),
-                    "true" => Token::new(TokenType::True, Span::new(start, end)),
-                    "enum" => Token::new(TokenType::Enum, Span::new(start, end)),
-                    "struct" => Token::new(TokenType::Struct, Span::new(start, end)),
-                    "false" => Token::new(TokenType::False, Span::new(start, end)),
-                    "if" => Token::new(TokenType::If, Span::new(start, end)),
-                    "else" => Token::new(TokenType::Else, Span::new(start, end)),
-                    "return" => Token::new(TokenType::Return, Span::new(start, end)),
-                    "int" => Token::new(TokenType::Int, Span::new(start, end)),
-                    "char" => Token::new(TokenType::Char, Span::new(start, end)),
-                    "bool" => Token::new(TokenType::Bool, Span::new(start, end)),
-                    "float" => Token::new(TokenType::Float, Span::new(start, end)),
-                    "double" => Token::new(TokenType::Double, Span::new(start, end)),
-                    _ => Token::new(TokenType::Ident(ident), Span::new(start, end)),
+                    "const" => Token::Const,
+                    "true" => Token::True,
+                    "enum" => Token::Enum,
+                    "struct" => Token::Struct,
+                    "false" => Token::False,
+                    "if" => Token::If,
+                    "else" => Token::Else,
+                    "return" => Token::Return,
+                    "int" => Token::Int,
+                    "char" => Token::Char,
+                    "bool" => Token::Bool,
+                    "float" => Token::Float,
+                    "double" => Token::Double,
+                    _ => Token::Ident(ident),
                 });
             }
             b'0'..=b'9' => {
-                let int = self.read_int();
-                let end = self.lc();
-
-                return Ok(Token::new(TokenType::Integer(int), Span::new(start, end)));
+                return Ok(Token::Integer(self.read_int()));
             }
-            0 => {
-                let end = self.lc();
-
-                Token::new(TokenType::Eof, Span::new(start, end))
-            }
+            0 => Token::Eof,
             c => unreachable!("coudn't parse char {}, skill issue", char::from(c)),
         };
 
@@ -226,10 +129,6 @@ impl Lexer {
         }
 
         return self.input[self.read_position];
-    }
-
-    fn lc(&self) -> LineColumn {
-        return self.line_column.clone();
     }
 
     fn read_ident(&mut self) -> String {
@@ -268,11 +167,6 @@ impl Lexer {
 
     fn skip_whitespace(&mut self) {
         while self.ch.is_ascii_whitespace() {
-            if self.ch == b'\n' {
-                self.line_column.line += 1;
-                self.line_column.column = 0;
-            }
-
             self.read_char();
         }
     }
@@ -280,7 +174,7 @@ impl Lexer {
 
 #[cfg(test)]
 mod test {
-    use crate::lexer::TokenType;
+    use crate::lexer::Token;
 
     use super::Lexer;
 
@@ -309,75 +203,75 @@ mod test {
         "#;
 
         let tokens = vec![
-            TokenType::LBracket,
-            TokenType::GreaterThan,
-            TokenType::Period,
-            TokenType::LessThan,
-            TokenType::RBracket,
-            TokenType::Arrow,
-            TokenType::Bang,
-            TokenType::Minus,
-            TokenType::Plus,
-            TokenType::Slash,
-            TokenType::Equal,
-            TokenType::NotEqual,
-            TokenType::Colon,
-            TokenType::True,
-            TokenType::Comma,
-            TokenType::False,
-            TokenType::LessEqual,
-            TokenType::GreaterEqual,
-            TokenType::Const,
-            TokenType::Int,
-            TokenType::Ident(String::from("a")),
-            TokenType::Assign,
-            TokenType::Integer(String::from("5")),
-            TokenType::Semicolon,
-            TokenType::Int,
-            TokenType::Asterisk,
-            TokenType::Ident(String::from("b")),
-            TokenType::Assign,
-            TokenType::Ampersand,
-            TokenType::Ident(String::from("a")),
-            TokenType::Semicolon,
-            TokenType::Char,
-            TokenType::Asterisk,
-            TokenType::Ident(String::from("str")),
-            TokenType::Assign,
-            TokenType::String(String::from("ddnet")),
-            TokenType::Semicolon,
-            TokenType::If,
-            TokenType::LParen,
-            TokenType::False,
-            TokenType::RParen,
-            TokenType::LBrace,
-            TokenType::RBrace,
-            TokenType::Else,
-            TokenType::LBrace,
-            TokenType::RBrace,
-            TokenType::Int,
-            TokenType::Ident(String::from("foo")),
-            TokenType::LParen,
-            TokenType::RParen,
-            TokenType::LBrace,
-            TokenType::Return,
-            TokenType::Integer(String::from("69")),
-            TokenType::Semicolon,
-            TokenType::RBrace,
-            TokenType::Struct,
-            TokenType::Ident(String::from("Foo")),
-            TokenType::LBrace,
-            TokenType::RBrace,
-            TokenType::Enum,
-            TokenType::Ident(String::from("Bar")),
-            TokenType::LBrace,
-            TokenType::RBrace,
+            Token::LBracket,
+            Token::GreaterThan,
+            Token::Period,
+            Token::LessThan,
+            Token::RBracket,
+            Token::Arrow,
+            Token::Bang,
+            Token::Minus,
+            Token::Plus,
+            Token::Slash,
+            Token::Equal,
+            Token::NotEqual,
+            Token::Colon,
+            Token::True,
+            Token::Comma,
+            Token::False,
+            Token::LessEqual,
+            Token::GreaterEqual,
+            Token::Const,
+            Token::Int,
+            Token::Ident(String::from("a")),
+            Token::Assign,
+            Token::Integer(String::from("5")),
+            Token::Semicolon,
+            Token::Int,
+            Token::Asterisk,
+            Token::Ident(String::from("b")),
+            Token::Assign,
+            Token::Ampersand,
+            Token::Ident(String::from("a")),
+            Token::Semicolon,
+            Token::Char,
+            Token::Asterisk,
+            Token::Ident(String::from("str")),
+            Token::Assign,
+            Token::String(String::from("ddnet")),
+            Token::Semicolon,
+            Token::If,
+            Token::LParen,
+            Token::False,
+            Token::RParen,
+            Token::LBrace,
+            Token::RBrace,
+            Token::Else,
+            Token::LBrace,
+            Token::RBrace,
+            Token::Int,
+            Token::Ident(String::from("foo")),
+            Token::LParen,
+            Token::RParen,
+            Token::LBrace,
+            Token::Return,
+            Token::Integer(String::from("69")),
+            Token::Semicolon,
+            Token::RBrace,
+            Token::Struct,
+            Token::Ident(String::from("Foo")),
+            Token::LBrace,
+            Token::RBrace,
+            Token::Enum,
+            Token::Ident(String::from("Bar")),
+            Token::LBrace,
+            Token::RBrace,
         ];
 
         let mut lexer = Lexer::new(input.to_string());
 
         for token in tokens {
-            let next_token = lexer.next_token()?.token_type;
+            let next_token = lexer.next_token()?;
             println!("expected: {:?}, received: {:?}", token, next_token);
             assert_eq!(token, next_token);
         }
