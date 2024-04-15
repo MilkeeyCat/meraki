@@ -1,12 +1,11 @@
+use crate::{
+    parser::{ASTNode, ASTNodeType},
+    symtable::SymbolTable,
+};
 use std::{
     fmt::Display,
     fs::File,
     io::{BufWriter, Write},
-};
-
-use crate::{
-    parser::{ASTNode, ASTNodeType},
-    symtable::SymbolTable,
 };
 
 enum CmpType {
@@ -69,6 +68,10 @@ impl<'a> CodeGen<'a> {
                 Register::new("r11"),
             ],
         };
+    }
+
+    fn append(&mut self, line: &str) {
+        writeln!(self.writer, "{}", line).unwrap();
     }
 
     fn alloc_register(&mut self) -> usize {
@@ -135,67 +138,41 @@ impl<'a> CodeGen<'a> {
         self.postabmble();
     }
 
-    // functions to work with registers
-    // dont look below...
-
     fn preabmble(&mut self) {
-        self.writer
-            .write_all(
-                &format!(
-                    "section .data
-    fmt: db '%d', 10, 0
-
-section .text
-    extern printf
-    extern fflush
-    global main
-
-printint:
-    mov rsi, rdi
-    mov rdi, fmt
-    xor rax, rax
-
-    call printf
-
-    ret
-
-main:
-"
-                )
-                .into_bytes(),
-            )
-            .unwrap();
+        self.append(concat!(
+            "section .data\n",
+            "    fmt: db '%d', 10, 0\n",
+            "\n",
+            "section .text",
+            "    extern printf\n",
+            "    extern fflush\n",
+            "    global main\n",
+            "\n",
+            "printint:\n",
+            "    mov rsi, rdi\n",
+            "    mov rdi, fmt\n",
+            "    xor rax, rax\n",
+            "\n",
+            "    call printf\n",
+            "\n",
+            "    ret\n",
+            "\n",
+            "main:"
+        ));
     }
 
     fn postabmble(&mut self) {
-        self.writer
-            .write_all(
-                &format!(
-                    "
-    mov rax, 60
-    mov rsi, 0
-    syscall
-"
-                )
-                .into_bytes(),
-            )
-            .unwrap();
+        self.append(concat!(
+            "    mov rax, 60\n",
+            "    mov rsi, 0\n",
+            "    syscall"
+        ));
     }
 
     fn load(&mut self, name: String) -> usize {
         let r = self.alloc_register();
 
-        self.writer
-            .write_all(
-                &format!(
-                    "
-    mov {}, [{name}]
-",
-                    self.registers[r].name
-                )
-                .into_bytes(),
-            )
-            .unwrap();
+        self.append(&format!("    mov {}, [{name}]", self.registers[r].name));
 
         return r;
     }
@@ -203,32 +180,14 @@ main:
     fn loadint(&mut self, value: i32) -> usize {
         let r = self.alloc_register();
 
-        self.writer
-            .write_all(
-                &format!(
-                    "
-    mov {}, {value}
-",
-                    self.registers[r].name
-                )
-                .into_bytes(),
-            )
-            .unwrap();
+        self.append(&format!("    mov {}, {value}", self.registers[r].name));
 
         return r;
     }
 
     fn generate_variable(&mut self, name: String) -> usize {
-        self.writer
-            .write_all(
-                &format!(
-                    "
-    common {name} 8:8
-"
-                )
-                .into_bytes(),
-            )
-            .unwrap();
+        self.append(&format!("    common {name} 8:8"));
+
         self.free_all_registers();
 
         //this function should return nothing :|
@@ -236,106 +195,72 @@ main:
     }
 
     fn store(&mut self, reg: usize, name: String) -> usize {
-        self.writer
-            .write_all(
-                &format!(
-                    "
-    mov [{name}], {}
-",
-                    self.registers[reg].name
-                )
-                .into_bytes(),
-            )
-            .unwrap();
+        self.append(&format!("    mov [{name}], {}", self.registers[reg].name));
 
         return reg;
     }
 
     fn add(&mut self, r1: usize, r2: usize) -> usize {
-        self.writer
-            .write_all(
-                &format!(
-                    "
-    add {}, {}
-",
-                    self.registers[r1].name, self.registers[r2].name
-                )
-                .into_bytes(),
-            )
-            .unwrap();
+        self.append(&format!(
+            "    add {}, {}",
+            self.registers[r1].name, self.registers[r2].name
+        ));
         self.free_register(r2);
 
         return r1;
     }
 
     fn sub(&mut self, r1: usize, r2: usize) -> usize {
-        self.writer
-            .write_all(
-                &format!(
-                    "
-    sub {}, {}
-",
-                    self.registers[r1].name, self.registers[r2].name
-                )
-                .into_bytes(),
-            )
-            .unwrap();
+        self.append(&format!(
+            "    sub {}, {}",
+            self.registers[r1].name, self.registers[r2].name
+        ));
         self.free_register(r2);
 
         return r1;
     }
 
     fn mul(&mut self, r1: usize, r2: usize) -> usize {
-        self.writer
-            .write_all(
-                &format!(
-                    "
-    mov rax, {}
-    mul {}
-    mov {}, rax
-",
-                    self.registers[r1].name, self.registers[r2].name, self.registers[r1].name,
-                )
-                .into_bytes(),
-            )
-            .unwrap();
+        self.append(&format!(
+            "\tmov rax, {}\n\
+             \tmul {}\n\
+             \tmov {}, rax",
+            self.registers[r1].name, self.registers[r2].name, self.registers[r1].name,
+        ));
         self.free_register(r2);
 
         return r1;
     }
 
     fn div(&mut self, r1: usize, r2: usize) -> usize {
-        self.writer
-            .write_all(
-                &format!(
-                    "
-    mov rax, {}
-    idiv {}
-    mov {}, rax
-",
-                    self.registers[r1].name, self.registers[r2].name, self.registers[r1].name,
-                )
-                .into_bytes(),
-            )
-            .unwrap();
+        self.append(&format!(
+            "\tmov rax, {}\n\
+             \tidiv {}\n\
+             \tmov {}, rax",
+            self.registers[r1].name, self.registers[r2].name, self.registers[r1].name,
+        ));
         self.free_register(r2);
 
         return r1;
     }
 
     fn printint(&mut self, r: usize) {
-        self.writer
-            .write_all(
-                &format!(
-                    "
-    mov rdi, {}
-    call printint
-",
-                    self.registers[r].name
-                )
-                .into_bytes(),
-            )
-            .unwrap();
+        self.append(&format!(
+            "\tmov rdi, {}\n\
+             \tcall printint",
+            self.registers[r].name
+        ));
+    }
+
+    fn compare(&mut self, r1: usize, r2: usize, cmp_type: CmpType) -> usize {
+        self.append(&format!(
+            "\tcmp {}, {}\n\
+             \t{cmp_type} {}b",
+            self.registers[r1].name, self.registers[r2].name, self.registers[r2].name
+        ));
+        self.free_register(r1);
+
+        return r2;
     }
 
     fn equal(&mut self, r1: usize, r2: usize) -> usize {
@@ -360,23 +285,5 @@ main:
 
     fn greater_equal(&mut self, r1: usize, r2: usize) -> usize {
         return self.compare(r1, r2, CmpType::GreaterEqual);
-    }
-
-    fn compare(&mut self, r1: usize, r2: usize, cmp_type: CmpType) -> usize {
-        self.writer
-            .write_all(
-                &format!(
-                    "
-                cmp {}, {}
-                {cmp_type} {}b
-",
-                    self.registers[r1].name, self.registers[r2].name, self.registers[r2].name
-                )
-                .into_bytes(),
-            )
-            .unwrap();
-        self.free_register(r1);
-
-        return r2;
     }
 }
