@@ -2,6 +2,7 @@ use crate::{
     parser::{ASTNode, ASTNodeType},
     symtable::SymbolTable,
 };
+use indoc::writedoc;
 use std::{
     fmt::Display,
     fs::File,
@@ -70,10 +71,6 @@ impl<'a> CodeGen<'a> {
         };
     }
 
-    fn append(&mut self, line: &str) {
-        writeln!(self.writer, "{}", line).unwrap();
-    }
-
     fn alloc_register(&mut self) -> usize {
         for (i, register) in self.registers.iter_mut().enumerate() {
             if register.in_use == false {
@@ -139,40 +136,55 @@ impl<'a> CodeGen<'a> {
     }
 
     fn preabmble(&mut self) {
-        self.append(concat!(
-            "section .data\n",
-            "    fmt: db '%d', 10, 0\n",
-            "\n",
-            "section .text",
-            "    extern printf\n",
-            "    extern fflush\n",
-            "    global main\n",
-            "\n",
-            "printint:\n",
-            "    mov rsi, rdi\n",
-            "    mov rdi, fmt\n",
-            "    xor rax, rax\n",
-            "\n",
-            "    call printf\n",
-            "\n",
-            "    ret\n",
-            "\n",
-            "main:"
-        ));
+        writedoc!(
+            self.writer,
+            "
+            section .data
+                fmt: db '%d', 10, 0
+
+            section .text
+                extern printf
+                extern fflush
+                global main
+
+            printint:
+                mov rsi, rdi
+                mov rdi, fmt
+                xor rax, rax
+
+                call printf
+
+                ret
+
+            main:
+            "
+        )
+        .unwrap();
     }
 
     fn postabmble(&mut self) {
-        self.append(concat!(
-            "    mov rax, 60\n",
-            "    mov rsi, 0\n",
-            "    syscall"
-        ));
+        writedoc!(
+            self.writer,
+            "
+            \tmov rax, 60
+            \tmov rsi, 0
+            \tsyscall
+            "
+        )
+        .unwrap();
     }
 
     fn load(&mut self, name: String) -> usize {
         let r = self.alloc_register();
 
-        self.append(&format!("    mov {}, [{name}]", self.registers[r].name));
+        writedoc!(
+            self.writer,
+            "
+            \tmov {}, [{name}]
+            ",
+            self.registers[r].name
+        )
+        .unwrap();
 
         return r;
     }
@@ -180,14 +192,26 @@ impl<'a> CodeGen<'a> {
     fn loadint(&mut self, value: i32) -> usize {
         let r = self.alloc_register();
 
-        self.append(&format!("    mov {}, {value}", self.registers[r].name));
+        writedoc!(
+            self.writer,
+            "
+            \tmov {}, {value}
+            ",
+            self.registers[r].name
+        )
+        .unwrap();
 
         return r;
     }
 
     fn generate_variable(&mut self, name: String) -> usize {
-        self.append(&format!("    common {name} 8:8"));
-
+        writedoc!(
+            self.writer,
+            "
+            \tcommon {name} 8:8
+            "
+        )
+        .unwrap();
         self.free_all_registers();
 
         //this function should return nothing :|
@@ -195,69 +219,108 @@ impl<'a> CodeGen<'a> {
     }
 
     fn store(&mut self, reg: usize, name: String) -> usize {
-        self.append(&format!("    mov [{name}], {}", self.registers[reg].name));
+        writedoc!(
+            self.writer,
+            "
+            \tmov [{name}], {}
+            ",
+            self.registers[reg].name
+        )
+        .unwrap();
 
         return reg;
     }
 
     fn add(&mut self, r1: usize, r2: usize) -> usize {
-        self.append(&format!(
-            "    add {}, {}",
-            self.registers[r1].name, self.registers[r2].name
-        ));
+        writedoc!(
+            self.writer,
+            "
+            \tadd {}, {}
+            ",
+            self.registers[r1].name,
+            self.registers[r2].name
+        )
+        .unwrap();
         self.free_register(r2);
 
         return r1;
     }
 
     fn sub(&mut self, r1: usize, r2: usize) -> usize {
-        self.append(&format!(
-            "    sub {}, {}",
-            self.registers[r1].name, self.registers[r2].name
-        ));
+        writedoc!(
+            self.writer,
+            "
+            \tsub {}, {}
+            ",
+            self.registers[r1].name,
+            self.registers[r2].name
+        )
+        .unwrap();
         self.free_register(r2);
 
         return r1;
     }
 
     fn mul(&mut self, r1: usize, r2: usize) -> usize {
-        self.append(&format!(
-            "\tmov rax, {}\n\
-             \tmul {}\n\
-             \tmov {}, rax",
-            self.registers[r1].name, self.registers[r2].name, self.registers[r1].name,
-        ));
+        writedoc!(
+            self.writer,
+            "
+            \tmov rax, {}
+            \tmul {}
+            \tmov {}, rax
+            ",
+            self.registers[r1].name,
+            self.registers[r2].name,
+            self.registers[r1].name,
+        )
+        .unwrap();
         self.free_register(r2);
 
         return r1;
     }
 
     fn div(&mut self, r1: usize, r2: usize) -> usize {
-        self.append(&format!(
-            "\tmov rax, {}\n\
-             \tidiv {}\n\
-             \tmov {}, rax",
-            self.registers[r1].name, self.registers[r2].name, self.registers[r1].name,
-        ));
+        writedoc!(
+            self.writer,
+            "
+            \tmov rax, {}
+            \tidiv {}
+            \tmov {}, rax
+             ",
+            self.registers[r1].name,
+            self.registers[r2].name,
+            self.registers[r1].name,
+        )
+        .unwrap();
         self.free_register(r2);
 
         return r1;
     }
 
     fn printint(&mut self, r: usize) {
-        self.append(&format!(
-            "\tmov rdi, {}\n\
-             \tcall printint",
+        writedoc!(
+            self.writer,
+            "
+            \tmov rdi, {}
+            \tcall printint
+             ",
             self.registers[r].name
-        ));
+        )
+        .unwrap();
     }
 
     fn compare(&mut self, r1: usize, r2: usize, cmp_type: CmpType) -> usize {
-        self.append(&format!(
-            "\tcmp {}, {}\n\
-             \t{cmp_type} {}b",
-            self.registers[r1].name, self.registers[r2].name, self.registers[r2].name
-        ));
+        writedoc!(
+            self.writer,
+            "
+            \tcmp {}, {}
+            \t{cmp_type} {}b
+             ",
+            self.registers[r1].name,
+            self.registers[r2].name,
+            self.registers[r2].name
+        )
+        .unwrap();
         self.free_register(r1);
 
         return r2;
