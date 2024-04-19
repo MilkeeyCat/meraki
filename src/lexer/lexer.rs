@@ -16,10 +16,9 @@ impl Lexer {
             read_position: 0,
             position: 0,
         };
-
         lexer.read_char();
 
-        return lexer;
+        lexer
     }
 
     fn read_char(&mut self) {
@@ -35,7 +34,7 @@ impl Lexer {
 
     pub fn next_token(&mut self) -> Result<Token, Box<dyn std::error::Error>> {
         self.skip_whitespace();
-        let tok = match self.ch {
+        let token = match self.ch {
             b'=' => {
                 if self.peek() == b'=' {
                     self.read_char();
@@ -120,7 +119,7 @@ impl Lexer {
 
         self.read_char();
 
-        return Ok(tok);
+        Ok(token)
     }
 
     fn peek(&self) -> u8 {
@@ -128,7 +127,7 @@ impl Lexer {
             return 0;
         }
 
-        return self.input[self.read_position];
+        self.input[self.read_position]
     }
 
     fn read_ident(&mut self) -> String {
@@ -138,7 +137,7 @@ impl Lexer {
             self.read_char();
         }
 
-        return String::from_utf8_lossy(&self.input[pos..self.position]).to_string();
+        String::from_utf8_lossy(&self.input[pos..self.position]).to_string()
     }
 
     fn read_int(&mut self) -> String {
@@ -148,7 +147,7 @@ impl Lexer {
             self.read_char();
         }
 
-        return String::from_utf8_lossy(&self.input[pos..self.position]).to_string();
+        String::from_utf8_lossy(&self.input[pos..self.position]).to_string()
     }
 
     fn read_string(&mut self) -> String {
@@ -162,7 +161,7 @@ impl Lexer {
             }
         }
 
-        return String::from_utf8_lossy(&self.input[pos..self.position]).to_string();
+        String::from_utf8_lossy(&self.input[pos..self.position]).to_string()
     }
 
     fn skip_whitespace(&mut self) {
@@ -174,9 +173,8 @@ impl Lexer {
 
 #[cfg(test)]
 mod test {
-    use crate::lexer::Token;
-
     use super::Lexer;
+    use crate::lexer::Token;
 
     #[test]
     fn source_into_tokens() -> Result<(), Box<dyn std::error::Error>> {
@@ -276,6 +274,6 @@ mod test {
             assert_eq!(token, next_token);
         }
 
-        return Ok(());
+        Ok(())
     }
 }

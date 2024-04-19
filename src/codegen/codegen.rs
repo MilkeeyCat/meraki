@@ -29,7 +29,7 @@ impl Display for CmpType {
             Self::NotEqual => "setne",
         };
 
-        return f.write_str(s);
+        f.write_str(s)
     }
 }
 
@@ -40,10 +40,10 @@ struct Register<'a> {
 
 impl<'a> Register<'a> {
     pub fn new(name: &'a str) -> Self {
-        return Self {
+        Self {
             name,
             in_use: false,
-        };
+        }
     }
 }
 
@@ -58,7 +58,7 @@ impl<'a> CodeGen<'a> {
     pub fn new(path: &str, program: Vec<ASTNode>, symtable: SymbolTable) -> Self {
         let file = File::create(path).unwrap();
 
-        return Self {
+        Self {
             program,
             symtable,
             writer: BufWriter::new(file),
@@ -68,7 +68,7 @@ impl<'a> CodeGen<'a> {
                 Register::new("r10"),
                 Register::new("r11"),
             ],
-        };
+        }
     }
 
     fn alloc_register(&mut self) -> usize {
@@ -105,7 +105,7 @@ impl<'a> CodeGen<'a> {
             right = self.compile(*node.right.unwrap(), Some(left));
         }
 
-        return match node.op {
+        match node.op {
             ASTNodeType::Add => self.add(left, right),
             ASTNodeType::Sub => self.sub(left, right),
             ASTNodeType::Mult => self.mul(left, right),
@@ -121,7 +121,7 @@ impl<'a> CodeGen<'a> {
             ASTNodeType::IntLit(int) => self.loadint(int.parse().unwrap()),
             ASTNodeType::Assign => right,
             ASTNodeType::DeclareVariable(var_name) => self.generate_variable(var_name),
-        };
+        }
     }
 
     pub fn generate(&mut self) {
@@ -186,7 +186,7 @@ impl<'a> CodeGen<'a> {
         )
         .unwrap();
 
-        return r;
+        r
     }
 
     fn loadint(&mut self, value: i32) -> usize {
@@ -201,7 +201,7 @@ impl<'a> CodeGen<'a> {
         )
         .unwrap();
 
-        return r;
+        r
     }
 
     fn generate_variable(&mut self, name: String) -> usize {
@@ -215,20 +215,20 @@ impl<'a> CodeGen<'a> {
         self.free_all_registers();
 
         //this function should return nothing :|
-        return 69420;
+        69420
     }
 
-    fn store(&mut self, reg: usize, name: String) -> usize {
+    fn store(&mut self, r: usize, name: String) -> usize {
         writedoc!(
             self.writer,
             "
             \tmov [{name}], {}
             ",
-            self.registers[reg].name
+            self.registers[r].name
         )
         .unwrap();
 
-        return reg;
+        r
     }
 
     fn add(&mut self, r1: usize, r2: usize) -> usize {
@@ -243,7 +243,7 @@ impl<'a> CodeGen<'a> {
         .unwrap();
         self.free_register(r2);
 
-        return r1;
+        r1
     }
 
     fn sub(&mut self, r1: usize, r2: usize) -> usize {
@@ -258,7 +258,7 @@ impl<'a> CodeGen<'a> {
         .unwrap();
         self.free_register(r2);
 
-        return r1;
+        r1
     }
 
     fn mul(&mut self, r1: usize, r2: usize) -> usize {
@@ -276,7 +276,7 @@ impl<'a> CodeGen<'a> {
         .unwrap();
         self.free_register(r2);
 
-        return r1;
+        r1
     }
 
     fn div(&mut self, r1: usize, r2: usize) -> usize {
@@ -294,7 +294,7 @@ impl<'a> CodeGen<'a> {
         .unwrap();
         self.free_register(r2);
 
-        return r1;
+        r1
     }
 
     fn printint(&mut self, r: usize) {
@@ -323,30 +323,30 @@ impl<'a> CodeGen<'a> {
         .unwrap();
         self.free_register(r1);
 
-        return r2;
+        r2
     }
 
     fn equal(&mut self, r1: usize, r2: usize) -> usize {
-        return self.compare(r1, r2, CmpType::Equal);
+        self.compare(r1, r2, CmpType::Equal)
     }
 
     fn not_equal(&mut self, r1: usize, r2: usize) -> usize {
-        return self.compare(r1, r2, CmpType::NotEqual);
+        self.compare(r1, r2, CmpType::NotEqual)
     }
 
     fn less_than(&mut self, r1: usize, r2: usize) -> usize {
-        return self.compare(r1, r2, CmpType::LessThan);
+        self.compare(r1, r2, CmpType::LessThan)
     }
 
     fn greater_than(&mut self, r1: usize, r2: usize) -> usize {
-        return self.compare(r1, r2, CmpType::GreaterThan);
+        self.compare(r1, r2, CmpType::GreaterThan)
     }
 
     fn less_equal(&mut self, r1: usize, r2: usize) -> usize {
-        return self.compare(r1, r2, CmpType::LessEqual);
+        self.compare(r1, r2, CmpType::LessEqual)
     }
 
     fn greater_equal(&mut self, r1: usize, r2: usize) -> usize {
-        return self.compare(r1, r2, CmpType::GreaterEqual);
+        self.compare(r1, r2, CmpType::GreaterEqual)
     }
 }

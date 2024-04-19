@@ -16,10 +16,10 @@ pub enum ASTNodeType {
     GreaterThan,
     LessEqual,
     GreaterEqual,
+    Assign,
     IntLit(String),
     Ident(usize),
     LvIdent(usize),
-    Assign,
     DeclareVariable(String),
 }
 
@@ -41,7 +41,7 @@ impl Token {
 impl From<&Token> for ASTNodeType {
     fn from(value: &Token) -> Self {
         use Token::*;
-        return match value {
+        match value {
             Asterisk => Self::Mult,
             Plus => Self::Add,
             Minus => Self::Sub,
@@ -54,7 +54,7 @@ impl From<&Token> for ASTNodeType {
             GreaterEqual => Self::GreaterEqual,
             Integer(int) => Self::IntLit(int.to_owned()),
             t => unreachable!("unknown token type {:?}", t),
-        };
+        }
     }
 }
 
@@ -67,7 +67,7 @@ pub struct ASTNode {
 
 impl ASTNode {
     pub fn new(op: ASTNodeType, left: Option<Box<ASTNode>>, right: Option<Box<ASTNode>>) -> Self {
-        return Self { op, left, right };
+        Self { op, left, right }
     }
 }
 
@@ -81,12 +81,12 @@ pub struct Parser {
 
 impl Parser {
     pub fn new(mut lexer: Lexer) -> Self {
-        return Self {
+        Self {
             cur_token: lexer.next_token().unwrap(),
             peek_token: lexer.next_token().unwrap(),
             symtable: SymbolTable::new(),
             lexer,
-        };
+        }
     }
 
     fn next_token(&mut self) {
@@ -95,18 +95,18 @@ impl Parser {
     }
 
     fn cur_token_is(&self, token: Token) -> bool {
-        return self.cur_token == token;
+        self.cur_token == token
     }
 
     fn peek_token_is(&self, token: Token) -> bool {
-        return self.peek_token == token;
+        self.peek_token == token
     }
 
     fn primary(&mut self) -> ASTNode {
         let token = self.cur_token.clone();
         self.next_token();
 
-        return match token {
+        match token {
             Token::Integer(int) => ASTNode::new(ASTNodeType::IntLit(int), None, None),
             Token::Ident(ident) => ASTNode::new(
                 ASTNodeType::Ident(self.symtable.find(&ident).unwrap()),
@@ -114,7 +114,7 @@ impl Parser {
                 None,
             ),
             t => unreachable!("syntax error, token: {:?}", t),
-        };
+        }
     }
 
     fn expect_peek(&mut self, token: Token) {
@@ -152,7 +152,7 @@ impl Parser {
             token = self.cur_token.clone();
         }
 
-        return left;
+        left
     }
 
     pub fn statements(&mut self) {

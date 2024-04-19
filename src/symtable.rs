@@ -7,25 +7,25 @@ pub struct SymbolTable {
 
 impl SymbolTable {
     pub fn new() -> Self {
-        return Self { symbols: vec![] };
+        Self {
+            symbols: Vec::new(),
+        }
     }
 
     pub fn get(&self, id: usize) -> Option<String> {
-        return self
-            .symbols
+        self.symbols
             .iter()
             .enumerate()
             .find(|(i, _)| *i == id)
-            .map(|(_, val)| val.to_owned());
+            .map(|(_, val)| val.to_owned())
     }
 
     pub fn find(&self, name: &str) -> Option<usize> {
-        return self
-            .symbols
+        self.symbols
             .iter()
             .enumerate()
             .find(|(_, val)| *val == name)
-            .map(|(i, _)| i);
+            .map(|(i, _)| i)
     }
 
     pub fn push(&mut self, name: String) -> usize {
@@ -41,6 +41,6 @@ impl SymbolTable {
 
         self.symbols.push(name);
 
-        return len;
+        len
     }
 }
