@@ -7,7 +7,7 @@ use lexer::Lexer;
 use parser::Parser;
 
 fn main() {
-    let lexer = Lexer::new("print 6 != 6;".to_string());
+    let lexer = Lexer::new("1 - (2 + 3) + 3".to_string());
 
     let mut parser = Parser::new(lexer);
     parser.statements();

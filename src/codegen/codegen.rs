@@ -1,7 +1,4 @@
-use crate::{
-    parser::{ASTNode, ASTNodeType},
-    symtable::SymbolTable,
-};
+use crate::{parser::Expr, symtable::SymbolTable};
 use indoc::writedoc;
 use std::{
     fmt::Display,
@@ -48,14 +45,14 @@ impl<'a> Register<'a> {
 }
 
 pub struct CodeGen<'a> {
-    program: Vec<ASTNode>,
+    program: Vec<Expr>,
     symtable: SymbolTable,
     writer: BufWriter<File>,
     registers: [Register<'a>; 4],
 }
 
 impl<'a> CodeGen<'a> {
-    pub fn new(path: &str, program: Vec<ASTNode>, symtable: SymbolTable) -> Self {
+    pub fn new(path: &str, program: Vec<Expr>, symtable: SymbolTable) -> Self {
         let file = File::create(path).unwrap();
 
         Self {
@@ -93,45 +90,47 @@ impl<'a> CodeGen<'a> {
         self.registers[id].in_use = false;
     }
 
-    fn compile(&mut self, node: ASTNode, reg: Option<usize>) -> usize {
+    fn compile(&mut self, node: Expr, reg: Option<usize>) -> usize {
         let mut left: usize = 0;
         let mut right: usize = 0;
 
-        if node.left.is_some() {
-            left = self.compile(*node.left.unwrap(), None);
-        }
+        69
 
-        if node.right.is_some() {
-            right = self.compile(*node.right.unwrap(), Some(left));
-        }
+        //if node.left.is_some() {
+        //    left = self.compile(*node.left.unwrap(), None);
+        //}
 
-        match node.op {
-            ASTNodeType::Add => self.add(left, right),
-            ASTNodeType::Sub => self.sub(left, right),
-            ASTNodeType::Mult => self.mul(left, right),
-            ASTNodeType::Div => self.div(left, right),
-            ASTNodeType::Equal => self.equal(left, right),
-            ASTNodeType::NotEqual => self.not_equal(left, right),
-            ASTNodeType::LessThan => self.less_than(left, right),
-            ASTNodeType::GreaterThan => self.greater_than(left, right),
-            ASTNodeType::LessEqual => self.less_equal(left, right),
-            ASTNodeType::GreaterEqual => self.greater_equal(left, right),
-            ASTNodeType::LvIdent(id) => self.store(reg.unwrap(), self.symtable.get(id).unwrap()),
-            ASTNodeType::Ident(id) => self.load(self.symtable.get(id).unwrap()),
-            ASTNodeType::IntLit(int) => self.loadint(int.parse().unwrap()),
-            ASTNodeType::Assign => right,
-            ASTNodeType::DeclareVariable(var_name) => self.generate_variable(var_name),
-        }
+        //if node.right.is_some() {
+        //    right = self.compile(*node.right.unwrap(), Some(left));
+        //}
+
+        //match node.op {
+        //    ASTNodeType::Add => self.add(left, right),
+        //    ASTNodeType::Sub => self.sub(left, right),
+        //    ASTNodeType::Mult => self.mul(left, right),
+        //    ASTNodeType::Div => self.div(left, right),
+        //    ASTNodeType::Equal => self.equal(left, right),
+        //    ASTNodeType::NotEqual => self.not_equal(left, right),
+        //    ASTNodeType::LessThan => self.less_than(left, right),
+        //    ASTNodeType::GreaterThan => self.greater_than(left, right),
+        //    ASTNodeType::LessEqual => self.less_equal(left, right),
+        //    ASTNodeType::GreaterEqual => self.greater_equal(left, right),
+        //    ASTNodeType::LvIdent(id) => self.store(reg.unwrap(), self.symtable.get(id).unwrap()),
+        //    ASTNodeType::Ident(id) => self.load(self.symtable.get(id).unwrap()),
+        //    ASTNodeType::IntLit(int) => self.loadint(int.parse().unwrap()),
+        //    ASTNodeType::Assign => right,
+        //    ASTNodeType::DeclareVariable(var_name) => self.generate_variable(var_name),
+        //}
     }
 
     pub fn generate(&mut self) {
         self.preabmble();
-        for node in self.program.clone() {
-            let res = self.compile(node, None);
-            if res != 69420 {
-                self.printint(res);
-            }
-        }
+        //for node in self.program.clone() {
+        //    let res = self.compile(node, None);
+        //    if res != 69420 {
+        //        self.printint(res);
+        //    }
+        //}
         self.postabmble();
     }
 
