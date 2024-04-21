@@ -1,6 +1,6 @@
 use crate::lexer::Token;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum BinOp {
     Add,
     Sub,
@@ -32,7 +32,7 @@ impl From<&Token> for BinOp {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expr {
     Return(ExprReturn),
     Binary(ExprBinary),
@@ -41,10 +41,10 @@ pub enum Expr {
     Ident(String),
 }
 
-#[derive(Debug)]
-struct ExprReturn {}
+#[derive(Debug, Clone)]
+pub struct ExprReturn {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ExprBinary {
     op: BinOp,
     left: Option<Box<Expr>>,
@@ -55,9 +55,21 @@ impl ExprBinary {
     pub fn new(op: BinOp, left: Option<Box<Expr>>, right: Option<Box<Expr>>) -> Self {
         Self { op, left, right }
     }
+
+    pub fn op(&self) -> &BinOp {
+        return &self.op;
+    }
+
+    pub fn left(&self) -> &Option<Box<Expr>> {
+        return &self.left;
+    }
+
+    pub fn right(&self) -> &Option<Box<Expr>> {
+        return &self.right;
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ExprLit {
     Bool(bool),
     Float(f64),
@@ -65,7 +77,7 @@ pub enum ExprLit {
     Str(String),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum UnOp {
     Not,
     Negative,
@@ -81,7 +93,7 @@ impl From<&Token> for UnOp {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ExprUnary {
     op: UnOp,
     expr: Box<Expr>,

@@ -3,12 +3,14 @@ mod lexer;
 mod parser;
 mod symtable;
 
+use codegen::CodeGen;
 use lexer::Lexer;
 use parser::Parser;
 
 fn main() {
-    let lexer = Lexer::new("1 - (2 + 3) + 3".to_string());
+    let lexer = Lexer::new("(1 + (2 + ( 4 + 5 )))".to_string());
 
     let mut parser = Parser::new(lexer);
-    parser.statements();
+    let exprs = parser.statements();
+    CodeGen::new("./nasm/main.nasm", exprs, parser.symtable).generate();
 }

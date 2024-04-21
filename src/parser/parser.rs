@@ -11,7 +11,7 @@ type InfixParseFn = fn(&mut Parser, Expr) -> Expr;
 
 pub struct Parser {
     lexer: Lexer,
-    symtable: SymbolTable,
+    pub symtable: SymbolTable,
     pub cur_token: Token,
     pub peek_token: Token,
     pub prefix_parse_fns: HashMap<Token, PrefixParseFn>,
@@ -74,8 +74,8 @@ impl Parser {
         }
     }
 
-    pub fn statements(&mut self) {
-        let mut nodes: Vec<Expr> = vec![];
+    pub fn statements(&mut self) -> Vec<Expr> {
+        let mut nodes = Vec::new();
 
         loop {
             match &self.cur_token {
@@ -87,9 +87,8 @@ impl Parser {
 
             self.next_token();
         }
-        dbg!(&nodes);
 
-        //CodeGen::new("./nasm/main.nasm", nodes, self.symtable.clone()).generate();
+        nodes
     }
 
     fn parse_expression(&mut self, precedence: Precedence) -> Expr {
