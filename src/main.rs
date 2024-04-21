@@ -8,7 +8,7 @@ use lexer::Lexer;
 use parser::Parser;
 
 fn main() {
-    let lexer = Lexer::new("(1 + (2 + ( 4 + 5 )))".to_string());
+    let lexer = Lexer::new("return 5;".to_string());
 
     let mut parser = Parser::new(lexer);
     let exprs = parser.statements();

@@ -42,7 +42,15 @@ pub enum Expr {
 }
 
 #[derive(Debug, Clone)]
-pub struct ExprReturn {}
+pub struct ExprReturn {
+    value: Box<Expr>,
+}
+
+impl ExprReturn {
+    pub fn new(value: Box<Expr>) -> Self {
+        Self { value }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct ExprBinary {

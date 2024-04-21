@@ -1,4 +1,4 @@
-use super::{BinOp, ExprBinary, ExprLit, ExprUnary, Precedence, UnOp};
+use super::{BinOp, ExprBinary, ExprLit, ExprReturn, ExprUnary, Precedence, UnOp};
 use crate::{
     lexer::{Lexer, Token},
     parser::Expr,
@@ -82,6 +82,7 @@ impl Parser {
                 Token::Eof => {
                     break;
                 }
+                Token::Return => nodes.push(self.parse_return_statement()),
                 _ => nodes.push(self.parse_expression(Precedence::Lowest)),
             }
 
@@ -129,6 +130,16 @@ impl Parser {
         }
 
         left
+    }
+
+    fn parse_return_statement(&mut self) -> Expr {
+        self.next_token();
+        let expr = Expr::Return(ExprReturn::new(Box::new(
+            self.parse_expression(Precedence::Lowest),
+        )));
+        self.expect_peek(Token::Semicolon);
+
+        expr
     }
 }
 

@@ -99,7 +99,8 @@ impl<'a> CodeGen<'a> {
                 todo!();
             }
             Expr::Return(ret) => {
-                todo!();
+                println!("Here should be codegen of return statement");
+                0
             }
             Expr::Lit(literal) => match literal {
                 ExprLit::Int(val) => self.loadint(val),
