@@ -1,4 +1,4 @@
-use super::{BinOp, ExprBinary, ExprLit, ExprReturn, ExprUnary, Precedence, UnOp};
+use super::{BinOp, ExprBinary, ExprLit, ExprUnary, Precedence, Stmt, StmtReturn, UnOp};
 use crate::{
     lexer::{Lexer, Token},
     parser::Expr,
@@ -74,7 +74,7 @@ impl Parser {
         }
     }
 
-    pub fn statements(&mut self) -> Vec<Expr> {
+    pub fn parse_statements(&mut self) -> Vec<Stmt> {
         let mut nodes = Vec::new();
 
         loop {
@@ -83,7 +83,7 @@ impl Parser {
                     break;
                 }
                 Token::Return => nodes.push(self.parse_return_statement()),
-                _ => nodes.push(self.parse_expression(Precedence::Lowest)),
+                _ => nodes.push(self.parse_expression_statement()),
             }
 
             self.next_token();
@@ -132,14 +132,21 @@ impl Parser {
         left
     }
 
-    fn parse_return_statement(&mut self) -> Expr {
+    fn parse_return_statement(&mut self) -> Stmt {
         self.next_token();
-        let expr = Expr::Return(ExprReturn::new(Box::new(
+        let stmt = Stmt::Return(StmtReturn::new(Box::new(
             self.parse_expression(Precedence::Lowest),
         )));
         self.expect_peek(Token::Semicolon);
 
-        expr
+        stmt
+    }
+
+    fn parse_expression_statement(&mut self) -> Stmt {
+        let stmt = Stmt::Expr(self.parse_expression(Precedence::Lowest));
+        self.expect_peek(Token::Semicolon);
+
+        stmt
     }
 }
 

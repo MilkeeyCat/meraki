@@ -1,5 +1,5 @@
 use crate::{
-    parser::{BinOp, Expr, ExprLit},
+    parser::{BinOp, Expr, ExprLit, Stmt},
     symtable::SymbolTable,
 };
 use indoc::writedoc;
@@ -48,14 +48,14 @@ impl<'a> Register<'a> {
 }
 
 pub struct CodeGen<'a> {
-    program: Vec<Expr>,
+    program: Vec<Stmt>,
     symtable: SymbolTable,
     writer: BufWriter<File>,
     registers: [Register<'a>; 4],
 }
 
 impl<'a> CodeGen<'a> {
-    pub fn new(path: &str, program: Vec<Expr>, symtable: SymbolTable) -> Self {
+    pub fn new(path: &str, program: Vec<Stmt>, symtable: SymbolTable) -> Self {
         let file = File::create(path).unwrap();
 
         Self {
@@ -93,57 +93,67 @@ impl<'a> CodeGen<'a> {
         self.registers[id].in_use = false;
     }
 
-    fn compile(&mut self, node: Expr) -> usize {
-        match node {
-            Expr::Ident(ident) => {
+    fn compile(&mut self, stmt: Stmt) -> usize {
+        match stmt {
+            Stmt::Local(_) => {
                 todo!();
             }
-            Expr::Return(ret) => {
-                println!("Here should be codegen of return statement");
+            Stmt::Return(stmt) => {
+                let expr = self.compile(Stmt::Expr(*stmt.0));
+
+                self.ret(expr);
                 0
             }
-            Expr::Lit(literal) => match literal {
-                ExprLit::Int(val) => self.loadint(val),
-                ExprLit::Float(val) => {
+            Stmt::Expr(expr) => match expr {
+                Expr::Ident(ident) => {
                     todo!();
                 }
-                ExprLit::Bool(val) => {
+                Expr::Lit(literal) => match literal {
+                    ExprLit::Int(val) => self.loadint(val),
+                    ExprLit::Float(val) => {
+                        todo!();
+                    }
+                    ExprLit::Bool(val) => {
+                        todo!();
+                    }
+                    ExprLit::Str(val) => {
+                        todo!();
+                    }
+                },
+                Expr::Unary(unary) => {
                     todo!();
                 }
-                ExprLit::Str(val) => {
-                    todo!();
+                Expr::Binary(expr) => {
+                    let left = self.compile(Stmt::Expr(*expr.left().to_owned().unwrap()));
+                    let right = self.compile(Stmt::Expr(*expr.right().to_owned().unwrap()));
+
+                    match *expr.op() {
+                        BinOp::Add => self.add(left, right),
+                        BinOp::Sub => self.sub(left, right),
+                        BinOp::Mul => self.mul(left, right),
+                        BinOp::Div => self.div(left, right),
+                        BinOp::Equal => self.equal(left, right),
+                        BinOp::NotEqual => self.not_equal(left, right),
+                        BinOp::LessThan => self.less_than(left, right),
+                        BinOp::GreaterThan => self.greater_than(left, right),
+                        BinOp::LessEqual => self.less_equal(left, right),
+                        BinOp::GreaterEqual => self.greater_equal(left, right),
+                    }
                 }
             },
-            Expr::Unary(unary) => {
-                todo!();
-            }
-            Expr::Binary(expr) => {
-                let left = self.compile(*expr.left().to_owned().unwrap());
-                let right = self.compile(*expr.right().to_owned().unwrap());
-
-                match *expr.op() {
-                    BinOp::Add => self.add(left, right),
-                    BinOp::Sub => self.sub(left, right),
-                    BinOp::Mul => self.mul(left, right),
-                    BinOp::Div => self.div(left, right),
-                    BinOp::Equal => self.equal(left, right),
-                    BinOp::NotEqual => self.not_equal(left, right),
-                    BinOp::LessThan => self.less_than(left, right),
-                    BinOp::GreaterThan => self.greater_than(left, right),
-                    BinOp::LessEqual => self.less_equal(left, right),
-                    BinOp::GreaterEqual => self.greater_equal(left, right),
-                }
-            }
         }
     }
 
     pub fn generate(&mut self) {
         self.preabmble();
-        for node in self.program.clone() {
-            let r = self.compile(node);
-            self.printint(r);
+        for stmt in self.program.clone() {
+            let r = self.compile(stmt.clone());
+
+            //remove this and clone above later
+            if let Stmt::Expr(_) = stmt {
+                self.printint(r);
+            }
         }
-        self.postabmble();
     }
 
     fn preabmble(&mut self) {
@@ -173,14 +183,14 @@ impl<'a> CodeGen<'a> {
         .unwrap();
     }
 
-    fn postabmble(&mut self) {
+    fn ret(&mut self, r: usize) {
         writedoc!(
             self.writer,
             "
-            \tmov rax, 60
-            \tmov rsi, 0
-            \tsyscall
-            "
+            \tmov rax, {}
+            \tret
+            ",
+            self.registers[r].name
         )
         .unwrap();
     }

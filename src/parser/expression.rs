@@ -34,22 +34,10 @@ impl From<&Token> for BinOp {
 
 #[derive(Debug, Clone)]
 pub enum Expr {
-    Return(ExprReturn),
     Binary(ExprBinary),
     Lit(ExprLit),
     Unary(ExprUnary),
     Ident(String),
-}
-
-#[derive(Debug, Clone)]
-pub struct ExprReturn {
-    value: Box<Expr>,
-}
-
-impl ExprReturn {
-    pub fn new(value: Box<Expr>) -> Self {
-        Self { value }
-    }
 }
 
 #[derive(Debug, Clone)]
