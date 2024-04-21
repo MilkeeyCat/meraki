@@ -133,11 +133,17 @@ impl Parser {
     }
 
     fn parse_return_statement(&mut self) -> Stmt {
+        let stmt;
         self.next_token();
-        let stmt = Stmt::Return(StmtReturn::new(Box::new(
-            self.parse_expression(Precedence::Lowest),
-        )));
-        self.expect_peek(Token::Semicolon);
+
+        if self.cur_token_is(Token::Semicolon) {
+            stmt = Stmt::Return(StmtReturn::new(None));
+        } else {
+            stmt = Stmt::Return(StmtReturn::new(Some(Box::new(
+                self.parse_expression(Precedence::Lowest),
+            ))));
+            self.expect_peek(Token::Semicolon);
+        }
 
         stmt
     }

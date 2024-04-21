@@ -14,10 +14,10 @@ pub struct StmtLocal {
 }
 
 #[derive(Debug, Clone)]
-pub struct StmtReturn(pub Box<Expr>);
+pub struct StmtReturn(pub Option<Box<Expr>>);
 
 impl StmtReturn {
-    pub fn new(value: Box<Expr>) -> Self {
+    pub fn new(value: Option<Box<Expr>>) -> Self {
         Self(value)
     }
 }

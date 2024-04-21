@@ -99,9 +99,10 @@ impl<'a> CodeGen<'a> {
                 todo!();
             }
             Stmt::Return(stmt) => {
-                let expr = self.compile(Stmt::Expr(*stmt.0));
+                let r = stmt.0.map(|expr| self.compile(Stmt::Expr(*expr)));
+                self.ret(r);
 
-                self.ret(expr);
+                //TODO: i don't have to return value here, think about something more clever
                 0
             }
             Stmt::Expr(expr) => match expr {
@@ -183,16 +184,29 @@ impl<'a> CodeGen<'a> {
         .unwrap();
     }
 
-    fn ret(&mut self, r: usize) {
-        writedoc!(
-            self.writer,
-            "
-            \tmov rax, {}
-            \tret
-            ",
-            self.registers[r].name
-        )
-        .unwrap();
+    fn ret(&mut self, r: Option<usize>) {
+        match r {
+            Some(r) => {
+                writedoc!(
+                    self.writer,
+                    "
+                    \tmov rax, {}
+                    \tret
+                    ",
+                    self.registers[r].name
+                )
+                .unwrap();
+            }
+            None => {
+                writedoc!(
+                    self.writer,
+                    "
+                    \tret
+                    ",
+                )
+                .unwrap();
+            }
+        }
     }
 
     fn load(&mut self, name: String) -> usize {
