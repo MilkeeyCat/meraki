@@ -203,3 +203,38 @@ fn parse_grouped_binary(parser: &mut Parser) -> Expr {
 
     expr
 }
+
+#[cfg(test)]
+mod test {
+    use super::Parser;
+    use crate::{
+        lexer::Lexer,
+        parser::{BinOp, Expr, ExprBinary, ExprLit, Stmt},
+    };
+
+    #[test]
+    fn parse_arithmetic_expression() {
+        let input = "1 * 2 + 3 / (4 + 1);";
+        let mut parser = Parser::new(Lexer::new(input.to_string()));
+        dbg!(
+            parser.parse_statements(),
+            [Stmt::Expr(Expr::Binary(ExprBinary::new(
+                BinOp::Add,
+                Some(Box::new(Expr::Binary(ExprBinary::new(
+                    BinOp::Mul,
+                    Some(Box::new(Expr::Lit(ExprLit::Int(1)))),
+                    Some(Box::new(Expr::Lit(ExprLit::Int(2))))
+                )))),
+                Some(Box::new(Expr::Binary(ExprBinary::new(
+                    BinOp::Div,
+                    Some(Box::new(Expr::Lit(ExprLit::Int(3)))),
+                    Some(Box::new(Expr::Binary(ExprBinary::new(
+                        BinOp::Add,
+                        Some(Box::new(Expr::Lit(ExprLit::Int(4)))),
+                        Some(Box::new(Expr::Lit(ExprLit::Int(1)))),
+                    ))))
+                ))))
+            )))]
+        );
+    }
+}
