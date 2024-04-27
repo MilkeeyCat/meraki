@@ -102,7 +102,14 @@ impl Lexer {
                     "if" => Token::If,
                     "else" => Token::Else,
                     "return" => Token::Return,
-                    "int" => Token::Int,
+                    "i8" => Token::I8,
+                    "i16" => Token::I16,
+                    "i32" => Token::I32,
+                    "i64" => Token::I64,
+                    "u8" => Token::U8,
+                    "u16" => Token::U16,
+                    "u32" => Token::U32,
+                    "u64" => Token::U64,
                     "char" => Token::Char,
                     "bool" => Token::Bool,
                     "float" => Token::Float,
@@ -181,15 +188,15 @@ mod test {
         let input = r#"
             [>.<]->!-+/==!=:true,false<=>=
 
-            const int a = 5;
-            int *b = &a;
+            const i8 a = 5;
+            i8 *b = &a;
             char *str = "ddnet";
 
             if(false) {
             } else {
             }
 
-            int foo() {
+            i8 foo() {
                 return 69;
             }
 
@@ -220,12 +227,12 @@ mod test {
             Token::LessEqual,
             Token::GreaterEqual,
             Token::Const,
-            Token::Int,
+            Token::I8,
             Token::Ident(String::from("a")),
             Token::Assign,
             Token::Integer(String::from("5")),
             Token::Semicolon,
-            Token::Int,
+            Token::I8,
             Token::Asterisk,
             Token::Ident(String::from("b")),
             Token::Assign,
@@ -247,7 +254,7 @@ mod test {
             Token::Else,
             Token::LBrace,
             Token::RBrace,
-            Token::Int,
+            Token::I8,
             Token::Ident(String::from("foo")),
             Token::LParen,
             Token::RParen,
