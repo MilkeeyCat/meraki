@@ -1,5 +1,7 @@
 use crate::lexer::Token;
 
+use super::Type;
+
 #[derive(Debug, Clone)]
 pub enum BinOp {
     Add,
@@ -71,6 +73,28 @@ pub enum ExprLit {
     Float(f64),
     Int(i64),
     Str(String),
+}
+
+impl ExprLit {
+    fn kind(&self) -> Type {
+        match self {
+            Self::Int(int) => match int {
+                -128..=127 => Type::I8,
+                0..=255 => Type::U8,
+                -32768..=32767 => Type::I16,
+                0..=65535 => Type::U16,
+                -2147483648..=2147483647 => Type::I32,
+                0..=4294967295 => Type::U32,
+                -9223372036854775808..=9223372036854775807 => Type::I64,
+                //TODO: what do i do here?
+                //0..=18446744073709551615 => Type::U64,
+            },
+            Self::Str(_) => Type::Ptr(Box::new(Type::Char)),
+            Self::Bool(_) => Type::Bool,
+            //Who needs floats, amiright
+            Self::Float(_) => todo!(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
