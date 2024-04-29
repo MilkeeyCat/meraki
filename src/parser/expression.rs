@@ -71,23 +71,108 @@ impl ExprBinary {
 pub enum ExprLit {
     Bool(bool),
     Float(f64),
-    Int(i64),
+    Int(IntLitRepr),
     Str(String),
+}
+
+#[derive(Debug, Clone)]
+pub struct IntLitRepr(Vec<u8>);
+
+impl IntLitRepr {
+    pub fn new() -> Self {
+        Self(vec![0])
+    }
+
+    fn div2(&self, num: &str) -> Option<(String, bool)> {
+        let mut remainder = false;
+        let result = num
+            .chars()
+            .map(|ch| {
+                let mut new = ch as u8 - b'0';
+                if remainder {
+                    new += 10;
+                }
+
+                if new & 1 != 0 {
+                    remainder = true;
+                } else {
+                    remainder = false;
+                }
+
+                new >>= 1;
+
+                (new + b'0') as char
+            })
+            .collect::<String>();
+
+        if result.len() > 0 {
+            Some((result, remainder))
+        } else {
+            None
+        }
+    }
+
+    fn set_bit(&mut self, n: usize) {
+        if let None = self.0.get(n / 8) {
+            self.0.push(0);
+            self.set_bit(n);
+        } else {
+            self.0[n / 8] |= 1 << (n % 8);
+        }
+    }
+
+    pub fn from_str(s: String) -> Self {
+        let mut int_repr = IntLitRepr::new();
+        let mut result = s;
+
+        for i in 0.. {
+            match int_repr.div2(&result) {
+                Some((string, remainder)) => {
+                    result = string;
+
+                    if result.as_bytes()[0] == b'0' {
+                        result.remove(0);
+                    }
+
+                    if remainder {
+                        int_repr.set_bit(i);
+                    }
+                }
+                None => break,
+            }
+        }
+
+        int_repr
+    }
+
+    pub fn bytes(&self) -> &[u8] {
+        &self.0
+    }
+
+    pub fn i64(&mut self) -> i64 {
+        if self.0.len() < 8 {
+            self.0.resize(8, 0);
+        }
+
+        i64::from_le_bytes(self.0[0..8].try_into().unwrap())
+    }
+}
+
+impl From<String> for IntLitRepr {
+    fn from(value: String) -> Self {
+        Self::from_str(value)
+    }
 }
 
 impl ExprLit {
     fn kind(&self) -> Type {
         match self {
-            Self::Int(int) => match int {
-                -128..=127 => Type::I8,
-                0..=255 => Type::U8,
-                -32768..=32767 => Type::I16,
-                0..=65535 => Type::U16,
-                -2147483648..=2147483647 => Type::I32,
-                0..=4294967295 => Type::U32,
-                -9223372036854775808..=9223372036854775807 => Type::I64,
-                //TODO: what do i do here?
-                //0..=18446744073709551615 => Type::U64,
+            Self::Int(int) => match int.bytes().len() {
+                1 => Type::U8,
+                2 => Type::U16,
+                3..=4 => Type::U32,
+                5..=8 => Type::U64,
+                bytes => panic!("Int out of bounds, max: 64 bit, got: {:?}", bytes * 8),
             },
             Self::Str(_) => Type::Ptr(Box::new(Type::Char)),
             Self::Bool(_) => Type::Bool,

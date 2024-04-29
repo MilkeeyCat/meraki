@@ -1,4 +1,6 @@
-use super::{BinOp, ExprBinary, ExprLit, ExprUnary, Precedence, Stmt, StmtReturn, UnOp};
+use super::{
+    BinOp, ExprBinary, ExprLit, ExprUnary, IntLitRepr, Precedence, Stmt, StmtReturn, UnOp,
+};
 use crate::{
     lexer::{Lexer, Token},
     parser::Expr,
@@ -64,7 +66,7 @@ impl Parser {
     fn parse_expression(&mut self, precedence: Precedence) -> Expr {
         let mut left = match &self.cur_token {
             Token::Ident(_) => self.parse_identifier(),
-            Token::Integer(_) => self.parse_ingeter_literal(),
+            Token::Integer(_) => self.parse_integer_literal(),
             Token::Bang | Token::Minus => self.parse_unary(),
             Token::LParen => self.parse_grouped_binary(),
             token => {
@@ -128,9 +130,9 @@ impl Parser {
         }
     }
 
-    fn parse_ingeter_literal(&self) -> Expr {
+    fn parse_integer_literal(&self) -> Expr {
         match &self.cur_token {
-            Token::Integer(int) => Expr::Lit(ExprLit::Int(int.to_owned().parse().unwrap())),
+            Token::Integer(int) => Expr::Lit(ExprLit::Int(IntLitRepr::from(int.clone()))),
             token => {
                 panic!("wrong value {:?}", token);
             }
@@ -173,7 +175,7 @@ mod test {
     use super::Parser;
     use crate::{
         lexer::Lexer,
-        parser::{BinOp, Expr, ExprBinary, ExprLit, Stmt},
+        parser::{BinOp, Expr, ExprBinary, ExprLit, IntLitRepr, Stmt},
     };
 
     #[test]
@@ -186,16 +188,26 @@ mod test {
                 BinOp::Add,
                 Some(Box::new(Expr::Binary(ExprBinary::new(
                     BinOp::Mul,
-                    Some(Box::new(Expr::Lit(ExprLit::Int(1)))),
-                    Some(Box::new(Expr::Lit(ExprLit::Int(2))))
+                    Some(Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::from_str(
+                        "1".to_string()
+                    ))))),
+                    Some(Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::from_str(
+                        "2".to_string()
+                    )))))
                 )))),
                 Some(Box::new(Expr::Binary(ExprBinary::new(
                     BinOp::Div,
-                    Some(Box::new(Expr::Lit(ExprLit::Int(3)))),
+                    Some(Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::from_str(
+                        "3".to_string()
+                    ))))),
                     Some(Box::new(Expr::Binary(ExprBinary::new(
                         BinOp::Add,
-                        Some(Box::new(Expr::Lit(ExprLit::Int(4)))),
-                        Some(Box::new(Expr::Lit(ExprLit::Int(1)))),
+                        Some(Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::from_str(
+                            "4".to_string()
+                        ))))),
+                        Some(Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::from_str(
+                            "1".to_string()
+                        ))))),
                     ))))
                 ))))
             )))]

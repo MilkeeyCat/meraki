@@ -110,7 +110,8 @@ impl<'a> CodeGen<'a> {
                     todo!();
                 }
                 Expr::Lit(literal) => match literal {
-                    ExprLit::Int(val) => self.loadint(val),
+                    ExprLit::Int(mut int_repr) => self.loadint(int_repr.i64()),
+                    ExprLit::Int(val) => todo!(),
                     ExprLit::Float(val) => {
                         todo!();
                     }
