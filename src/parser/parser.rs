@@ -1,20 +1,21 @@
 use super::{
-    BinOp, ExprBinary, ExprLit, ExprUnary, IntLitRepr, Precedence, Stmt, StmtReturn, UnOp,
+    BinOp, ExprBinary, ExprLit, ExprUnary, IntLitRepr, Precedence, Stmt, StmtFunction, StmtReturn,
+    Type, UnOp,
 };
 use crate::{
     lexer::{Lexer, Token},
     parser::Expr,
-    symtable::SymbolTable,
+    symtable::{Symbol, SymbolFunction, SymbolTable},
 };
 
-pub struct Parser {
+pub struct Parser<'a> {
     lexer: Lexer,
-    pub symtable: SymbolTable,
+    pub symtable: SymbolTable<'a>,
     pub cur_token: Token,
     pub peek_token: Token,
 }
 
-impl Parser {
+impl<'a> Parser<'a> {
     pub fn new(mut lexer: Lexer) -> Self {
         Self {
             cur_token: lexer.next_token().unwrap(),
@@ -45,22 +46,119 @@ impl Parser {
         }
     }
 
-    pub fn parse_statements(&mut self) -> Vec<Stmt> {
-        let mut nodes = Vec::new();
+    fn parse_type(&mut self) -> Type {
+        let mut type_ = match &self.cur_token {
+            Token::I8 => Type::I8,
+            Token::I16 => Type::I16,
+            Token::I32 => Type::I32,
+            Token::I64 => Type::I64,
+            Token::U8 => Type::U8,
+            Token::U16 => Type::U16,
+            Token::U32 => Type::U32,
+            Token::U64 => Type::U64,
+            Token::Char => Type::Char,
+            Token::Bool => Type::Bool,
+            token => panic!("token {:?} cant be converted to a type", token),
+        };
 
-        loop {
-            match &self.cur_token {
-                Token::Eof => {
-                    break;
-                }
-                Token::Return => nodes.push(self.parse_return_statement()),
-                _ => nodes.push(self.parse_expression_statement()),
-            }
-
+        while self.peek_token_is(Token::Asterisk) {
             self.next_token();
+            type_ = Type::Ptr(Box::new(type_));
         }
 
-        nodes
+        self.next_token();
+
+        type_
+    }
+
+    pub fn parse_statements(&mut self) -> Vec<Stmt> {
+        let mut stmts = Vec::new();
+
+        while !self.cur_token_is(Token::Eof) {
+            let type_ = self.parse_type();
+
+            match &self.cur_token {
+                Token::Ident(_) => {
+                    if self.peek_token_is(Token::LParen) {
+                        stmts.push(self.parse_function(type_));
+                    } else {
+                        stmts.push(self.parse_variable(type_));
+                    }
+                }
+                token => panic!("expected ident, got: {:?}", token),
+            }
+        }
+
+        stmts
+    }
+
+    fn parse_function(&mut self, type_: Type) -> Stmt {
+        let func_name = match &self.cur_token {
+            Token::Ident(ident) => ident.clone(),
+            _ => unreachable!(),
+        };
+
+        self.expect_peek(Token::LParen);
+        let args = self.parse_variables_list(Token::Comma, Token::RParen);
+
+        self.expect_peek(Token::LBrace);
+        let block = self.parse_block_statement();
+
+        self.symtable.push(Symbol::Function(SymbolFunction::new(
+            func_name.to_string(),
+            args.clone(),
+            type_.clone(),
+        )));
+
+        let args = args.into_iter().map(|(_, type_)| type_).collect();
+
+        Stmt::Function(StmtFunction::new(type_, args, block))
+    }
+
+    fn parse_variables_list(&mut self, delim: Token, end_token: Token) -> Vec<(String, Type)> {
+        let mut variables: Vec<(String, Type)> = Vec::new();
+        self.next_token();
+
+        while !self.cur_token_is(end_token.clone()) {
+            let type_ = self.parse_type();
+
+            match &self.cur_token {
+                Token::Ident(ident) => {
+                    variables.push((ident.clone(), type_));
+
+                    if self.peek_token_is(delim.clone()) {
+                        self.next_token();
+                    }
+
+                    self.next_token();
+                }
+                token => panic!("expected ident, got: {:?}", token),
+            }
+        }
+
+        variables
+    }
+
+    fn parse_block_statement(&mut self) -> Vec<Stmt> {
+        let mut stmts: Vec<Stmt> = Vec::new();
+
+        self.next_token();
+
+        while !self.peek_token_is(Token::RBrace) {
+            match &self.cur_token {
+                Token::Return => stmts.push(self.parse_return_statement()),
+                _ => stmts.push(self.parse_expression_statement()),
+            }
+        }
+
+        self.expect_peek(Token::RBrace);
+        self.next_token();
+
+        stmts
+    }
+
+    fn parse_variable(&self, type_: Type) -> Stmt {
+        todo!();
     }
 
     fn parse_expression(&mut self, precedence: Precedence) -> Expr {

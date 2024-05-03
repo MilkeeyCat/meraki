@@ -10,8 +10,9 @@ use parser::Parser;
 fn main() {
     let lexer = Lexer::new(
         "
-        5 + 5;
-        return 0;
+        u8 main(u8 argc, char **argv) {
+            return 0;
+        }
         "
         .to_string(),
     );

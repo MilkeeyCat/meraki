@@ -112,8 +112,7 @@ impl Lexer {
                     "u64" => Token::U64,
                     "char" => Token::Char,
                     "bool" => Token::Bool,
-                    "float" => Token::Float,
-                    "double" => Token::Double,
+                    "f32" => Token::Float32,
                     _ => Token::Ident(ident),
                 });
             }

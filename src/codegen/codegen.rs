@@ -49,13 +49,13 @@ impl<'a> Register<'a> {
 
 pub struct CodeGen<'a> {
     program: Vec<Stmt>,
-    symtable: SymbolTable,
+    symtable: SymbolTable<'a>,
     writer: BufWriter<File>,
     registers: [Register<'a>; 4],
 }
 
 impl<'a> CodeGen<'a> {
-    pub fn new(path: &str, program: Vec<Stmt>, symtable: SymbolTable) -> Self {
+    pub fn new(path: &str, program: Vec<Stmt>, symtable: SymbolTable<'a>) -> Self {
         let file = File::create(path).unwrap();
 
         Self {
@@ -104,6 +104,9 @@ impl<'a> CodeGen<'a> {
 
                 //TODO: i don't have to return value here, think about something more clever
                 0
+            }
+            Stmt::Function(stmt) => {
+                todo!();
             }
             Stmt::Expr(expr) => match expr {
                 Expr::Ident(ident) => {
