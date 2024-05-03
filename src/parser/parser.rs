@@ -112,7 +112,7 @@ impl<'a> Parser<'a> {
 
         let args = args.into_iter().map(|(_, type_)| type_).collect();
 
-        Stmt::Function(StmtFunction::new(type_, args, block))
+        Stmt::Function(StmtFunction::new(func_name.to_string(), type_, args, block))
     }
 
     fn parse_variables_list(&mut self, delim: Token, end_token: Token) -> Vec<(String, Type)> {

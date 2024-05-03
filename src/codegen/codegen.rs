@@ -1,5 +1,5 @@
 use crate::{
-    parser::{BinOp, Expr, ExprLit, Stmt},
+    parser::{BinOp, Expr, ExprLit, Stmt, StmtFunction},
     symtable::SymbolTable,
 };
 use indoc::writedoc;
@@ -52,6 +52,8 @@ pub struct CodeGen<'a> {
     symtable: SymbolTable<'a>,
     writer: BufWriter<File>,
     registers: [Register<'a>; 4],
+
+    func: Option<StmtFunction>,
 }
 
 impl<'a> CodeGen<'a> {
@@ -68,6 +70,7 @@ impl<'a> CodeGen<'a> {
                 Register::new("r10"),
                 Register::new("r11"),
             ],
+            func: None,
         }
     }
 
@@ -105,9 +108,7 @@ impl<'a> CodeGen<'a> {
                 //TODO: i don't have to return value here, think about something more clever
                 0
             }
-            Stmt::Function(stmt) => {
-                todo!();
-            }
+            Stmt::Function(func) => self.generate_function(func),
             Stmt::Expr(expr) => match expr {
                 Expr::Ident(ident) => {
                     todo!();
@@ -181,11 +182,44 @@ impl<'a> CodeGen<'a> {
                 call printf
 
                 ret
-
-            main:
             "
         )
         .unwrap();
+    }
+
+    fn generate_function(&mut self, func: StmtFunction) -> usize {
+        //TODO: remove clone
+        self.func = Some(func.clone());
+
+        writedoc!(
+            self.writer,
+            "
+
+            {}:
+                push rbp
+                mov rbp, rsp
+                ; sub rsp, $stack_size
+            ",
+            &func.name,
+        )
+        .unwrap();
+
+        for stmt in func.stmts {
+            self.compile(stmt);
+        }
+
+        writedoc!(
+            self.writer,
+            "
+            {}_end:
+                leave
+                ret
+            ",
+            &func.name
+        )
+        .unwrap();
+
+        0
     }
 
     fn ret(&mut self, r: Option<usize>) {
@@ -195,9 +229,10 @@ impl<'a> CodeGen<'a> {
                     self.writer,
                     "
                     \tmov rax, {}
-                    \tret
+                    \tjmp {}_end
                     ",
-                    self.registers[r].name
+                    self.registers[r].name,
+                    self.func.as_ref().unwrap().name
                 )
                 .unwrap();
             }

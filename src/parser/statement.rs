@@ -25,14 +25,16 @@ impl StmtReturn {
 
 #[derive(Debug, Clone)]
 pub struct StmtFunction {
-    arguments: Vec<Type>,
-    return_type: Type,
-    stmts: Vec<Stmt>,
+    pub name: String,
+    pub arguments: Vec<Type>,
+    pub return_type: Type,
+    pub stmts: Vec<Stmt>,
 }
 
 impl StmtFunction {
-    pub fn new(ret: Type, args: Vec<Type>, stmts: Vec<Stmt>) -> Self {
+    pub fn new(name: String, ret: Type, args: Vec<Type>, stmts: Vec<Stmt>) -> Self {
         Self {
+            name,
             return_type: ret,
             arguments: args,
             stmts,
