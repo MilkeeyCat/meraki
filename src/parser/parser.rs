@@ -58,6 +58,7 @@ impl<'a> Parser<'a> {
             Token::U64 => Type::U64,
             Token::Char => Type::Char,
             Token::Bool => Type::Bool,
+            Token::Void => Type::Void,
             token => panic!("token {:?} cant be converted to a type", token),
         };
 

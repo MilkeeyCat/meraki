@@ -51,4 +51,5 @@ pub enum Token {
     Char,
     Bool,
     Float32,
+    Void,
 }

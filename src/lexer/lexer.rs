@@ -113,6 +113,7 @@ impl Lexer {
                     "char" => Token::Char,
                     "bool" => Token::Bool,
                     "f32" => Token::Float32,
+                    "void" => Token::Void,
                     _ => Token::Ident(ident),
                 });
             }
