@@ -1,6 +1,6 @@
 use super::{Expr, Type};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
     Local(StmtLocal),
     Expr(Expr),
@@ -8,13 +8,13 @@ pub enum Stmt {
     Function(StmtFunction),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct StmtLocal {
     name: String,
     value: Option<Expr>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct StmtReturn(pub Option<Box<Expr>>);
 
 impl StmtReturn {
@@ -23,7 +23,7 @@ impl StmtReturn {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct StmtFunction {
     pub name: String,
     pub arguments: Vec<Type>,

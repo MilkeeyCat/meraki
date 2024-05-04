@@ -273,16 +273,17 @@ mod test {
     use super::Parser;
     use crate::{
         lexer::Lexer,
-        parser::{BinOp, Expr, ExprBinary, ExprLit, IntLitRepr, Stmt},
+        parser::{BinOp, Expr, ExprBinary, ExprLit, IntLitRepr, Precedence},
     };
 
     #[test]
     fn parse_arithmetic_expression() {
         let input = "1 * 2 + 3 / (4 + 1);";
         let mut parser = Parser::new(Lexer::new(input.to_string()));
-        dbg!(
-            parser.parse_statements(),
-            [Stmt::Expr(Expr::Binary(ExprBinary::new(
+
+        assert_eq!(
+            parser.parse_expression(Precedence::Lowest),
+            Expr::Binary(ExprBinary::new(
                 BinOp::Add,
                 Some(Box::new(Expr::Binary(ExprBinary::new(
                     BinOp::Mul,
@@ -308,7 +309,7 @@ mod test {
                         ))))),
                     ))))
                 ))))
-            )))]
+            ))
         );
     }
 }

@@ -2,7 +2,7 @@ use crate::lexer::Token;
 
 use super::Type;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum BinOp {
     Add,
     Sub,
@@ -34,7 +34,7 @@ impl From<&Token> for BinOp {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Binary(ExprBinary),
     Lit(ExprLit),
@@ -42,7 +42,7 @@ pub enum Expr {
     Ident(String),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ExprBinary {
     op: BinOp,
     left: Option<Box<Expr>>,
@@ -67,7 +67,7 @@ impl ExprBinary {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ExprLit {
     Bool(bool),
     Float(f64),
@@ -75,7 +75,7 @@ pub enum ExprLit {
     Str(String),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct IntLitRepr(Vec<u8>);
 
 impl IntLitRepr {
@@ -182,7 +182,7 @@ impl ExprLit {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum UnOp {
     Not,
     Negative,
@@ -198,7 +198,7 @@ impl From<&Token> for UnOp {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ExprUnary {
     op: UnOp,
     expr: Box<Expr>,
