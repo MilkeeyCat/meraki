@@ -205,7 +205,7 @@ impl<'a> Parser<'a> {
             stmt = Stmt::Return(StmtReturn::new(None));
         } else {
             stmt = Stmt::Return(StmtReturn::new(Some(Box::new(
-                self.parse_expression(Precedence::Lowest),
+                self.parse_expression(Precedence::default()),
             ))));
             self.expect_peek(Token::Semicolon);
         }
@@ -214,7 +214,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_expression_statement(&mut self) -> Stmt {
-        let stmt = Stmt::Expr(self.parse_expression(Precedence::Lowest));
+        let stmt = Stmt::Expr(self.parse_expression(Precedence::default()));
         self.expect_peek(Token::Semicolon);
 
         stmt
@@ -251,7 +251,7 @@ impl<'a> Parser<'a> {
     fn parse_grouped_binary(&mut self) -> Expr {
         self.next_token();
 
-        let expr = self.parse_expression(Precedence::Lowest);
+        let expr = self.parse_expression(Precedence::default());
         self.expect_peek(Token::RParen);
 
         expr
@@ -283,7 +283,7 @@ mod test {
         let mut parser = Parser::new(Lexer::new(input.to_string()));
 
         assert_eq!(
-            parser.parse_expression(Precedence::Lowest),
+            parser.parse_expression(Precedence::default()),
             Expr::Binary(ExprBinary::new(
                 BinOp::Add,
                 Some(Box::new(Expr::Binary(ExprBinary::new(

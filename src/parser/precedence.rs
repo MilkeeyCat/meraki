@@ -1,7 +1,8 @@
 use crate::lexer::Token;
 
-#[derive(Debug, PartialEq, PartialOrd)]
+#[derive(Debug, PartialEq, PartialOrd, Default)]
 pub enum Precedence {
+    #[default]
     Lowest,
     Equals,      // ==
     Lessgreater, // > or <
