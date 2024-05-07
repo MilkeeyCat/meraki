@@ -279,8 +279,8 @@ impl<'a> Parser<'a> {
 
         Expr::Binary(ExprBinary::new(
             BinOp::from(&token),
-            Some(Box::new(left)),
-            Some(Box::new(self.parse_expression(Precedence::from(&token)))),
+            Box::new(left),
+            Box::new(self.parse_expression(Precedence::from(&token))),
         ))
     }
 }
@@ -302,30 +302,30 @@ mod test {
             parser.parse_expression(Precedence::default()),
             Expr::Binary(ExprBinary::new(
                 BinOp::Add,
-                Some(Box::new(Expr::Binary(ExprBinary::new(
+                Box::new(Expr::Binary(ExprBinary::new(
                     BinOp::Mul,
-                    Some(Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::from_str(
+                    Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::from_str(
                         "1".to_string()
-                    ))))),
-                    Some(Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::from_str(
+                    )))),
+                    Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::from_str(
                         "2".to_string()
-                    )))))
-                )))),
-                Some(Box::new(Expr::Binary(ExprBinary::new(
-                    BinOp::Div,
-                    Some(Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::from_str(
-                        "3".to_string()
-                    ))))),
-                    Some(Box::new(Expr::Binary(ExprBinary::new(
-                        BinOp::Add,
-                        Some(Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::from_str(
-                            "4".to_string()
-                        ))))),
-                        Some(Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::from_str(
-                            "1".to_string()
-                        ))))),
                     ))))
-                ))))
+                ))),
+                Box::new(Expr::Binary(ExprBinary::new(
+                    BinOp::Div,
+                    Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::from_str(
+                        "3".to_string()
+                    )))),
+                    Box::new(Expr::Binary(ExprBinary::new(
+                        BinOp::Add,
+                        Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::from_str(
+                            "4".to_string()
+                        )))),
+                        Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::from_str(
+                            "1".to_string()
+                        )))),
+                    )))
+                )))
             ))
         );
     }

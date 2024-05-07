@@ -119,8 +119,8 @@ impl<'a> CodeGen<'a> {
                 todo!();
             }
             Expr::Binary(expr) => {
-                let left = self.compile_expr(*expr.left().to_owned().unwrap());
-                let right = self.compile_expr(*expr.right().to_owned().unwrap());
+                let left = self.compile_expr(expr.left().to_owned());
+                let right = self.compile_expr(expr.right().to_owned());
 
                 match *expr.op() {
                     BinOp::Add => self.add(left, right),

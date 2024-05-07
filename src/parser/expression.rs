@@ -45,12 +45,12 @@ pub enum Expr {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprBinary {
     op: BinOp,
-    left: Option<Box<Expr>>,
-    right: Option<Box<Expr>>,
+    left: Box<Expr>,
+    right: Box<Expr>,
 }
 
 impl ExprBinary {
-    pub fn new(op: BinOp, left: Option<Box<Expr>>, right: Option<Box<Expr>>) -> Self {
+    pub fn new(op: BinOp, left: Box<Expr>, right: Box<Expr>) -> Self {
         Self { op, left, right }
     }
 
@@ -58,11 +58,11 @@ impl ExprBinary {
         return &self.op;
     }
 
-    pub fn left(&self) -> &Option<Box<Expr>> {
+    pub fn left(&self) -> &Expr {
         return &self.left;
     }
 
-    pub fn right(&self) -> &Option<Box<Expr>> {
+    pub fn right(&self) -> &Expr {
         return &self.right;
     }
 }
