@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{
     lexer::{Lexer, Token},
-    parser::Expr,
+    parser::{Expr, StmtVarDecl},
     symtable::{Symbol, SymbolFunction, SymbolTable},
 };
 
@@ -83,7 +83,7 @@ impl<'a> Parser<'a> {
                     if self.peek_token_is(Token::LParen) {
                         stmts.push(self.parse_function(type_));
                     } else {
-                        stmts.push(self.parse_variable(type_));
+                        stmts.push(self.parse_variable_declaration(type_));
                     }
                 }
                 token => panic!("expected ident, got: {:?}", token),
@@ -158,8 +158,24 @@ impl<'a> Parser<'a> {
         stmts
     }
 
-    fn parse_variable(&self, type_: Type) -> Stmt {
-        todo!();
+    fn parse_variable_declaration(&mut self, type_: Type) -> Stmt {
+        match &self.cur_token {
+            Token::Ident(ident) => {
+                let name = ident.to_string();
+                let mut value = None;
+                self.next_token();
+
+                if self.cur_token_is(Token::Assign) {
+                    value = Some(self.parse_expression(Precedence::default()));
+                } else if !self.cur_token_is(Token::Semicolon) {
+                    panic!("expected semicolon, got: {:?}", self.cur_token);
+                }
+                self.next_token();
+
+                Stmt::VarDecl(StmtVarDecl::new(type_, name, value))
+            }
+            token => panic!("expected ident, got: {:?}", token),
+        }
     }
 
     fn parse_expression(&mut self, precedence: Precedence) -> Expr {

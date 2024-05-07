@@ -2,16 +2,23 @@ use super::{Expr, Type};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
-    Local(StmtLocal),
+    VarDecl(StmtVarDecl),
     Expr(Expr),
     Return(StmtReturn),
     Function(StmtFunction),
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct StmtLocal {
-    name: String,
-    value: Option<Expr>,
+pub struct StmtVarDecl {
+    pub type_: Type,
+    pub name: String,
+    pub value: Option<Expr>,
+}
+
+impl StmtVarDecl {
+    pub fn new(type_: Type, name: String, value: Option<Expr>) -> Self {
+        Self { type_, name, value }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

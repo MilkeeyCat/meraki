@@ -10,6 +10,8 @@ use parser::Parser;
 fn main() {
     let lexer = Lexer::new(
         "
+        u16 foo;
+
         u8 main(u8 argc, char **argv) {
             return 0;
         }

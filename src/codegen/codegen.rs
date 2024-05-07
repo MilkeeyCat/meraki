@@ -1,5 +1,5 @@
 use crate::{
-    parser::{BinOp, Expr, ExprLit, Stmt, StmtFunction},
+    parser::{BinOp, Expr, ExprLit, Stmt, StmtFunction, StmtVarDecl, Type},
     symtable::SymbolTable,
 };
 use indoc::writedoc;
@@ -98,8 +98,10 @@ impl<'a> CodeGen<'a> {
 
     fn compile(&mut self, stmt: Stmt) -> usize {
         match stmt {
-            Stmt::Local(_) => {
-                todo!();
+            Stmt::VarDecl(stmt) => {
+                self.generate_variable(stmt);
+
+                69420
             }
             Stmt::Return(stmt) => {
                 let r = stmt.0.map(|expr| self.compile(Stmt::Expr(*expr)));
@@ -278,18 +280,23 @@ impl<'a> CodeGen<'a> {
         r
     }
 
-    fn generate_variable(&mut self, name: String) -> usize {
-        writedoc!(
-            self.writer,
-            "
-            \tcommon {name} 8:8
-            "
-        )
-        .unwrap();
-        self.free_all_registers();
-
-        //this function should return nothing :|
-        69420
+    fn generate_variable(&mut self, var: StmtVarDecl) {
+        match &var.value {
+            Some(_value) => {
+                todo!("init a variable with the value");
+            }
+            None => {
+                writedoc!(
+                    self.writer,
+                    "
+                    common {} {}
+                    ",
+                    &var.name,
+                    self.type_size(&var.type_)
+                )
+                .unwrap();
+            }
+        }
     }
 
     fn store(&mut self, r: usize, name: String) -> usize {
@@ -422,5 +429,26 @@ impl<'a> CodeGen<'a> {
 
     fn greater_equal(&mut self, r1: usize, r2: usize) -> usize {
         self.compare(r1, r2, CmpType::GreaterEqual)
+    }
+
+    fn type_size(&self, type_: &Type) -> usize {
+        //NOTE: this thingy is probably platform dependant ™
+        use Type::*;
+
+        match &type_ {
+            I8 => 1,
+            U8 => 1,
+            Char => 1,
+            I16 => 2,
+            U16 => 2,
+            I32 => 4,
+            U32 => 4,
+            I64 => 8,
+            U64 => 8,
+            Bool => 1,
+            Ptr(_) => 8,
+            Arr(arr) => arr.len * self.type_size(&arr.type_),
+            Void => panic!("what do i do here????"),
+        }
     }
 }

@@ -17,8 +17,8 @@ pub enum Type {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TypeArr {
-    len: usize,
-    type_: Box<Type>,
+    pub len: usize,
+    pub type_: Box<Type>,
 }
 
 impl TypeArr {
