@@ -51,7 +51,7 @@ pub struct CodeGen<'a> {
     program: Vec<Stmt>,
     symtable: SymbolTable<'a>,
     writer: BufWriter<File>,
-    registers: [Register<'a>; 4],
+    registers: [Register<'a>; 6],
 
     func: Option<StmtFunction>,
 }
@@ -65,10 +65,12 @@ impl<'a> CodeGen<'a> {
             symtable,
             writer: BufWriter::new(file),
             registers: [
+                Register::new("rdi"),
+                Register::new("rsi"),
+                Register::new("rdx"),
+                Register::new("rcx"),
                 Register::new("r8"),
                 Register::new("r9"),
-                Register::new("r10"),
-                Register::new("r11"),
             ],
             func: None,
         }
@@ -96,71 +98,68 @@ impl<'a> CodeGen<'a> {
         self.registers[id].in_use = false;
     }
 
-    fn compile(&mut self, stmt: Stmt) -> usize {
+    fn compile_expr(&mut self, expr: Expr) -> usize {
+        match expr {
+            Expr::Ident(_ident) => {
+                todo!();
+            }
+            Expr::Lit(literal) => match literal {
+                ExprLit::Int(mut int_repr) => self.loadint(int_repr.i64()),
+                ExprLit::Float(_val) => {
+                    todo!();
+                }
+                ExprLit::Bool(_val) => {
+                    todo!();
+                }
+                ExprLit::Str(_val) => {
+                    todo!();
+                }
+            },
+            Expr::Unary(_unary) => {
+                todo!();
+            }
+            Expr::Binary(expr) => {
+                let left = self.compile_expr(*expr.left().to_owned().unwrap());
+                let right = self.compile_expr(*expr.right().to_owned().unwrap());
+
+                match *expr.op() {
+                    BinOp::Add => self.add(left, right),
+                    BinOp::Sub => self.sub(left, right),
+                    BinOp::Mul => self.mul(left, right),
+                    BinOp::Div => self.div(left, right),
+                    BinOp::Equal => self.equal(left, right),
+                    BinOp::NotEqual => self.not_equal(left, right),
+                    BinOp::LessThan => self.less_than(left, right),
+                    BinOp::GreaterThan => self.greater_than(left, right),
+                    BinOp::LessEqual => self.less_equal(left, right),
+                    BinOp::GreaterEqual => self.greater_equal(left, right),
+                }
+            }
+        }
+    }
+
+    fn compile(&mut self, stmt: Stmt) {
         match stmt {
             Stmt::VarDecl(stmt) => {
                 self.generate_variable(stmt);
-
-                69420
             }
             Stmt::Return(stmt) => {
-                let r = stmt.0.map(|expr| self.compile(Stmt::Expr(*expr)));
-                self.ret(r);
+                let r = stmt.0.map(|expr| self.compile_expr(*expr));
 
-                //TODO: i don't have to return value here, think about something more clever
-                0
+                self.ret(r);
             }
             Stmt::Function(func) => self.generate_function(func),
-            Stmt::Expr(expr) => match expr {
-                Expr::Ident(ident) => {
-                    todo!();
-                }
-                Expr::Lit(literal) => match literal {
-                    ExprLit::Int(mut int_repr) => self.loadint(int_repr.i64()),
-                    ExprLit::Int(val) => todo!(),
-                    ExprLit::Float(val) => {
-                        todo!();
-                    }
-                    ExprLit::Bool(val) => {
-                        todo!();
-                    }
-                    ExprLit::Str(val) => {
-                        todo!();
-                    }
-                },
-                Expr::Unary(unary) => {
-                    todo!();
-                }
-                Expr::Binary(expr) => {
-                    let left = self.compile(Stmt::Expr(*expr.left().to_owned().unwrap()));
-                    let right = self.compile(Stmt::Expr(*expr.right().to_owned().unwrap()));
-
-                    match *expr.op() {
-                        BinOp::Add => self.add(left, right),
-                        BinOp::Sub => self.sub(left, right),
-                        BinOp::Mul => self.mul(left, right),
-                        BinOp::Div => self.div(left, right),
-                        BinOp::Equal => self.equal(left, right),
-                        BinOp::NotEqual => self.not_equal(left, right),
-                        BinOp::LessThan => self.less_than(left, right),
-                        BinOp::GreaterThan => self.greater_than(left, right),
-                        BinOp::LessEqual => self.less_equal(left, right),
-                        BinOp::GreaterEqual => self.greater_equal(left, right),
-                    }
-                }
-            },
+            Stmt::Expr(expr) => {
+                self.compile_expr(expr);
+            }
         }
     }
 
     pub fn generate(&mut self) {
         self.preabmble();
-        for stmt in self.program.clone() {
-            let r = self.compile(stmt.clone());
 
-            //remove this and clone above later
-            if let Stmt::Expr(_) = stmt {
-                self.printint(r);
-            }
+        for stmt in self.program.clone() {
+            self.compile(stmt);
         }
     }
 
@@ -189,7 +188,7 @@ impl<'a> CodeGen<'a> {
         .unwrap();
     }
 
-    fn generate_function(&mut self, func: StmtFunction) -> usize {
+    fn generate_function(&mut self, func: StmtFunction) {
         //TODO: remove clone
         self.func = Some(func.clone());
 
@@ -220,8 +219,6 @@ impl<'a> CodeGen<'a> {
             &func.name
         )
         .unwrap();
-
-        0
     }
 
     fn ret(&mut self, r: Option<usize>) {
