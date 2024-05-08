@@ -10,17 +10,16 @@ use parser::Parser;
 fn main() {
     let lexer = Lexer::new(
         "
-        u16 foo;
-
-        u8 main(u8 argc, char **argv) {
-            return 0;
-        }
+        u8 foo;
+        1 + 2 * 3 / 4 - 5;
         "
         .to_string(),
     );
 
-    let mut parser = Parser::new(lexer);
-    let statements = parser.parse_statements();
-    dbg!(&statements);
-    CodeGen::new("./nasm/main.nasm", statements, parser.symtable).generate();
+    let parser = Parser::new(lexer);
+    let (stmts, symtable) = parser.into_parts();
+
+    dbg!(&stmts);
+
+    CodeGen::new(stmts, symtable).compile("./nasm/main.nasm");
 }

@@ -4,12 +4,10 @@ use crate::lexer::Token;
 pub enum Precedence {
     #[default]
     Lowest,
-    Equals,      // ==
-    Lessgreater, // > or <
-    Sum,         // +
-    Product,     // *
-    Prefix,      // -X or !X
-    Call,        // foo()
+    Prefix,
+    Product,
+    Sum,
+    Assign,
 }
 
 impl From<&Token> for Precedence {
@@ -17,27 +15,9 @@ impl From<&Token> for Precedence {
         use Token::*;
 
         match value {
-            Equal | NotEqual => Self::Equals,
-            LessThan | GreaterThan | LessEqual | GreaterEqual => Self::Lessgreater,
             Plus | Minus => Self::Sum,
             Asterisk | Slash => Self::Product,
             _ => Self::Lowest,
-        }
-    }
-}
-
-impl Into<u8> for Precedence {
-    fn into(self) -> u8 {
-        use Precedence::*;
-
-        match self {
-            Lowest => 0,
-            Equals => 1,
-            Lessgreater => 2,
-            Sum => 3,
-            Product => 4,
-            Prefix => 5,
-            Call => 6,
         }
     }
 }

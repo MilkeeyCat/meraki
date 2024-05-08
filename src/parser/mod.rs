@@ -1,11 +1,9 @@
-mod expression;
+mod expr;
 mod parser;
 mod precedence;
-mod statement;
+mod stmt;
 mod type_;
 
-pub use expression::*;
-pub use parser::*;
-pub use precedence::*;
-pub use statement::*;
-pub use type_::*;
+pub use expr::Expr;
+pub use parser::Parser;
+pub use stmt::{Stmt, StmtVarDecl};

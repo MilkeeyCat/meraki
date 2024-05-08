@@ -41,15 +41,17 @@ pub enum Token {
     Return,
 
     I8,
-    I16,
-    I32,
-    I64,
     U8,
-    U16,
-    U32,
-    U64,
-    Char,
-    Bool,
-    Float32,
-    Void,
+}
+
+impl Token {
+    pub fn precedence(&self) -> u8 {
+        match self {
+            Token::Bang => 3,
+            Token::Asterisk | Token::Slash => 3,
+            Token::Plus | Token::Minus => 2,
+            Token::Assign => 1,
+            _ => 0,
+        }
+    }
 }

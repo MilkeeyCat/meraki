@@ -1,7 +1,5 @@
 use crate::lexer::Token;
 
-use super::Type;
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum BinOp {
     Add,
@@ -29,7 +27,7 @@ impl From<&Token> for BinOp {
             Token::GreaterThan => Self::GreaterThan,
             Token::LessEqual => Self::LessEqual,
             Token::GreaterEqual => Self::GreaterEqual,
-            token => unreachable!("cant convert token {:?} into binary operator", token),
+            token => panic!("Couldn't convert {:?} into binary operator", token),
         }
     }
 }
@@ -37,50 +35,35 @@ impl From<&Token> for BinOp {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Binary(ExprBinary),
-    Lit(ExprLit),
     Unary(ExprUnary),
+    Lit(ExprLit),
     Ident(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprBinary {
-    op: BinOp,
-    left: Box<Expr>,
-    right: Box<Expr>,
+    pub op: BinOp,
+    pub left: Box<Expr>,
+    pub right: Box<Expr>,
 }
 
 impl ExprBinary {
     pub fn new(op: BinOp, left: Box<Expr>, right: Box<Expr>) -> Self {
         Self { op, left, right }
     }
-
-    pub fn op(&self) -> &BinOp {
-        return &self.op;
-    }
-
-    pub fn left(&self) -> &Expr {
-        return &self.left;
-    }
-
-    pub fn right(&self) -> &Expr {
-        return &self.right;
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExprLit {
-    Bool(bool),
-    Float(f64),
     Int(IntLitRepr),
-    Str(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct IntLitRepr(Vec<u8>);
 
 impl IntLitRepr {
-    pub fn new() -> Self {
-        Self(vec![0])
+    pub fn new(str_num: String) -> Self {
+        Self::parse_string(str_num)
     }
 
     fn div2(&self, num: &str) -> Option<(String, bool)> {
@@ -121,9 +104,9 @@ impl IntLitRepr {
         }
     }
 
-    pub fn from_str(s: String) -> Self {
-        let mut int_repr = IntLitRepr::new();
-        let mut result = s;
+    pub fn parse_string(str_num: String) -> Self {
+        let mut int_repr = IntLitRepr(vec![]);
+        let mut result = str_num;
 
         for i in 0.. {
             match int_repr.div2(&result) {
@@ -144,42 +127,6 @@ impl IntLitRepr {
 
         int_repr
     }
-
-    pub fn bytes(&self) -> &[u8] {
-        &self.0
-    }
-
-    pub fn i64(&mut self) -> i64 {
-        if self.0.len() < 8 {
-            self.0.resize(8, 0);
-        }
-
-        i64::from_le_bytes(self.0[0..8].try_into().unwrap())
-    }
-}
-
-impl From<String> for IntLitRepr {
-    fn from(value: String) -> Self {
-        Self::from_str(value)
-    }
-}
-
-impl ExprLit {
-    fn kind(&self) -> Type {
-        match self {
-            Self::Int(int) => match int.bytes().len() {
-                1 => Type::U8,
-                2 => Type::U16,
-                3..=4 => Type::U32,
-                5..=8 => Type::U64,
-                bytes => panic!("Int out of bounds, max: 64 bit, got: {:?}", bytes * 8),
-            },
-            Self::Str(_) => Type::Ptr(Box::new(Type::Char)),
-            Self::Bool(_) => Type::Bool,
-            //Who needs floats, amiright
-            Self::Float(_) => todo!(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -193,7 +140,7 @@ impl From<&Token> for UnOp {
         match value {
             Token::Bang => Self::Not,
             Token::Minus => Self::Negative,
-            token => unreachable!("cant convert token {:?} into unary operator", token),
+            token => panic!("Couldn't convert {:?} into unary operator", token),
         }
     }
 }

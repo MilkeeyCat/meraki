@@ -103,17 +103,7 @@ impl Lexer {
                     "else" => Token::Else,
                     "return" => Token::Return,
                     "i8" => Token::I8,
-                    "i16" => Token::I16,
-                    "i32" => Token::I32,
-                    "i64" => Token::I64,
                     "u8" => Token::U8,
-                    "u16" => Token::U16,
-                    "u32" => Token::U32,
-                    "u64" => Token::U64,
-                    "char" => Token::Char,
-                    "bool" => Token::Bool,
-                    "f32" => Token::Float32,
-                    "void" => Token::Void,
                     _ => Token::Ident(ident),
                 });
             }
@@ -121,7 +111,7 @@ impl Lexer {
                 return Ok(Token::Integer(self.read_int()));
             }
             0 => Token::Eof,
-            c => unreachable!("coudn't parse char {}, skill issue", char::from(c)),
+            c => panic!("Coudn't parse char {}, skill issue", char::from(c)),
         };
 
         self.read_char();
@@ -190,7 +180,6 @@ mod test {
 
             const i8 a = 5;
             i8 *b = &a;
-            char *str = "ddnet";
 
             if(false) {
             } else {
@@ -239,12 +228,6 @@ mod test {
             Token::Ampersand,
             Token::Ident(String::from("a")),
             Token::Semicolon,
-            Token::Char,
-            Token::Asterisk,
-            Token::Ident(String::from("str")),
-            Token::Assign,
-            Token::String(String::from("ddnet")),
-            Token::Semicolon,
             Token::If,
             Token::LParen,
             Token::False,
@@ -277,7 +260,7 @@ mod test {
 
         for token in tokens {
             let next_token = lexer.next_token()?;
-            println!("expected: {:?}, received: {:?}", token, next_token);
+
             assert_eq!(token, next_token);
         }
 

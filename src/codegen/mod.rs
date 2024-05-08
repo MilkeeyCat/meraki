@@ -1,3 +1,3 @@
 mod codegen;
 
-pub use codegen::*;
+pub use codegen::CodeGen;
