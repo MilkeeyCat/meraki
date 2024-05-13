@@ -133,7 +133,7 @@ impl Parser {
 
     fn int_lit(&mut self) -> Expr {
         if let Token::Integer(num_str) = &self.cur_token {
-            Expr::Lit(ExprLit::Int(IntLitRepr::new(num_str.to_owned())))
+            Expr::Lit(ExprLit::Int(IntLitRepr::from(&num_str[..])))
         } else {
             panic!("Expected integer literal, got: {:?}", self.cur_token);
         }

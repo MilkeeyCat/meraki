@@ -1,3 +1,4 @@
+use super::IntLitRepr;
 use crate::lexer::Token;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -56,77 +57,6 @@ impl ExprBinary {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExprLit {
     Int(IntLitRepr),
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct IntLitRepr(Vec<u8>);
-
-impl IntLitRepr {
-    pub fn new(str_num: String) -> Self {
-        Self::parse_string(str_num)
-    }
-
-    fn div2(&self, num: &str) -> Option<(String, bool)> {
-        let mut remainder = false;
-        let result = num
-            .chars()
-            .map(|ch| {
-                let mut new = ch as u8 - b'0';
-                if remainder {
-                    new += 10;
-                }
-
-                if new & 1 != 0 {
-                    remainder = true;
-                } else {
-                    remainder = false;
-                }
-
-                new >>= 1;
-
-                (new + b'0') as char
-            })
-            .collect::<String>();
-
-        if result.len() > 0 {
-            Some((result, remainder))
-        } else {
-            None
-        }
-    }
-
-    fn set_bit(&mut self, n: usize) {
-        if let None = self.0.get(n / 8) {
-            self.0.push(0);
-            self.set_bit(n);
-        } else {
-            self.0[n / 8] |= 1 << (n % 8);
-        }
-    }
-
-    pub fn parse_string(str_num: String) -> Self {
-        let mut int_repr = IntLitRepr(vec![]);
-        let mut result = str_num;
-
-        for i in 0.. {
-            match int_repr.div2(&result) {
-                Some((string, remainder)) => {
-                    result = string;
-
-                    if result.as_bytes()[0] == b'0' {
-                        result.remove(0);
-                    }
-
-                    if remainder {
-                        int_repr.set_bit(i);
-                    }
-                }
-                None => break,
-            }
-        }
-
-        int_repr
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

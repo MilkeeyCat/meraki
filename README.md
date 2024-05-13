@@ -1,3 +1,3 @@
 # Milk lang
 
-It's like C but with some goofy features™
+It's like if C and Rust had a love child and was ashamed of it
