@@ -1,5 +1,8 @@
-#[derive(Debug, Clone, PartialEq)]
-pub struct IntLitRepr(Vec<u8>);
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct IntLitRepr {
+    bytes: Vec<u8>,
+    signed: bool,
+}
 
 impl IntLitRepr {
     fn mul2(num: &str) -> String {
@@ -58,12 +61,16 @@ impl IntLitRepr {
     }
 
     fn set_bit(&mut self, n: usize) {
-        if let None = self.0.get(n / 8) {
-            self.0.push(0);
+        if let None = self.bytes.get(n / 8) {
+            self.bytes.push(0);
             self.set_bit(n);
         } else {
-            self.0[n / 8] |= 1 << (n % 8);
+            self.bytes[n / 8] |= 1 << (n % 8);
         }
+    }
+
+    pub fn signed(&mut self, signed: bool) {
+        self.signed = signed;
     }
 }
 
@@ -71,9 +78,13 @@ impl ToString for IntLitRepr {
     fn to_string(&self) -> String {
         let mut res = String::from("0");
 
-        for byte in self.0.iter().rev() {
-            for i in 0..8 {
-                let bit = (byte << i) & 0b10000000;
+        for (i, byte) in self.bytes.iter().rev().enumerate() {
+            for j in 0..8 {
+                if i == 0 && j == 0 && self.signed {
+                    continue;
+                }
+
+                let bit = (byte << j) & 0b1000_0000;
                 res = Self::mul2(&res);
 
                 if bit != 0 {
@@ -82,13 +93,17 @@ impl ToString for IntLitRepr {
             }
         }
 
+        if self.signed {
+            res.insert(0, '-');
+        }
+
         res
     }
 }
 
 impl From<&str> for IntLitRepr {
     fn from(value: &str) -> Self {
-        let mut int_repr = Self(Vec::new());
+        let mut int_repr = Self::default();
         let mut result = value.to_owned();
 
         for i in 0.. {
@@ -149,24 +164,12 @@ mod test {
     #[test]
     fn addition() {
         let mut num = String::from("0");
+        let tests = ["1", "2", "3", "4", "5", "6"];
 
-        IntLitRepr::inc(&mut num);
-        assert_eq!(num, "1");
-
-        IntLitRepr::inc(&mut num);
-        assert_eq!(num, "2");
-
-        IntLitRepr::inc(&mut num);
-        assert_eq!(num, "3");
-
-        IntLitRepr::inc(&mut num);
-        assert_eq!(num, "4");
-
-        IntLitRepr::inc(&mut num);
-        assert_eq!(num, "5");
-
-        IntLitRepr::inc(&mut num);
-        assert_eq!(num, "6");
+        for actual in tests {
+            IntLitRepr::inc(&mut num);
+            assert_eq!(num, actual);
+        }
     }
 
     #[test]
@@ -192,5 +195,16 @@ mod test {
         for (actual, expected) in tests {
             assert_eq!(actual, expected);
         }
+    }
+
+    #[test]
+    fn sign() {
+        let mut lit = IntLitRepr::from("25");
+
+        lit.signed(true);
+        assert_eq!(lit.to_string(), "-25");
+
+        lit.signed(false);
+        assert_eq!(lit.to_string(), "25");
     }
 }
