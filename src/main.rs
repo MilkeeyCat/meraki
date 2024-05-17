@@ -11,6 +11,7 @@ fn main() {
     let lexer = Lexer::new(
         "
         u8 foo;
+        i8 bar;
         1 + 2 * 3 / 4 - 5;
         "
         .to_string(),
@@ -21,5 +22,5 @@ fn main() {
 
     dbg!(&stmts);
 
-    CodeGen::new(stmts, symtable).compile("./nasm/main.nasm");
+    CodeGen::new(symtable).compile(stmts, "./nasm/main.nasm");
 }

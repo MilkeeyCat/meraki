@@ -1,5 +1,9 @@
-use crate::{parser::Stmt, symtable::SymbolTable};
-use std::{fs::File, io::Write};
+use crate::{
+    parser::{Expr, Stmt, StmtVarDecl, Type},
+    symtable::SymbolTable,
+};
+use indoc::{formatdoc, writedoc};
+use std::{fmt::Write, fs::File};
 
 struct Register<'a> {
     name: &'a str,
@@ -16,17 +20,16 @@ impl<'a> Register<'a> {
 }
 
 pub struct CodeGen<'a> {
-    program: Vec<Stmt>,
     symtable: SymbolTable,
     registers: [Register<'a>; 6],
     data_section: String,
     text_section: String,
+    bss_section: String,
 }
 
 impl<'a> CodeGen<'a> {
-    pub fn new(program: Vec<Stmt>, symtable: SymbolTable) -> Self {
+    pub fn new(symtable: SymbolTable) -> Self {
         Self {
-            program,
             symtable,
             registers: [
                 Register::new("rdi"),
@@ -36,8 +39,14 @@ impl<'a> CodeGen<'a> {
                 Register::new("r8"),
                 Register::new("r9"),
             ],
-            text_section: ".text:\n".to_string(),
-            data_section: ".data:\n".to_string(),
+            bss_section: "section .bss\n".to_string(),
+            data_section: "section .data\n".to_string(),
+            text_section: formatdoc!(
+                "
+                section .text
+                    global main
+                "
+            ),
         }
     }
 
@@ -57,12 +66,55 @@ impl<'a> CodeGen<'a> {
         self.registers[r].in_use = false;
     }
 
-    pub fn compile(self, path: &str) {
+    fn declare(&mut self, var: &StmtVarDecl) {
+        let size = self.size(&var.type_);
+
+        writedoc!(
+            self.bss_section,
+            "
+            \t{} resb {size}
+            ",
+            &var.name
+        )
+        .unwrap();
+    }
+
+    fn expr(&mut self, expr: &Expr) -> usize {
+        //todo!();
+        0
+    }
+
+    fn stmt(&mut self, stmt: &Stmt) {
+        match stmt {
+            Stmt::Expr(expr) => _ = self.expr(expr),
+            Stmt::VarDecl(var_decl) => {
+                self.declare(var_decl);
+            }
+        }
+    }
+
+    fn size(&self, type_: &Type) -> usize {
+        match type_ {
+            Type::I8 | Type::U8 => 1,
+        }
+    }
+
+    pub fn compile(&mut self, program: Vec<Stmt>, path: &str) {
         let mut file = File::create(path).expect(&format!("Failed to open a file {}", path));
 
-        file.write_all(&self.data_section.into_bytes())
+        for stmt in program {
+            self.stmt(&stmt);
+        }
+
+        use std::io::Write;
+
+        file.write_all(self.bss_section.as_bytes())
+            .expect("Failed to write generated .bss section to output file");
+        file.write(&[10]).unwrap();
+        file.write_all(self.data_section.as_bytes())
             .expect("Failed to write generated .data section to output file");
-        file.write_all(&self.text_section.into_bytes())
+        file.write(&[10]).unwrap();
+        file.write_all(self.text_section.as_bytes())
             .expect("Failed to write generated .text section to output file");
     }
 }
