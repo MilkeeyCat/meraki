@@ -1,5 +1,5 @@
 use crate::{
-    parser::{Expr, Stmt, StmtVarDecl, Type},
+    parser::{BinOp, Expr, ExprBinary, ExprLit, IntLitRepr, Stmt, StmtVarDecl, Type},
     symtable::SymbolTable,
 };
 use indoc::{formatdoc, writedoc};
@@ -44,7 +44,16 @@ impl<'a> CodeGen<'a> {
             text_section: formatdoc!(
                 "
                 section .text
-                    global main
+                    global _start
+
+                _start:
+                    call main
+
+                    mov rax, 60
+                    mov rdi, 0
+                    syscall
+
+                main:
                 "
             ),
         }
@@ -80,8 +89,34 @@ impl<'a> CodeGen<'a> {
     }
 
     fn expr(&mut self, expr: &Expr) -> usize {
-        //todo!();
-        0
+        match expr {
+            Expr::Binary(bin_expr) => self.bin_expr(bin_expr),
+            Expr::Lit(lit) => match lit {
+                ExprLit::Int(int_lit) => self.load(int_lit),
+            },
+            _ => panic!("nono"),
+        }
+    }
+
+    fn bin_expr(&mut self, expr: &ExprBinary) -> usize {
+        match &expr.op {
+            BinOp::Assign => {
+                let left = expr.left.as_ref();
+
+                if let Expr::Ident(name) = left {
+                    assert!(self.symtable.exists(name));
+
+                    let right = self.expr(expr.right.as_ref());
+
+                    self.mov(name, right);
+
+                    return 69;
+                } else {
+                    panic!("Cant assign to non ident");
+                }
+            }
+            _ => panic!("lasjdf"),
+        }
     }
 
     fn stmt(&mut self, stmt: &Stmt) {
@@ -97,6 +132,34 @@ impl<'a> CodeGen<'a> {
         match type_ {
             Type::I8 | Type::U8 => 1,
         }
+    }
+
+    fn mov(&mut self, label: &str, r: usize) {
+        writedoc!(
+            self.text_section,
+            "
+            \tmov [{}], {}
+            ",
+            &label,
+            &self.registers[r].name
+        )
+        .unwrap();
+    }
+
+    fn load(&mut self, int_lit: &IntLitRepr) -> usize {
+        let r = self.alloc();
+
+        writedoc!(
+            self.text_section,
+            "
+            \tmov {}, {}
+            ",
+            &self.registers[r].name,
+            int_lit.to_string(),
+        )
+        .unwrap();
+
+        r
     }
 
     pub fn compile(&mut self, program: Vec<Stmt>, path: &str) {
@@ -116,5 +179,7 @@ impl<'a> CodeGen<'a> {
         file.write(&[10]).unwrap();
         file.write_all(self.text_section.as_bytes())
             .expect("Failed to write generated .text section to output file");
+        //TODO: remove this hack
+        file.write_all("\tret".as_bytes()).unwrap();
     }
 }

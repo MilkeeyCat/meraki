@@ -13,6 +13,7 @@ pub enum BinOp {
     GreaterThan,
     LessEqual,
     GreaterEqual,
+    Assign,
 }
 
 impl From<&Token> for BinOp {
@@ -28,6 +29,7 @@ impl From<&Token> for BinOp {
             Token::GreaterThan => Self::GreaterThan,
             Token::LessEqual => Self::LessEqual,
             Token::GreaterEqual => Self::GreaterEqual,
+            Token::Assign => Self::Assign,
             token => panic!("Couldn't convert {:?} into binary operator", token),
         }
     }

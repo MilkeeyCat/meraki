@@ -5,7 +5,7 @@ use super::{
 };
 use crate::{
     lexer::{Lexer, Token},
-    symtable::SymbolTable,
+    symtable::{Symbol, SymbolGlobalVar, SymbolTable},
 };
 
 pub struct Parser {
@@ -74,7 +74,9 @@ impl Parser {
             self.next_token();
 
             left = match &self.cur_token {
-                Token::Plus | Token::Minus | Token::Asterisk | Token::Slash => self.bin_expr(left),
+                Token::Plus | Token::Minus | Token::Asterisk | Token::Slash | Token::Assign => {
+                    self.bin_expr(left)
+                }
                 token => panic!("Failed to parse infix token {:?}", token),
             }
         }
@@ -119,6 +121,10 @@ impl Parser {
         }
 
         self.next_token();
+        self.symtable.push(Symbol::GlobalVar(SymbolGlobalVar {
+            name: name.clone(),
+            type_: type_.clone(),
+        }));
 
         Stmt::VarDecl(StmtVarDecl::new(type_, name, None))
     }

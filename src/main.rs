@@ -10,9 +10,9 @@ use parser::Parser;
 fn main() {
     let lexer = Lexer::new(
         "
-        u8 foo;
-        i8 bar;
-        1 + 2 * 3 / 4 - 5;
+        u8 bar;
+
+        bar = 69;
         "
         .to_string(),
     );
@@ -21,6 +21,7 @@ fn main() {
     let (stmts, symtable) = parser.into_parts();
 
     dbg!(&stmts);
+    dbg!(&symtable);
 
     CodeGen::new(symtable).compile(stmts, "./nasm/main.nasm");
 }
