@@ -44,14 +44,7 @@ impl<'a> CodeGen<'a> {
             text_section: formatdoc!(
                 "
                 section .text
-                    global _start
-
-                _start:
-                    call main
-
-                    mov rax, 60
-                    mov rdi, 0
-                    syscall
+                    global main
 
                 main:
                 "
@@ -110,10 +103,22 @@ impl<'a> CodeGen<'a> {
 
                     self.mov(name, right);
 
-                    return 69;
+                    69
                 } else {
                     panic!("Cant assign to non ident");
                 }
+            }
+            BinOp::Add => {
+                let left = self.expr(expr.left.as_ref());
+                let right = self.expr(expr.right.as_ref());
+
+                self.add(left, right)
+            }
+            BinOp::Sub => {
+                let left = self.expr(expr.left.as_ref());
+                let right = self.expr(expr.right.as_ref());
+
+                self.sub(left, right)
             }
             _ => panic!("lasjdf"),
         }
@@ -160,6 +165,38 @@ impl<'a> CodeGen<'a> {
         .unwrap();
 
         r
+    }
+
+    fn add(&mut self, r1: usize, r2: usize) -> usize {
+        writedoc!(
+            self.text_section,
+            "
+            \tadd {}, {}
+            ",
+            &self.registers[r1].name,
+            &self.registers[r2].name,
+        )
+        .unwrap();
+
+        self.free(r2);
+
+        r1
+    }
+
+    fn sub(&mut self, r1: usize, r2: usize) -> usize {
+        writedoc!(
+            self.text_section,
+            "
+            \tsub {}, {}
+            ",
+            &self.registers[r1].name,
+            &self.registers[r2].name,
+        )
+        .unwrap();
+
+        self.free(r2);
+
+        r1
     }
 
     pub fn compile(&mut self, program: Vec<Stmt>, path: &str) {
