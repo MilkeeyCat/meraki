@@ -32,12 +32,12 @@ impl<'a> CodeGen<'a> {
         Self {
             symtable,
             registers: [
+                Register::new("r8"),
+                Register::new("r9"),
                 Register::new("rdi"),
                 Register::new("rsi"),
                 Register::new("rdx"),
                 Register::new("rcx"),
-                Register::new("r8"),
-                Register::new("r9"),
             ],
             bss_section: "section .bss\n".to_string(),
             data_section: "section .data\n".to_string(),
@@ -120,6 +120,18 @@ impl<'a> CodeGen<'a> {
 
                 self.sub(left, right)
             }
+            BinOp::Mul => {
+                let left = self.expr(expr.left.as_ref());
+                let right = self.expr(expr.right.as_ref());
+
+                self.mul(left, right)
+            }
+            BinOp::Div => {
+                let left = self.expr(expr.left.as_ref());
+                let right = self.expr(expr.right.as_ref());
+
+                self.div(left, right)
+            }
             _ => panic!("lasjdf"),
         }
     }
@@ -191,6 +203,43 @@ impl<'a> CodeGen<'a> {
             ",
             &self.registers[r1].name,
             &self.registers[r2].name,
+        )
+        .unwrap();
+
+        self.free(r2);
+
+        r1
+    }
+
+    fn mul(&mut self, r1: usize, r2: usize) -> usize {
+        writedoc!(
+            self.text_section,
+            "
+            \timul {}, {}
+            ",
+            &self.registers[r1].name,
+            &self.registers[r2].name,
+        )
+        .unwrap();
+
+        self.free(r2);
+
+        r1
+    }
+
+    //NOTE: if mafs doesn't works, prolly because of this
+    fn div(&mut self, r1: usize, r2: usize) -> usize {
+        writedoc!(
+            self.text_section,
+            "
+            \tmov rax, {}
+            \tcqo
+            \tidiv {}
+            \tmov {}, rax
+            ",
+            &self.registers[r1].name,
+            &self.registers[r2].name,
+            &self.registers[r1].name,
         )
         .unwrap();
 
