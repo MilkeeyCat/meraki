@@ -68,10 +68,6 @@ impl IntLitRepr {
             self.bytes[n / 8] |= 1 << (n % 8);
         }
     }
-
-    pub fn signed(&mut self, signed: bool) {
-        self.signed = signed;
-    }
 }
 
 impl ToString for IntLitRepr {
@@ -195,16 +191,5 @@ mod test {
         for (actual, expected) in tests {
             assert_eq!(actual, expected);
         }
-    }
-
-    #[test]
-    fn sign() {
-        let mut lit = IntLitRepr::from("25");
-
-        lit.signed(true);
-        assert_eq!(lit.to_string(), "-25");
-
-        lit.signed(false);
-        assert_eq!(lit.to_string(), "25");
     }
 }
