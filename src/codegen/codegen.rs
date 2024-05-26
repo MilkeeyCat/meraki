@@ -1,5 +1,7 @@
 use crate::{
-    parser::{BinOp, Expr, ExprBinary, ExprLit, IntLitRepr, Stmt, StmtVarDecl, Type},
+    parser::{
+        BinOp, Expr, ExprBinary, ExprLit, ExprUnary, IntLitRepr, Stmt, StmtVarDecl, Type, UnOp,
+    },
     symtable::SymbolTable,
 };
 use indoc::{formatdoc, writedoc};
@@ -87,6 +89,7 @@ impl<'a> CodeGen<'a> {
             Expr::Lit(lit) => match lit {
                 ExprLit::Int(int_lit) => self.load(int_lit),
             },
+            Expr::Unary(unary_expr) => self.unary_expr(unary_expr),
             _ => panic!("nono"),
         }
     }
@@ -177,6 +180,29 @@ impl<'a> CodeGen<'a> {
         .unwrap();
 
         r
+    }
+
+    fn unary_expr(&mut self, unary_expr: &ExprUnary) -> usize {
+        match unary_expr.op {
+            UnOp::Negative => {
+                let r = self.expr(unary_expr.expr.as_ref());
+                self.negate(r);
+
+                r
+            }
+            _ => panic!("not unary operator is not supported yet"),
+        }
+    }
+
+    fn negate(&mut self, r: usize) {
+        writedoc!(
+            self.text_section,
+            "
+            \tneg {}
+            ",
+            &self.registers[r].name,
+        )
+        .unwrap();
     }
 
     fn add(&mut self, r1: usize, r2: usize) -> usize {

@@ -157,11 +157,13 @@ impl Parser {
     }
 
     fn unary_expr(&mut self) -> Expr {
+        let op_token = self.cur_token.clone();
+        self.next_token();
+
         let expr = Expr::Unary(ExprUnary::new(
-            UnOp::from(&self.cur_token),
+            UnOp::from(&op_token),
             Box::new(self.expr(self.cur_token.precedence())),
         ));
-        self.next_token();
 
         expr
     }

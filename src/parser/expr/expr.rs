@@ -79,8 +79,8 @@ impl From<&Token> for UnOp {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprUnary {
-    op: UnOp,
-    expr: Box<Expr>,
+    pub op: UnOp,
+    pub expr: Box<Expr>,
 }
 
 impl ExprUnary {
