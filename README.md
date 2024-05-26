@@ -1,4 +1,4 @@
-# Milk lang
+# Meraki
 
 It's like if C and Rust had a love child and was ashamed of it
 
