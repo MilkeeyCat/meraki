@@ -4,9 +4,9 @@ use crate::lexer::Token;
 pub enum Precedence {
     #[default]
     Lowest,
-    Prefix,
     Product,
     Sum,
+    Prefix,
     Assign,
 }
 

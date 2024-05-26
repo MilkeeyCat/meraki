@@ -12,7 +12,7 @@ fn main() {
         "
         u8 bar;
 
-        bar = -5;
+        bar = 5 * 6 + 69 - 45 / 8;
         "
         .to_string(),
     );

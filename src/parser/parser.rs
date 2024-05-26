@@ -1,5 +1,6 @@
 use super::{
     expr::{BinOp, ExprBinary, ExprLit, ExprUnary, IntLitRepr, UnOp},
+    precedence::Precedence,
     type_::Type,
     Expr, Stmt, StmtVarDecl,
 };
@@ -162,7 +163,7 @@ impl Parser {
 
         let expr = Expr::Unary(ExprUnary::new(
             UnOp::from(&op_token),
-            Box::new(self.expr(self.cur_token.precedence())),
+            Box::new(self.expr(Precedence::Prefix as u8)),
         ));
 
         expr
