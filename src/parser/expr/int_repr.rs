@@ -1,3 +1,5 @@
+const MAX_BITS_NUM_SUPPORTED: usize = 8;
+
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct IntLitRepr {
     bytes: Vec<u8>,
@@ -68,6 +70,10 @@ impl IntLitRepr {
             self.bytes[n / 8] |= 1 << (n % 8);
         }
     }
+
+    fn bits(&self) -> usize {
+        self.bytes.len() * 8
+    }
 }
 
 impl ToString for IntLitRepr {
@@ -97,8 +103,15 @@ impl ToString for IntLitRepr {
     }
 }
 
-impl From<&str> for IntLitRepr {
-    fn from(value: &str) -> Self {
+#[derive(Debug)]
+pub enum IntLitReprError {
+    TooLarge(usize),
+}
+
+impl TryFrom<&str> for IntLitRepr {
+    type Error = IntLitReprError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
         let mut int_repr = Self::default();
         let mut result = value.to_owned();
 
@@ -119,13 +132,17 @@ impl From<&str> for IntLitRepr {
             }
         }
 
-        int_repr
+        if int_repr.bits() > MAX_BITS_NUM_SUPPORTED {
+            return Err(IntLitReprError::TooLarge(int_repr.bits()));
+        }
+
+        Ok(int_repr)
     }
 }
 
 #[cfg(test)]
 mod test {
-    use super::IntLitRepr;
+    use super::{IntLitRepr, IntLitReprError};
 
     #[test]
     fn multiplication() {
@@ -169,27 +186,24 @@ mod test {
     }
 
     #[test]
-    fn int_repr() {
+    fn int_repr() -> Result<(), IntLitReprError> {
         let tests = [
-            (IntLitRepr::from("0").to_string(), "0"),
-            (IntLitRepr::from("65535").to_string(), "65535"),
-            (IntLitRepr::from("4294967295").to_string(), "4294967295"),
-            (
-                IntLitRepr::from("18446744073709551615").to_string(),
-                "18446744073709551615",
-            ),
-            (
-                IntLitRepr::from("340282366920938463463374607431768211455").to_string(),
-                "340282366920938463463374607431768211455",
-            ),
-            (
-                IntLitRepr::from("340282366920938463463374607431768211456").to_string(),
-                "340282366920938463463374607431768211456",
-            ),
+            (IntLitRepr::try_from("0")?.to_string(), "0"),
+            (IntLitRepr::try_from("255")?.to_string(), "255"),
+            //(IntLitRepr::from("65535").to_string(), "65535"),
+            //(IntLitRepr::from("4294967295").to_string(), "4294967295"),
+            //(
+            //    IntLitRepr::from("18446744073709551615").to_string(),
+            //    "18446744073709551615",
+            //),
         ];
 
         for (actual, expected) in tests {
             assert_eq!(actual, expected);
         }
+
+        assert!(IntLitRepr::try_from("256").is_err());
+
+        Ok(())
     }
 }
