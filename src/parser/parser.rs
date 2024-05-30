@@ -182,42 +182,35 @@ impl Parser {
 #[cfg(test)]
 mod test {
     use super::Parser;
-    use crate::lexer::Lexer;
+    use crate::{
+        lexer::Lexer,
+        parser::{precedence::Precedence, BinOp, Expr, ExprBinary, ExprLit, IntLitRepr},
+    };
 
     #[test]
     fn parse_arithmetic_expression() {
         let input = "1 * 2 + 3 / (4 + 1);";
         let mut parser = Parser::new(Lexer::new(input.to_string()));
 
-        //assert_eq!(
-        //    parser.parse_expression(Precedence::default()),
-        //    Expr::Binary(ExprBinary::new(
-        //        BinOp::Add,
-        //        Box::new(Expr::Binary(ExprBinary::new(
-        //            BinOp::Mul,
-        //            Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::from_string(
-        //                "1".to_string()
-        //            )))),
-        //            Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::from_string(
-        //                "2".to_string()
-        //            ))))
-        //        ))),
-        //        Box::new(Expr::Binary(ExprBinary::new(
-        //            BinOp::Div,
-        //            Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::from_string(
-        //                "3".to_string()
-        //            )))),
-        //            Box::new(Expr::Binary(ExprBinary::new(
-        //                BinOp::Add,
-        //                Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::from_string(
-        //                    "4".to_string()
-        //                )))),
-        //                Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::from_string(
-        //                    "1".to_string()
-        //                )))),
-        //            )))
-        //        )))
-        //    ))
-        //);
+        assert_eq!(
+            parser.expr(Precedence::default() as u8),
+            Expr::Binary(ExprBinary::new(
+                BinOp::Add,
+                Box::new(Expr::Binary(ExprBinary::new(
+                    BinOp::Mul,
+                    Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("1").unwrap()))),
+                    Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("2").unwrap())))
+                ))),
+                Box::new(Expr::Binary(ExprBinary::new(
+                    BinOp::Div,
+                    Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("3").unwrap()))),
+                    Box::new(Expr::Binary(ExprBinary::new(
+                        BinOp::Add,
+                        Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("4").unwrap()))),
+                        Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("1").unwrap()))),
+                    )))
+                )))
+            ))
+        );
     }
 }
