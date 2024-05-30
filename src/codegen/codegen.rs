@@ -1,3 +1,4 @@
+use super::{Register, RegisterAllocator};
 use crate::{
     parser::{
         BinOp, Expr, ExprBinary, ExprLit, ExprUnary, IntLitRepr, Stmt, StmtVarDecl, Type, UnOp,
@@ -7,40 +8,26 @@ use crate::{
 use indoc::{formatdoc, writedoc};
 use std::{fmt::Write, fs::File};
 
-struct Register<'a> {
-    name: &'a str,
-    in_use: bool,
-}
-
-impl<'a> Register<'a> {
-    pub fn new(name: &'a str) -> Self {
-        Self {
-            name,
-            in_use: false,
-        }
-    }
-}
-
-pub struct CodeGen<'a> {
+pub struct CodeGen {
     symtable: SymbolTable,
-    registers: [Register<'a>; 6],
+    registers: RegisterAllocator,
     data_section: String,
     text_section: String,
     bss_section: String,
 }
 
-impl<'a> CodeGen<'a> {
+impl CodeGen {
     pub fn new(symtable: SymbolTable) -> Self {
         Self {
             symtable,
-            registers: [
-                Register::new("r8"),
-                Register::new("r9"),
-                Register::new("rdi"),
-                Register::new("rsi"),
-                Register::new("rdx"),
-                Register::new("rcx"),
-            ],
+            registers: RegisterAllocator::new(vec![
+                Register::new("", "r8"),
+                Register::new("", "r9"),
+                Register::new("", "rdi"),
+                Register::new("", "rsi"),
+                Register::new("", "rdx"),
+                Register::new("", "rcx"),
+            ]),
             bss_section: "section .bss\n".to_string(),
             data_section: "section .data\n".to_string(),
             text_section: formatdoc!(
@@ -52,22 +39,6 @@ impl<'a> CodeGen<'a> {
                 "
             ),
         }
-    }
-
-    fn alloc(&mut self) -> usize {
-        for (i, r) in self.registers.iter_mut().enumerate() {
-            if !r.in_use {
-                r.in_use = true;
-
-                return i;
-            }
-        }
-
-        panic!("All registers were in use");
-    }
-
-    fn free(&mut self, r: usize) {
-        self.registers[r].in_use = false;
     }
 
     fn declare(&mut self, var: &StmtVarDecl) {
@@ -83,7 +54,7 @@ impl<'a> CodeGen<'a> {
         .unwrap();
     }
 
-    fn expr(&mut self, expr: &Expr) -> usize {
+    fn expr(&mut self, expr: &Expr) -> Register {
         match expr {
             Expr::Binary(bin_expr) => self.bin_expr(bin_expr),
             Expr::Lit(lit) => match lit {
@@ -94,7 +65,7 @@ impl<'a> CodeGen<'a> {
         }
     }
 
-    fn bin_expr(&mut self, expr: &ExprBinary) -> usize {
+    fn bin_expr(&mut self, expr: &ExprBinary) -> Register {
         match &expr.op {
             BinOp::Assign => {
                 let left = expr.left.as_ref();
@@ -103,10 +74,9 @@ impl<'a> CodeGen<'a> {
                     assert!(self.symtable.exists(name));
 
                     let right = self.expr(expr.right.as_ref());
+                    self.mov(name, &right);
 
-                    self.mov(name, right);
-
-                    69
+                    right
                 } else {
                     panic!("Cant assign to non ident");
                 }
@@ -115,25 +85,33 @@ impl<'a> CodeGen<'a> {
                 let left = self.expr(expr.left.as_ref());
                 let right = self.expr(expr.right.as_ref());
 
-                self.add(left, right)
+                self.add(&left, right);
+
+                left
             }
             BinOp::Sub => {
                 let left = self.expr(expr.left.as_ref());
                 let right = self.expr(expr.right.as_ref());
 
-                self.sub(left, right)
+                self.sub(&left, right);
+
+                left
             }
             BinOp::Mul => {
                 let left = self.expr(expr.left.as_ref());
                 let right = self.expr(expr.right.as_ref());
 
-                self.mul(left, right)
+                self.mul(&left, right);
+
+                left
             }
             BinOp::Div => {
                 let left = self.expr(expr.left.as_ref());
                 let right = self.expr(expr.right.as_ref());
 
-                self.div(left, right)
+                self.div(&left, right);
+
+                left
             }
             _ => panic!("lasjdf"),
         }
@@ -154,27 +132,27 @@ impl<'a> CodeGen<'a> {
         }
     }
 
-    fn mov(&mut self, label: &str, r: usize) {
+    fn mov(&mut self, label: &str, r: &Register) {
         writedoc!(
             self.text_section,
             "
             \tmov [{}], {}
             ",
             &label,
-            &self.registers[r].name
+            r.dword(),
         )
         .unwrap();
     }
 
-    fn load(&mut self, int_lit: &IntLitRepr) -> usize {
-        let r = self.alloc();
+    fn load(&mut self, int_lit: &IntLitRepr) -> Register {
+        let r = self.registers.alloc().unwrap();
 
         writedoc!(
             self.text_section,
             "
             \tmov {}, {}
             ",
-            &self.registers[r].name,
+            r.dword(),
             int_lit.to_string(),
         )
         .unwrap();
@@ -182,11 +160,11 @@ impl<'a> CodeGen<'a> {
         r
     }
 
-    fn unary_expr(&mut self, unary_expr: &ExprUnary) -> usize {
+    fn unary_expr(&mut self, unary_expr: &ExprUnary) -> Register {
         match unary_expr.op {
             UnOp::Negative => {
                 let r = self.expr(unary_expr.expr.as_ref());
-                self.negate(r);
+                self.negate(&r);
 
                 r
             }
@@ -194,67 +172,61 @@ impl<'a> CodeGen<'a> {
         }
     }
 
-    fn negate(&mut self, r: usize) {
+    fn negate(&mut self, r: &Register) {
         writedoc!(
             self.text_section,
             "
             \tneg {}
             ",
-            &self.registers[r].name,
+            r.dword(),
         )
         .unwrap();
     }
 
-    fn add(&mut self, r1: usize, r2: usize) -> usize {
+    fn add(&mut self, r1: &Register, r2: Register) {
         writedoc!(
             self.text_section,
             "
             \tadd {}, {}
             ",
-            &self.registers[r1].name,
-            &self.registers[r2].name,
+            r1.dword(),
+            r2.dword(),
         )
         .unwrap();
 
-        self.free(r2);
-
-        r1
+        self.registers.free(r2).unwrap();
     }
 
-    fn sub(&mut self, r1: usize, r2: usize) -> usize {
+    fn sub(&mut self, r1: &Register, r2: Register) {
         writedoc!(
             self.text_section,
             "
             \tsub {}, {}
             ",
-            &self.registers[r1].name,
-            &self.registers[r2].name,
+            r1.dword(),
+            r2.dword(),
         )
         .unwrap();
 
-        self.free(r2);
-
-        r1
+        self.registers.free(r2).unwrap();
     }
 
-    fn mul(&mut self, r1: usize, r2: usize) -> usize {
+    fn mul(&mut self, r1: &Register, r2: Register) {
         writedoc!(
             self.text_section,
             "
             \timul {}, {}
             ",
-            &self.registers[r1].name,
-            &self.registers[r2].name,
+            r1.dword(),
+            r2.dword(),
         )
         .unwrap();
 
-        self.free(r2);
-
-        r1
+        self.registers.free(r2).unwrap();
     }
 
     //NOTE: if mafs doesn't works, prolly because of this
-    fn div(&mut self, r1: usize, r2: usize) -> usize {
+    fn div(&mut self, r1: &Register, r2: Register) {
         writedoc!(
             self.text_section,
             "
@@ -263,15 +235,13 @@ impl<'a> CodeGen<'a> {
             \tidiv {}
             \tmov {}, rax
             ",
-            &self.registers[r1].name,
-            &self.registers[r2].name,
-            &self.registers[r1].name,
+            r1.dword(),
+            r2.dword(),
+            r1.dword(),
         )
         .unwrap();
 
-        self.free(r2);
-
-        r1
+        self.registers.free(r2).unwrap();
     }
 
     pub fn compile(&mut self, program: Vec<Stmt>, path: &str) {
