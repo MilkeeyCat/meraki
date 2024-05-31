@@ -1,5 +1,9 @@
 use super::IntLitRepr;
-use crate::lexer::Token;
+use crate::{
+    lexer::Token,
+    parser::Type,
+    symtable::{Symbol, SymbolTable},
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum BinOp {
@@ -41,6 +45,26 @@ pub enum Expr {
     Unary(ExprUnary),
     Lit(ExprLit),
     Ident(String),
+}
+
+impl Expr {
+    pub fn type_(&self, symtable: &SymbolTable) -> Type {
+        match self {
+            Self::Binary(expr) => {
+                let left_type = expr.left.as_ref().type_(symtable);
+                let right_type = expr.right.as_ref().type_(symtable);
+
+                Type::resolve(left_type, right_type)
+            }
+            Self::Unary(expr) => expr.type_(symtable),
+            Self::Lit(literal) => match literal {
+                ExprLit::Int(int) => int.type_(),
+            },
+            Self::Ident(ident) => match symtable.find(ident).unwrap() {
+                Symbol::GlobalVar(global_var) => global_var.type_.clone(),
+            },
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -86,5 +110,21 @@ pub struct ExprUnary {
 impl ExprUnary {
     pub fn new(op: UnOp, expr: Box<Expr>) -> Self {
         Self { op, expr }
+    }
+
+    pub fn type_(&self, symtable: &SymbolTable) -> Type {
+        let mut expr_type = self.expr.type_(symtable);
+
+        if let Expr::Lit(ExprLit::Int(int)) = self.expr.as_ref() {
+            if self.op == UnOp::Negative {
+                if int.first_bit_set() {
+                    expr_type = int.widen_type().unwrap();
+                } else {
+                    expr_type.to_signed();
+                }
+            }
+        }
+
+        expr_type
     }
 }

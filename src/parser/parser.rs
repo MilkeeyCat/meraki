@@ -93,7 +93,10 @@ impl Parser {
                 self.var_decl(type_)
             }
             token => {
-                let expr = Stmt::Expr(self.expr(token.precedence()));
+                let expr = self.expr(token.precedence());
+                _ = expr.type_(&self.symtable);
+                let expr = Stmt::Expr(expr);
+
                 self.expect_peek(Token::Semicolon);
 
                 expr

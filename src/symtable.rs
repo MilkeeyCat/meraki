@@ -21,6 +21,12 @@ impl SymbolTable {
         Self(Vec::with_capacity(MAX_SYMBOLS))
     }
 
+    pub fn find(&self, name: &str) -> Option<&Symbol> {
+        self.0.iter().find(|symbol| match symbol {
+            Symbol::GlobalVar(global_var) => global_var.name == name,
+        })
+    }
+
     pub fn exists(&self, name: &str) -> bool {
         for symbol in &self.0 {
             match symbol {

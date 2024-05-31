@@ -1,3 +1,5 @@
+use crate::parser::Type;
+
 const MAX_BITS_NUM_SUPPORTED: usize = 8;
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -73,6 +75,22 @@ impl IntLitRepr {
 
     fn bits(&self) -> usize {
         self.bytes.len() * 8
+    }
+
+    pub fn type_(&self) -> Type {
+        match self.bits() {
+            8 => Type::U8,
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn first_bit_set(&self) -> bool {
+        self.bytes.last().unwrap() & 0b1000_0000 != 0
+    }
+
+    pub fn widen_type(&self) -> Result<Type, IntLitReprError> {
+        //NOTE: currently da type can't be widen coz there's only 8 bit integers
+        Err(IntLitReprError::TooLarge(self.bits() * 2))
     }
 }
 
