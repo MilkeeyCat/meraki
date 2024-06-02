@@ -54,7 +54,10 @@ impl Expr {
                 let left_type = expr.left.as_ref().type_(symtable);
                 let right_type = expr.right.as_ref().type_(symtable);
 
-                Type::resolve(left_type, right_type)
+                match Type::promote(left_type, right_type) {
+                    Ok(type_) => type_,
+                    Err(e) => panic!("{:?}", e),
+                }
             }
             Self::Unary(expr) => expr.type_(symtable),
             Self::Lit(literal) => match literal {

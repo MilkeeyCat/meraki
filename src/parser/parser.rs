@@ -157,17 +157,16 @@ impl Parser {
         let right = Box::new(self.expr(token.precedence()));
         let op = BinOp::from(&token);
 
-        if op == BinOp::Assign {
-            if !left
+        if op == BinOp::Assign
+            && !left
                 .type_(&self.symtable)
                 .assignable(&right.type_(&self.symtable))
-            {
-                panic!(
-                    "Cant assign {:?} to {:?}",
-                    right.type_(&self.symtable),
-                    left.type_(&self.symtable)
-                );
-            }
+        {
+            panic!(
+                "Cant assign {:?} to {:?}",
+                right.type_(&self.symtable),
+                left.type_(&self.symtable)
+            );
         }
 
         Expr::Binary(ExprBinary::new(op, left, right))

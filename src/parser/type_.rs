@@ -4,6 +4,11 @@ pub enum Type {
     I8,
 }
 
+#[derive(Debug)]
+pub enum TypeError {
+    PromotionError(Type, Type),
+}
+
 impl Type {
     fn int(&self) -> bool {
         match self {
@@ -28,29 +33,29 @@ impl Type {
         }
     }
 
-    pub fn resolve(left: Self, right: Self) -> Self {
-        if left == right {
-            return left;
+    pub fn promote(self, type_: Self) -> Result<Self, TypeError> {
+        if self == type_ {
+            return Ok(self);
         }
 
-        if left.int() && right.int() {
-            return Self::resolve_ints(left, right);
+        if self.int() && type_.int() {
+            return self.promote_ints(type_);
         }
 
-        todo!();
+        Err(TypeError::PromotionError(self, type_))
     }
 
-    fn resolve_ints(mut left: Self, mut right: Self) -> Self {
-        if left.signed() || left.signed() {
-            left.to_signed();
-            right.to_signed();
+    fn promote_ints(mut self, mut type_: Self) -> Result<Self, TypeError> {
+        if self.signed() || type_.signed() {
+            self.to_signed();
+            type_.to_signed();
         }
 
-        if left > right {
-            return left;
+        if self > type_ {
+            return Ok(self);
         }
 
-        right
+        Ok(type_)
     }
 
     pub fn assignable(&self, type_: &Self) -> bool {
