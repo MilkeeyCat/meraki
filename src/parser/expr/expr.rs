@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use super::IntLitRepr;
 use crate::{
     lexer::Token,
@@ -9,6 +11,19 @@ use crate::{
 pub enum OpParseError {
     Bin(Token),
     Un(Token),
+}
+
+impl Display for OpParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Un(token) => {
+                write!(f, "Failed to parse unary operator from {}", token)
+            }
+            Self::Bin(token) => {
+                write!(f, "Failed to parse binary operator from {}", token)
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

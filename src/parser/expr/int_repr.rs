@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::parser::Type;
 
 const MAX_BITS_NUM_SUPPORTED: usize = 8;
@@ -124,6 +126,14 @@ impl ToString for IntLitRepr {
 #[derive(Debug)]
 pub enum IntLitReprError {
     TooLarge(usize),
+}
+
+impl Display for IntLitReprError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::TooLarge(bits) => write!(f, "{} bits integers are not supported", bits),
+        }
+    }
 }
 
 impl TryFrom<&str> for IntLitRepr {

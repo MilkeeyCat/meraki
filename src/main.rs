@@ -12,13 +12,17 @@ fn main() {
         "
         u8 bar;
 
-        bar = 5 * 6 + 69 - 45 / 8;
+        baz = 1;
         "
         .to_string(),
     );
 
     let parser = Parser::new(lexer);
     let (stmts, symtable) = parser.into_parts();
+    let stmts = match stmts {
+        Ok(stmts) => stmts,
+        Err(e) => panic!("Achtung:  {}", e),
+    };
 
     dbg!(&stmts);
     dbg!(&symtable);

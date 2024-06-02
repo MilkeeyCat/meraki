@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use super::{
     expr::{BinOp, ExprBinary, ExprLit, ExprUnary, IntLitRepr, UnOp},
     precedence::Precedence,
@@ -12,13 +14,30 @@ use crate::{
 #[derive(Debug)]
 pub enum ParserError {
     UnexpectedPeek(Token, Token),
-    UnexpectedToken(Token),
+    ParseType(Token),
     Prefix(Token),
     Infix(Token),
     Assignment(Type, Type),
     Type(TypeError),
     Operator(OpParseError),
     Int(IntLitReprError),
+}
+
+impl Display for ParserError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnexpectedPeek(expected, actual) => {
+                write!(f, "Expected token {}, got {}", expected, actual)
+            }
+            Self::ParseType(token) => write!(f, "Failed to parse type, found {}", token),
+            Self::Prefix(token) => write!(f, "Failed to parse prefix token {}", token),
+            Self::Infix(token) => write!(f, "Failed to parse infix token {}", token),
+            Self::Assignment(lhs, rhs) => write!(f, "Can't assign {} to {}", lhs, rhs),
+            Self::Type(e) => write!(f, "{}", e),
+            Self::Operator(e) => write!(f, "{}", e),
+            Self::Int(e) => write!(f, "{}", e),
+        }
+    }
 }
 
 impl From<TypeError> for ParserError {
@@ -136,7 +155,7 @@ impl Parser {
         match token {
             Token::U8 => Ok(Type::U8),
             Token::I8 => Ok(Type::I8),
-            token => Err(ParserError::UnexpectedToken(token)),
+            token => Err(ParserError::ParseType(token)),
         }
     }
 
@@ -148,7 +167,7 @@ impl Parser {
                 name = ident.to_string();
             }
             _ => {
-                return Err(ParserError::UnexpectedToken(self.cur_token.to_owned()));
+                return Err(ParserError::ParseType(self.cur_token.to_owned()));
             }
         }
 
@@ -164,7 +183,7 @@ impl Parser {
     fn ident(&mut self) -> Result<Expr, ParserError> {
         match &self.cur_token {
             Token::Ident(ident) => Ok(Expr::Ident(ident.to_owned())),
-            _ => Err(ParserError::UnexpectedToken(self.cur_token.to_owned())),
+            _ => Err(ParserError::ParseType(self.cur_token.to_owned())),
         }
     }
 
@@ -173,7 +192,7 @@ impl Parser {
             Token::Integer(num_str) => Ok(Expr::Lit(ExprLit::Int(
                 IntLitRepr::try_from(&num_str[..]).map_err(|e| ParserError::Int(e))?,
             ))),
-            _ => Err(ParserError::UnexpectedToken(self.cur_token.to_owned())),
+            _ => Err(ParserError::ParseType(self.cur_token.to_owned())),
         }
     }
 

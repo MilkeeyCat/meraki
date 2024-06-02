@@ -1,13 +1,35 @@
+use std::fmt::Display;
+
+#[derive(Debug)]
+pub enum TypeError {
+    Promotion(Type, Type),
+    IdentNotFound(String),
+}
+
+impl Display for TypeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::IdentNotFound(ident) => write!(f, "Ident {} not found", ident),
+            Self::Promotion(lhs, rhs) => {
+                write!(f, "Operation between {} and {} are not allowed", lhs, rhs)
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Type {
     U8,
     I8,
 }
 
-#[derive(Debug)]
-pub enum TypeError {
-    Promotion(Type, Type),
-    IdentNotFound(String),
+impl Display for Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::U8 => write!(f, "u8"),
+            Self::I8 => write!(f, "i8"),
+        }
+    }
 }
 
 impl Type {
