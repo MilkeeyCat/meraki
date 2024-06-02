@@ -155,7 +155,7 @@ impl Parser {
 
         let left = Box::new(left);
         let right = Box::new(self.expr(token.precedence()));
-        let op = BinOp::from(&token);
+        let op = BinOp::try_from(&token).unwrap();
 
         if op == BinOp::Assign
             && !left
@@ -177,7 +177,7 @@ impl Parser {
         self.next_token();
 
         let expr = Expr::Unary(ExprUnary::new(
-            UnOp::from(&op_token),
+            UnOp::try_from(&op_token).unwrap(),
             Box::new(self.expr(Precedence::Prefix as u8)),
         ));
 

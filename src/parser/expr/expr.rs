@@ -5,6 +5,12 @@ use crate::{
     symtable::{Symbol, SymbolTable},
 };
 
+#[derive(Debug)]
+pub enum OpParseError {
+    BinOpError(Token),
+    UnOpError(Token),
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum BinOp {
     Add,
@@ -20,21 +26,23 @@ pub enum BinOp {
     Assign,
 }
 
-impl From<&Token> for BinOp {
-    fn from(value: &Token) -> Self {
+impl TryFrom<&Token> for BinOp {
+    type Error = OpParseError;
+
+    fn try_from(value: &Token) -> Result<Self, Self::Error> {
         match value {
-            Token::Asterisk => Self::Mul,
-            Token::Plus => Self::Add,
-            Token::Minus => Self::Sub,
-            Token::Slash => Self::Div,
-            Token::Equal => Self::Equal,
-            Token::NotEqual => Self::NotEqual,
-            Token::LessThan => Self::LessThan,
-            Token::GreaterThan => Self::GreaterThan,
-            Token::LessEqual => Self::LessEqual,
-            Token::GreaterEqual => Self::GreaterEqual,
-            Token::Assign => Self::Assign,
-            token => panic!("Couldn't convert {:?} into binary operator", token),
+            Token::Asterisk => Ok(Self::Mul),
+            Token::Plus => Ok(Self::Add),
+            Token::Minus => Ok(Self::Sub),
+            Token::Slash => Ok(Self::Div),
+            Token::Equal => Ok(Self::Equal),
+            Token::NotEqual => Ok(Self::NotEqual),
+            Token::LessThan => Ok(Self::LessThan),
+            Token::GreaterThan => Ok(Self::GreaterThan),
+            Token::LessEqual => Ok(Self::LessEqual),
+            Token::GreaterEqual => Ok(Self::GreaterEqual),
+            Token::Assign => Ok(Self::Assign),
+            token => Err(OpParseError::BinOpError(token.to_owned())),
         }
     }
 }
@@ -94,12 +102,14 @@ pub enum UnOp {
     Negative,
 }
 
-impl From<&Token> for UnOp {
-    fn from(value: &Token) -> Self {
+impl TryFrom<&Token> for UnOp {
+    type Error = OpParseError;
+
+    fn try_from(value: &Token) -> Result<Self, Self::Error> {
         match value {
-            Token::Bang => Self::Not,
-            Token::Minus => Self::Negative,
-            token => panic!("Couldn't convert {:?} into unary operator", token),
+            Token::Bang => Ok(Self::Not),
+            Token::Minus => Ok(Self::Negative),
+            token => Err(OpParseError::UnOpError(token.to_owned())),
         }
     }
 }
