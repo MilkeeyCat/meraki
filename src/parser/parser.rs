@@ -1,13 +1,31 @@
 use super::{
     expr::{BinOp, ExprBinary, ExprLit, ExprUnary, IntLitRepr, UnOp},
     precedence::Precedence,
-    type_::Type,
-    Expr, Stmt, StmtVarDecl,
+    type_::{Type, TypeError},
+    Expr, IntLitReprError, OpParseError, Stmt, StmtVarDecl,
 };
 use crate::{
     lexer::{Lexer, Token},
     symtable::{Symbol, SymbolGlobalVar, SymbolTable},
 };
+
+#[derive(Debug)]
+pub enum ParserError {
+    UnexpectedPeek(Token, Token),
+    UnexpectedToken(Token),
+    Prefix(Token),
+    Infix(Token),
+    Assignment(Type, Type),
+    Type(TypeError),
+    Operator(OpParseError),
+    Int(IntLitReprError),
+}
+
+impl From<TypeError> for ParserError {
+    fn from(value: TypeError) -> Self {
+        ParserError::Type(value)
+    }
+}
 
 pub struct Parser {
     lexer: Lexer,
@@ -39,36 +57,41 @@ impl Parser {
         self.peek_token == token
     }
 
-    fn expect_peek(&mut self, token: Token) {
+    fn expect_peek(&mut self, token: Token) -> Result<(), ParserError> {
         if self.peek_token_is(token.clone()) {
             self.next_token();
-        } else {
-            panic!("Expected: {:?}, got: {:?}", token, self.peek_token);
+
+            return Ok(());
         }
+
+        Err(ParserError::UnexpectedPeek(
+            token,
+            self.peek_token.to_owned(),
+        ))
     }
 
-    pub fn into_parts(mut self) -> (Vec<Stmt>, SymbolTable) {
+    pub fn into_parts(mut self) -> (Result<Vec<Stmt>, ParserError>, SymbolTable) {
         (self.parse(), self.symtable)
     }
 
-    pub fn parse(&mut self) -> Vec<Stmt> {
+    pub fn parse(&mut self) -> Result<Vec<Stmt>, ParserError> {
         let mut stmts = Vec::new();
 
         while !&self.cur_token_is(Token::Eof) {
-            stmts.push(self.stmt());
+            stmts.push(self.stmt()?);
             self.next_token();
         }
 
-        stmts
+        Ok(stmts)
     }
 
-    fn expr(&mut self, precedence: u8) -> Expr {
+    fn expr(&mut self, precedence: u8) -> Result<Expr, ParserError> {
         let mut left = match &self.cur_token {
             Token::Ident(_) => self.ident(),
             Token::Integer(_) => self.int_lit(),
             Token::Minus | Token::Bang => self.unary_expr(),
             Token::LParen => self.grouped_bin_expr(),
-            token => panic!("Failed to parse prefix token {:?}", token),
+            token => Err(ParserError::Prefix(token.to_owned())),
         };
 
         while !self.peek_token_is(Token::Semicolon) && precedence < self.peek_token.precedence() {
@@ -76,52 +99,57 @@ impl Parser {
 
             left = match &self.cur_token {
                 Token::Plus | Token::Minus | Token::Asterisk | Token::Slash | Token::Assign => {
-                    self.bin_expr(left)
+                    self.bin_expr(left?)
                 }
-                token => panic!("Failed to parse infix token {:?}", token),
+                token => {
+                    return Err(ParserError::Infix(token.to_owned()));
+                }
             }
         }
 
         left
     }
 
-    fn stmt(&mut self) -> Stmt {
+    fn stmt(&mut self) -> Result<Stmt, ParserError> {
         match &self.cur_token {
             Token::U8 | Token::I8 => {
-                let type_ = self.parse_type();
+                let type_ = self.parse_type()?;
 
                 self.var_decl(type_)
             }
             token => {
-                let expr = self.expr(token.precedence());
+                let expr = self.expr(token.precedence())?;
                 _ = expr.type_(&self.symtable);
                 let expr = Stmt::Expr(expr);
 
-                self.expect_peek(Token::Semicolon);
+                self.expect_peek(Token::Semicolon)?;
 
-                expr
+                Ok(expr)
             }
         }
     }
 
-    fn parse_type(&mut self) -> Type {
+    fn parse_type(&mut self) -> Result<Type, ParserError> {
         let token = self.cur_token.clone();
         self.next_token();
 
         match token {
-            Token::U8 => Type::U8,
-            Token::I8 => Type::I8,
-            token => panic!("Couldn't parse type: {:?}", token),
+            Token::U8 => Ok(Type::U8),
+            Token::I8 => Ok(Type::I8),
+            token => Err(ParserError::UnexpectedToken(token)),
         }
     }
 
-    fn var_decl(&mut self, type_: Type) -> Stmt {
+    fn var_decl(&mut self, type_: Type) -> Result<Stmt, ParserError> {
         let name;
 
-        if let Token::Ident(ident) = &self.cur_token {
-            name = ident.to_string();
-        } else {
-            panic!("Expected: ident, got: {:?}", self.cur_token);
+        match &self.cur_token {
+            Token::Ident(ident) => {
+                name = ident.to_string();
+            }
+            _ => {
+                return Err(ParserError::UnexpectedToken(self.cur_token.to_owned()));
+            }
         }
 
         self.next_token();
@@ -130,65 +158,63 @@ impl Parser {
             type_: type_.clone(),
         }));
 
-        Stmt::VarDecl(StmtVarDecl::new(type_, name, None))
+        Ok(Stmt::VarDecl(StmtVarDecl::new(type_, name, None)))
     }
 
-    fn ident(&mut self) -> Expr {
-        if let Token::Ident(ident) = &self.cur_token {
-            Expr::Ident(ident.to_owned())
-        } else {
-            panic!("Expected ident, got: {:?}", self.cur_token);
+    fn ident(&mut self) -> Result<Expr, ParserError> {
+        match &self.cur_token {
+            Token::Ident(ident) => Ok(Expr::Ident(ident.to_owned())),
+            _ => Err(ParserError::UnexpectedToken(self.cur_token.to_owned())),
         }
     }
 
-    fn int_lit(&mut self) -> Expr {
-        if let Token::Integer(num_str) = &self.cur_token {
-            Expr::Lit(ExprLit::Int(IntLitRepr::try_from(&num_str[..]).unwrap()))
-        } else {
-            panic!("Expected integer literal, got: {:?}", self.cur_token);
+    fn int_lit(&mut self) -> Result<Expr, ParserError> {
+        match &self.cur_token {
+            Token::Integer(num_str) => Ok(Expr::Lit(ExprLit::Int(
+                IntLitRepr::try_from(&num_str[..]).map_err(|e| ParserError::Int(e))?,
+            ))),
+            _ => Err(ParserError::UnexpectedToken(self.cur_token.to_owned())),
         }
     }
 
-    fn bin_expr(&mut self, left: Expr) -> Expr {
+    fn bin_expr(&mut self, left: Expr) -> Result<Expr, ParserError> {
         let token = self.cur_token.clone();
         self.next_token();
 
         let left = Box::new(left);
-        let right = Box::new(self.expr(token.precedence()));
-        let op = BinOp::try_from(&token).unwrap();
+        let right = Box::new(self.expr(token.precedence())?);
+        let op = BinOp::try_from(&token).map_err(|e| ParserError::Operator(e))?;
+        let assignable = left
+            .type_(&self.symtable)?
+            .assignable(&right.type_(&self.symtable)?);
 
-        if op == BinOp::Assign
-            && !left
-                .type_(&self.symtable)
-                .assignable(&right.type_(&self.symtable))
-        {
-            panic!(
-                "Cant assign {:?} to {:?}",
-                right.type_(&self.symtable),
-                left.type_(&self.symtable)
-            );
+        if op == BinOp::Assign && !assignable {
+            return Err(ParserError::Assignment(
+                left.type_(&self.symtable)?,
+                right.type_(&self.symtable)?,
+            ));
         }
 
-        Expr::Binary(ExprBinary::new(op, left, right))
+        Ok(Expr::Binary(ExprBinary::new(op, left, right)))
     }
 
-    fn unary_expr(&mut self) -> Expr {
+    fn unary_expr(&mut self) -> Result<Expr, ParserError> {
         let op_token = self.cur_token.clone();
         self.next_token();
 
         let expr = Expr::Unary(ExprUnary::new(
             UnOp::try_from(&op_token).unwrap(),
-            Box::new(self.expr(Precedence::Prefix as u8)),
+            Box::new(self.expr(Precedence::Prefix as u8)?),
         ));
 
-        expr
+        Ok(expr)
     }
 
-    fn grouped_bin_expr(&mut self) -> Expr {
+    fn grouped_bin_expr(&mut self) -> Result<Expr, ParserError> {
         self.next_token();
 
         let expr = self.expr(Token::LParen.precedence());
-        self.expect_peek(Token::RParen);
+        self.expect_peek(Token::RParen)?;
 
         expr
     }
@@ -199,33 +225,37 @@ mod test {
     use super::Parser;
     use crate::{
         lexer::Lexer,
-        parser::{precedence::Precedence, BinOp, Expr, ExprBinary, ExprLit, IntLitRepr},
+        parser::{
+            precedence::Precedence, BinOp, Expr, ExprBinary, ExprLit, IntLitRepr, IntLitReprError,
+        },
     };
 
     #[test]
-    fn parse_arithmetic_expression() {
+    fn parse_arithmetic_expression() -> Result<(), IntLitReprError> {
         let input = "1 * 2 + 3 / (4 + 1);";
         let mut parser = Parser::new(Lexer::new(input.to_string()));
 
         assert_eq!(
-            parser.expr(Precedence::default() as u8),
+            parser.expr(Precedence::default() as u8).unwrap(),
             Expr::Binary(ExprBinary::new(
                 BinOp::Add,
                 Box::new(Expr::Binary(ExprBinary::new(
                     BinOp::Mul,
-                    Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("1").unwrap()))),
-                    Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("2").unwrap())))
+                    Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("1")?))),
+                    Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("2")?)))
                 ))),
                 Box::new(Expr::Binary(ExprBinary::new(
                     BinOp::Div,
-                    Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("3").unwrap()))),
+                    Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("3")?))),
                     Box::new(Expr::Binary(ExprBinary::new(
                         BinOp::Add,
-                        Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("4").unwrap()))),
-                        Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("1").unwrap()))),
+                        Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("4")?))),
+                        Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("1")?))),
                     )))
                 )))
             ))
         );
+
+        Ok(())
     }
 }

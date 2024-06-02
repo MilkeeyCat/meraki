@@ -1,14 +1,14 @@
 use super::IntLitRepr;
 use crate::{
     lexer::Token,
-    parser::Type,
+    parser::{type_::TypeError, Type},
     symtable::{Symbol, SymbolTable},
 };
 
 #[derive(Debug)]
 pub enum OpParseError {
-    BinOpError(Token),
-    UnOpError(Token),
+    Bin(Token),
+    Un(Token),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -42,7 +42,7 @@ impl TryFrom<&Token> for BinOp {
             Token::LessEqual => Ok(Self::LessEqual),
             Token::GreaterEqual => Ok(Self::GreaterEqual),
             Token::Assign => Ok(Self::Assign),
-            token => Err(OpParseError::BinOpError(token.to_owned())),
+            token => Err(OpParseError::Bin(token.to_owned())),
         }
     }
 }
@@ -56,23 +56,23 @@ pub enum Expr {
 }
 
 impl Expr {
-    pub fn type_(&self, symtable: &SymbolTable) -> Type {
+    pub fn type_(&self, symtable: &SymbolTable) -> Result<Type, TypeError> {
         match self {
             Self::Binary(expr) => {
-                let left_type = expr.left.as_ref().type_(symtable);
-                let right_type = expr.right.as_ref().type_(symtable);
+                let left_type = expr.left.as_ref().type_(symtable)?;
+                let right_type = expr.right.as_ref().type_(symtable)?;
 
-                match Type::promote(left_type, right_type) {
-                    Ok(type_) => type_,
-                    Err(e) => panic!("{:?}", e),
-                }
+                Type::promote(left_type, right_type)
             }
             Self::Unary(expr) => expr.type_(symtable),
             Self::Lit(literal) => match literal {
-                ExprLit::Int(int) => int.type_(),
+                ExprLit::Int(int) => Ok(int.type_()),
             },
-            Self::Ident(ident) => match symtable.find(ident).unwrap() {
-                Symbol::GlobalVar(global_var) => global_var.type_.clone(),
+            Self::Ident(ident) => match symtable
+                .find(ident)
+                .ok_or(TypeError::IdentNotFound(ident.to_owned()))?
+            {
+                Symbol::GlobalVar(global_var) => Ok(global_var.type_.clone()),
             },
         }
     }
@@ -109,7 +109,7 @@ impl TryFrom<&Token> for UnOp {
         match value {
             Token::Bang => Ok(Self::Not),
             Token::Minus => Ok(Self::Negative),
-            token => Err(OpParseError::UnOpError(token.to_owned())),
+            token => Err(OpParseError::Un(token.to_owned())),
         }
     }
 }
@@ -125,8 +125,8 @@ impl ExprUnary {
         Self { op, expr }
     }
 
-    pub fn type_(&self, symtable: &SymbolTable) -> Type {
-        let mut expr_type = self.expr.type_(symtable);
+    pub fn type_(&self, symtable: &SymbolTable) -> Result<Type, TypeError> {
+        let mut expr_type = self.expr.type_(symtable)?;
 
         if let Expr::Lit(ExprLit::Int(int)) = self.expr.as_ref() {
             if self.op == UnOp::Negative {
@@ -138,6 +138,6 @@ impl ExprUnary {
             }
         }
 
-        expr_type
+        Ok(expr_type)
     }
 }

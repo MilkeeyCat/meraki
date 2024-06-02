@@ -6,7 +6,8 @@ pub enum Type {
 
 #[derive(Debug)]
 pub enum TypeError {
-    PromotionError(Type, Type),
+    Promotion(Type, Type),
+    IdentNotFound(String),
 }
 
 impl Type {
@@ -42,7 +43,7 @@ impl Type {
             return self.promote_ints(type_);
         }
 
-        Err(TypeError::PromotionError(self, type_))
+        Err(TypeError::Promotion(self, type_))
     }
 
     fn promote_ints(mut self, mut type_: Self) -> Result<Self, TypeError> {
