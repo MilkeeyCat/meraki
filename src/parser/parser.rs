@@ -153,11 +153,24 @@ impl Parser {
         let token = self.cur_token.clone();
         self.next_token();
 
-        Expr::Binary(ExprBinary::new(
-            BinOp::from(&token),
-            Box::new(left),
-            Box::new(self.expr(token.precedence())),
-        ))
+        let left = Box::new(left);
+        let right = Box::new(self.expr(token.precedence()));
+        let op = BinOp::from(&token);
+
+        if op == BinOp::Assign {
+            if !left
+                .type_(&self.symtable)
+                .assignable(&right.type_(&self.symtable))
+            {
+                panic!(
+                    "Cant assign {:?} to {:?}",
+                    right.type_(&self.symtable),
+                    left.type_(&self.symtable)
+                );
+            }
+        }
+
+        Expr::Binary(ExprBinary::new(op, left, right))
     }
 
     fn unary_expr(&mut self) -> Expr {

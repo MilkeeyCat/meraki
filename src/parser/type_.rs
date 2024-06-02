@@ -52,4 +52,18 @@ impl Type {
 
         right
     }
+
+    pub fn assignable(&self, type_: &Self) -> bool {
+        if self.int() && type_.int() {
+            if (self.signed() && !type_.signed()) || (!self.signed() && type_.signed()) {
+                return false;
+            }
+
+            if self >= type_ {
+                return true;
+            }
+        }
+
+        false
+    }
 }
