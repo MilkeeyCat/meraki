@@ -130,7 +130,10 @@ impl TryFrom<&str> for IntLitRepr {
     type Error = IntLitReprError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        let mut int_repr = Self::default();
+        let mut int_repr = Self {
+            signed: false,
+            bytes: vec![0],
+        };
         let mut result = value.to_owned();
 
         for i in 0.. {
