@@ -66,6 +66,7 @@ impl TryFrom<&Token> for BinOp {
 pub enum Expr {
     Binary(ExprBinary),
     Unary(ExprUnary),
+    Cast(ExprCast),
     Lit(ExprLit),
     Ident(String),
 }
@@ -89,6 +90,7 @@ impl Expr {
             {
                 Symbol::GlobalVar(global_var) => Ok(global_var.type_.clone()),
             },
+            Self::Cast(cast) => Ok(cast.type_()),
         }
     }
 }
@@ -154,5 +156,21 @@ impl ExprUnary {
         }
 
         Ok(expr_type)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExprCast {
+    expr: Box<Expr>,
+    type_: Type,
+}
+
+impl ExprCast {
+    pub fn new(type_: Type, expr: Box<Expr>) -> Self {
+        Self { type_, expr }
+    }
+
+    pub fn type_(&self) -> Type {
+        self.type_.to_owned()
     }
 }

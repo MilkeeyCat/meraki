@@ -4,7 +4,7 @@ use super::{
     expr::{BinOp, ExprBinary, ExprLit, ExprUnary, IntLitRepr, UnOp},
     precedence::Precedence,
     type_::{Type, TypeError},
-    Expr, IntLitReprError, OpParseError, Stmt, StmtVarDecl,
+    Expr, ExprCast, IntLitReprError, OpParseError, Stmt, StmtVarDecl,
 };
 use crate::{
     lexer::{Lexer, Token},
@@ -13,7 +13,7 @@ use crate::{
 
 #[derive(Debug)]
 pub enum ParserError {
-    UnexpectedPeek(Token, Token),
+    UnexpectedToken(Token, Token),
     ParseType(Token),
     Prefix(Token),
     Infix(Token),
@@ -26,7 +26,7 @@ pub enum ParserError {
 impl Display for ParserError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::UnexpectedPeek(expected, actual) => {
+            Self::UnexpectedToken(expected, actual) => {
                 write!(f, "Expected token {}, got {}", expected, actual)
             }
             Self::ParseType(token) => write!(f, "Failed to parse type, found {}", token),
@@ -80,13 +80,26 @@ impl Parser {
         if self.peek_token_is(token.clone()) {
             self.next_token();
 
-            return Ok(());
+            Ok(())
+        } else {
+            Err(ParserError::UnexpectedToken(
+                token,
+                self.peek_token.to_owned(),
+            ))
         }
+    }
 
-        Err(ParserError::UnexpectedPeek(
-            token,
-            self.peek_token.to_owned(),
-        ))
+    fn expect(&mut self, token: Token) -> Result<(), ParserError> {
+        if self.cur_token_is(token.clone()) {
+            self.next_token();
+
+            Ok(())
+        } else {
+            Err(ParserError::UnexpectedToken(
+                token,
+                self.peek_token.to_owned(),
+            ))
+        }
     }
 
     pub fn into_parts(mut self) -> (Result<Vec<Stmt>, ParserError>, SymbolTable) {
@@ -109,7 +122,7 @@ impl Parser {
             Token::Ident(_) => self.ident(),
             Token::Integer(_) => self.int_lit(),
             Token::Minus | Token::Bang => self.unary_expr(),
-            Token::LParen => self.grouped_bin_expr(),
+            Token::LParen => self.grouped_expr(),
             token => Err(ParserError::Prefix(token.to_owned())),
         };
 
@@ -229,11 +242,24 @@ impl Parser {
         Ok(expr)
     }
 
-    fn grouped_bin_expr(&mut self) -> Result<Expr, ParserError> {
-        self.next_token();
+    fn grouped_expr(&mut self) -> Result<Expr, ParserError> {
+        self.expect(Token::LParen)?;
 
-        let expr = self.expr(Token::LParen.precedence());
-        self.expect_peek(Token::RParen)?;
+        let expr = match &self.cur_token {
+            Token::U8 | Token::I8 => {
+                let type_ = self.parse_type()?;
+                self.expect(Token::RParen)?;
+                let expr = self.expr(self.cur_token.precedence())?;
+
+                Ok(Expr::Cast(ExprCast::new(type_, Box::new(expr))))
+            }
+            _ => {
+                let expr = self.expr(Token::LParen.precedence());
+                self.expect_peek(Token::RParen)?;
+
+                expr
+            }
+        };
 
         expr
     }
@@ -245,13 +271,14 @@ mod test {
     use crate::{
         lexer::Lexer,
         parser::{
-            precedence::Precedence, BinOp, Expr, ExprBinary, ExprLit, IntLitRepr, IntLitReprError,
+            precedence::Precedence, BinOp, Expr, ExprBinary, ExprCast, ExprLit, IntLitRepr,
+            IntLitReprError, Type,
         },
     };
 
     #[test]
     fn parse_arithmetic_expression() -> Result<(), IntLitReprError> {
-        let input = "1 * 2 + 3 / (4 + 1);";
+        let input = "1 * 2 + 3 / (4 + (u8)1);";
         let mut parser = Parser::new(Lexer::new(input.to_string()));
 
         assert_eq!(
@@ -269,7 +296,10 @@ mod test {
                     Box::new(Expr::Binary(ExprBinary::new(
                         BinOp::Add,
                         Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("4")?))),
-                        Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("1")?))),
+                        Box::new(Expr::Cast(ExprCast::new(
+                            Type::U8,
+                            Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("1")?))),
+                        ))),
                     )))
                 )))
             ))
