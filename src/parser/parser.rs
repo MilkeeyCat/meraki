@@ -17,7 +17,6 @@ pub enum ParserError {
     ParseType(Token),
     Prefix(Token),
     Infix(Token),
-    Assignment(Type, Type),
     Type(TypeError),
     Operator(OpParseError),
     Int(IntLitReprError),
@@ -32,7 +31,6 @@ impl Display for ParserError {
             Self::ParseType(token) => write!(f, "Failed to parse type, found {}", token),
             Self::Prefix(token) => write!(f, "Failed to parse prefix token {}", token),
             Self::Infix(token) => write!(f, "Failed to parse infix token {}", token),
-            Self::Assignment(lhs, rhs) => write!(f, "Can't assign {} to {}", lhs, rhs),
             Self::Type(e) => write!(f, "{}", e),
             Self::Operator(e) => write!(f, "{}", e),
             Self::Int(e) => write!(f, "{}", e),
@@ -216,15 +214,10 @@ impl Parser {
         let left = Box::new(left);
         let right = Box::new(self.expr(token.precedence())?);
         let op = BinOp::try_from(&token).map_err(|e| ParserError::Operator(e))?;
-        let assignable = left
-            .type_(&self.symtable)?
-            .assignable(&right.type_(&self.symtable)?);
 
-        if op == BinOp::Assign && !assignable {
-            return Err(ParserError::Assignment(
-                left.type_(&self.symtable)?,
-                right.type_(&self.symtable)?,
-            ));
+        if op == BinOp::Assign {
+            left.type_(&self.symtable)?
+                .assign(right.type_(&self.symtable)?)?;
         }
 
         Ok(Expr::Binary(ExprBinary::new(op, left, right)))

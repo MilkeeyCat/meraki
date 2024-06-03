@@ -4,6 +4,7 @@ use std::fmt::Display;
 pub enum TypeError {
     Promotion(Type, Type),
     IdentNotFound(String),
+    Assignment(Type, Type),
     Cast(Type, Type),
 }
 
@@ -14,7 +15,8 @@ impl Display for TypeError {
             Self::Promotion(lhs, rhs) => {
                 write!(f, "Operation between {} and {} are not allowed", lhs, rhs)
             }
-            Self::Cast(from, to) => write!(f, "Cant cast {} into {}", from, to),
+            Self::Assignment(lhs, rhs) => write!(f, "Can't assign {} to {}", lhs, rhs),
+            Self::Cast(from, to) => write!(f, "Can't cast {} into {}", from, to),
         }
     }
 }
@@ -83,25 +85,25 @@ impl Type {
         Ok(type_)
     }
 
-    pub fn assignable(&self, type_: &Self) -> bool {
+    pub fn assign(self, type_: Self) -> Result<Self, TypeError> {
         if self.int() && type_.int() {
             if (self.signed() && !type_.signed()) || (!self.signed() && type_.signed()) {
-                return false;
+                return Err(TypeError::Assignment(self, type_));
             }
 
             if self >= type_ {
-                return true;
+                return Ok(self);
             }
         }
 
-        false
+        return Err(TypeError::Assignment(self.clone(), type_));
     }
 
-    pub fn castable(&self, type_: &Self) -> bool {
+    pub fn cast(self, type_: Self) -> Result<Self, TypeError> {
         if self.int() && type_.int() {
-            return true;
+            Ok(type_)
+        } else {
+            Err(TypeError::Cast(self, type_))
         }
-
-        false
     }
 }
