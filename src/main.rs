@@ -21,7 +21,10 @@ fn main() {
     let (stmts, symtable) = parser.into_parts();
     let stmts = match stmts {
         Ok(stmts) => stmts,
-        Err(e) => panic!("Achtung:  {}", e),
+        Err(e) => {
+            println!("Achtung:  {}", e);
+            std::process::exit(1)
+        }
     };
 
     dbg!(&stmts);
