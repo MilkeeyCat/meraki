@@ -90,7 +90,7 @@ impl Expr {
             {
                 Symbol::GlobalVar(global_var) => Ok(global_var.type_.clone()),
             },
-            Self::Cast(cast) => Ok(cast.type_()),
+            Self::Cast(cast) => cast.type_(symtable),
         }
     }
 }
@@ -170,7 +170,13 @@ impl ExprCast {
         Self { type_, expr }
     }
 
-    pub fn type_(&self) -> Type {
-        self.type_.to_owned()
+    pub fn type_(&self, symbtable: &SymbolTable) -> Result<Type, TypeError> {
+        let expr_type = self.expr.type_(symbtable)?;
+
+        if expr_type.castable(&self.type_) {
+            Ok(self.type_.clone())
+        } else {
+            Err(TypeError::Cast(expr_type, self.type_.clone()))
+        }
     }
 }

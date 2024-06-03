@@ -4,6 +4,7 @@ use std::fmt::Display;
 pub enum TypeError {
     Promotion(Type, Type),
     IdentNotFound(String),
+    Cast(Type, Type),
 }
 
 impl Display for TypeError {
@@ -13,6 +14,7 @@ impl Display for TypeError {
             Self::Promotion(lhs, rhs) => {
                 write!(f, "Operation between {} and {} are not allowed", lhs, rhs)
             }
+            Self::Cast(from, to) => write!(f, "Cant cast {} into {}", from, to),
         }
     }
 }
@@ -90,6 +92,14 @@ impl Type {
             if self >= type_ {
                 return true;
             }
+        }
+
+        false
+    }
+
+    pub fn castable(&self, type_: &Self) -> bool {
+        if self.int() && type_.int() {
+            return true;
         }
 
         false
