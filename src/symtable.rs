@@ -31,7 +31,9 @@ impl SymbolTable {
         for symbol in &self.0 {
             match symbol {
                 Symbol::GlobalVar(global_var) => {
-                    return global_var.name == name;
+                    if global_var.name == name {
+                        return true;
+                    }
                 }
             }
         }

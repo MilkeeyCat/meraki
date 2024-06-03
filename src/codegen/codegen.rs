@@ -1,12 +1,16 @@
 use super::{Register, RegisterAllocator};
 use crate::{
-    parser::{
-        BinOp, Expr, ExprBinary, ExprLit, ExprUnary, IntLitRepr, Stmt, StmtVarDecl, Type, UnOp,
-    },
-    symtable::SymbolTable,
+    parser::{BinOp, Expr, ExprBinary, ExprLit, ExprUnary, Stmt, StmtVarDecl, Type, UnOp},
+    symtable::{Symbol, SymbolTable},
 };
 use indoc::{formatdoc, writedoc};
 use std::{fmt::Write, fs::File};
+
+enum LoadItem {
+    Lit(ExprLit),
+    //Register(Register),
+    Symbol(Symbol),
+}
 
 pub struct CodeGen {
     symtable: SymbolTable,
@@ -57,10 +61,11 @@ impl CodeGen {
     fn expr(&mut self, expr: &Expr) -> Register {
         match expr {
             Expr::Binary(bin_expr) => self.bin_expr(bin_expr),
-            Expr::Lit(lit) => match lit {
-                ExprLit::Int(int_lit) => self.load(int_lit),
-            },
+            Expr::Lit(lit) => self.load(&LoadItem::Lit(lit.clone())),
             Expr::Unary(unary_expr) => self.unary_expr(unary_expr),
+            Expr::Ident(ident) => self.load(&LoadItem::Symbol(
+                self.symtable.find(ident).unwrap().to_owned(),
+            )),
             _ => panic!("nono"),
         }
     }
@@ -144,18 +149,37 @@ impl CodeGen {
         .unwrap();
     }
 
-    fn load(&mut self, int_lit: &IntLitRepr) -> Register {
+    fn load(&mut self, item: &LoadItem) -> Register {
         let r = self.registers.alloc().unwrap();
 
-        writedoc!(
-            self.text_section,
-            "
-            \tmov {}, {}
-            ",
-            r.dword(),
-            int_lit.to_string(),
-        )
-        .unwrap();
+        match item {
+            LoadItem::Lit(literal) => match literal {
+                ExprLit::Int(integer) => {
+                    writedoc!(
+                        self.text_section,
+                        "
+                        \tmov {}, {}
+                        ",
+                        r.dword(),
+                        integer.to_string(),
+                    )
+                    .unwrap();
+                }
+            },
+            LoadItem::Symbol(symbol) => match symbol {
+                Symbol::GlobalVar(global_var) => {
+                    writedoc!(
+                        self.text_section,
+                        "
+                        \tmov {}, [{}]
+                        ",
+                        r.dword(),
+                        global_var.name,
+                    )
+                    .unwrap();
+                }
+            },
+        }
 
         r
     }
