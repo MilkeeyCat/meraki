@@ -20,6 +20,7 @@ pub enum ParserError {
     Type(TypeError),
     Operator(OpParseError),
     Int(IntLitReprError),
+    Redeclaration(String),
 }
 
 impl Display for ParserError {
@@ -34,6 +35,7 @@ impl Display for ParserError {
             Self::Type(e) => write!(f, "{}", e),
             Self::Operator(e) => write!(f, "{}", e),
             Self::Int(e) => write!(f, "{}", e),
+            Self::Redeclaration(name) => write!(f, "Redeclaration of '{}'", name),
         }
     }
 }
@@ -95,7 +97,7 @@ impl Parser {
         } else {
             Err(ParserError::UnexpectedToken(
                 token,
-                self.peek_token.to_owned(),
+                self.cur_token.to_owned(),
             ))
         }
     }
@@ -109,7 +111,6 @@ impl Parser {
 
         while !&self.cur_token_is(Token::Eof) {
             stmts.push(self.stmt()?);
-            self.next_token();
         }
 
         Ok(stmts)
@@ -119,6 +120,7 @@ impl Parser {
         let mut left = match &self.cur_token {
             Token::Ident(_) => self.ident(),
             Token::Integer(_) => self.int_lit(),
+            Token::True | Token::False => self.bool(),
             Token::Minus | Token::Bang => self.unary_expr(),
             Token::LParen => self.grouped_expr(),
             token => Err(ParserError::Prefix(token.to_owned())),
@@ -142,17 +144,19 @@ impl Parser {
 
     fn stmt(&mut self) -> Result<Stmt, ParserError> {
         match &self.cur_token {
-            Token::U8 | Token::I8 => {
+            Token::U8 | Token::I8 | Token::Bool => {
                 let type_ = self.parse_type()?;
+                let stmt = self.var_decl(type_);
 
-                self.var_decl(type_)
+                stmt
             }
             token => {
                 let expr = self.expr(token.precedence())?;
                 _ = expr.type_(&self.symtable);
                 let expr = Stmt::Expr(expr);
 
-                self.expect_peek(Token::Semicolon)?;
+                self.next_token();
+                self.expect(Token::Semicolon)?;
 
                 Ok(expr)
             }
@@ -166,28 +170,30 @@ impl Parser {
         match token {
             Token::U8 => Ok(Type::U8),
             Token::I8 => Ok(Type::I8),
+            Token::Bool => Ok(Type::Bool),
             token => Err(ParserError::ParseType(token)),
         }
     }
 
     fn var_decl(&mut self, type_: Type) -> Result<Stmt, ParserError> {
-        let name;
-
-        match &self.cur_token {
-            Token::Ident(ident) => {
-                name = ident.to_string();
-            }
+        let name = match &self.cur_token {
+            Token::Ident(ident) => ident.to_owned(),
             _ => {
                 return Err(ParserError::ParseType(self.cur_token.to_owned()));
             }
+        };
+
+        if self.symtable.exists(&name) {
+            return Err(ParserError::Redeclaration(name));
         }
 
-        self.next_token();
         self.symtable.push(Symbol::GlobalVar(SymbolGlobalVar {
             name: name.clone(),
             type_: type_.clone(),
         }));
 
+        self.next_token();
+        self.expect(Token::Semicolon)?;
         Ok(Stmt::VarDecl(StmtVarDecl::new(type_, name, None)))
     }
 
@@ -198,12 +204,21 @@ impl Parser {
         }
     }
 
-    fn int_lit(&mut self) -> Result<Expr, ParserError> {
+    fn int_lit(&self) -> Result<Expr, ParserError> {
         match &self.cur_token {
             Token::Integer(num_str) => Ok(Expr::Lit(ExprLit::Int(
                 IntLitRepr::try_from(&num_str[..]).map_err(|e| ParserError::Int(e))?,
             ))),
             _ => Err(ParserError::ParseType(self.cur_token.to_owned())),
+        }
+    }
+
+    fn bool(&self) -> Result<Expr, ParserError> {
+        match &self.cur_token {
+            Token::True => Ok(Expr::Lit(ExprLit::Bool(true))),
+            Token::False => Ok(Expr::Lit(ExprLit::Bool(false))),
+            //FIXME: FIIIIIIX
+            token => Err(ParserError::UnexpectedToken(token.clone(), token.clone())),
         }
     }
 

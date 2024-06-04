@@ -10,9 +10,9 @@ use parser::Parser;
 fn main() {
     let lexer = Lexer::new(
         "
-        u8 bar;
-
-        baz = 1;
+        bool bar;
+        bar = true;
+        bar = false;
         "
         .to_string(),
     );

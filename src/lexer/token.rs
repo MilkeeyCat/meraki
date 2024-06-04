@@ -35,15 +35,16 @@ pub enum Token {
 
     Const,
     True,
+    False,
     Enum,
     Struct,
-    False,
     If,
     Else,
     Return,
 
     I8,
     U8,
+    Bool,
 }
 
 impl Token {
@@ -93,14 +94,15 @@ impl Display for Token {
             RBracket => write!(f, "]"),
             Const => write!(f, "const"),
             True => write!(f, "true"),
+            False => write!(f, "false"),
             Enum => write!(f, "enum"),
             Struct => write!(f, "struct"),
-            False => write!(f, "false"),
             If => write!(f, "if"),
             Else => write!(f, "else"),
             Return => write!(f, "return"),
             I8 => write!(f, "i8"),
             U8 => write!(f, "u8"),
+            Bool => write!(f, "bool"),
         }
     }
 }

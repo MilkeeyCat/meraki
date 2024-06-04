@@ -25,6 +25,7 @@ impl Display for TypeError {
 pub enum Type {
     U8,
     I8,
+    Bool,
 }
 
 impl Display for Type {
@@ -32,6 +33,7 @@ impl Display for Type {
         match self {
             Self::U8 => write!(f, "u8"),
             Self::I8 => write!(f, "i8"),
+            Self::Bool => write!(f, "bool"),
         }
     }
 }
@@ -41,6 +43,14 @@ impl Type {
         match self {
             Self::U8 | Self::I8 => true,
             _ => false,
+        }
+    }
+
+    fn bool(&self) -> bool {
+        if self == &Self::Bool {
+            true
+        } else {
+            false
         }
     }
 
@@ -86,9 +96,13 @@ impl Type {
     }
 
     pub fn assign(self, type_: Self) -> Result<Self, TypeError> {
+        if self == type_ {
+            return Ok(self);
+        }
+
         if self.int() && type_.int() {
             if (self.signed() && !type_.signed()) || (!self.signed() && type_.signed()) {
-                return Err(TypeError::Assignment(self, type_));
+                return Err(TypeError::Assignment(type_, self));
             }
 
             if self >= type_ {
@@ -96,14 +110,22 @@ impl Type {
             }
         }
 
-        return Err(TypeError::Assignment(self.clone(), type_));
+        return Err(TypeError::Assignment(type_, self));
     }
 
     pub fn cast(self, type_: Self) -> Result<Self, TypeError> {
         if self.int() && type_.int() {
-            Ok(type_)
-        } else {
-            Err(TypeError::Cast(self, type_))
+            return Ok(type_);
         }
+
+        if self.bool() && type_.int() {
+            return Ok(type_);
+        }
+
+        if type_.int() && self.bool() {
+            return Ok(self);
+        }
+
+        return Err(TypeError::Cast(self, type_));
     }
 }

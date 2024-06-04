@@ -133,7 +133,7 @@ impl CodeGen {
 
     fn size(&self, type_: &Type) -> usize {
         match type_ {
-            Type::I8 | Type::U8 => 1,
+            Type::I8 | Type::U8 | Type::Bool => 1,
         }
     }
 
@@ -162,6 +162,17 @@ impl CodeGen {
                         ",
                         r.dword(),
                         integer.to_string(),
+                    )
+                    .unwrap();
+                }
+                ExprLit::Bool(value) => {
+                    writedoc!(
+                        self.text_section,
+                        "
+                        \tmov {}, {}
+                        ",
+                        r.dword(),
+                        *value as u8
                     )
                     .unwrap();
                 }

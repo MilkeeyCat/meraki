@@ -81,9 +81,7 @@ impl Expr {
                 Type::promote(left_type, right_type)
             }
             Self::Unary(expr) => expr.type_(symtable),
-            Self::Lit(literal) => match literal {
-                ExprLit::Int(int) => Ok(int.type_()),
-            },
+            Self::Lit(literal) => literal.type_(),
             Self::Ident(ident) => match symtable
                 .find(ident)
                 .ok_or(TypeError::IdentNotFound(ident.to_owned()))?
@@ -111,6 +109,16 @@ impl ExprBinary {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExprLit {
     Int(IntLitRepr),
+    Bool(bool),
+}
+
+impl ExprLit {
+    pub fn type_(&self) -> Result<Type, TypeError> {
+        match self {
+            ExprLit::Int(int) => Ok(int.type_()),
+            ExprLit::Bool(_) => Ok(Type::Bool),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

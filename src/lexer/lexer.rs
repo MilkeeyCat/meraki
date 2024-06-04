@@ -104,6 +104,7 @@ impl Lexer {
                     "return" => Token::Return,
                     "i8" => Token::I8,
                     "u8" => Token::U8,
+                    "bool" => Token::Bool,
                     _ => Token::Ident(ident),
                 });
             }
