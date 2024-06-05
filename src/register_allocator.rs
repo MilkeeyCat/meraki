@@ -1,20 +1,40 @@
 #[derive(Clone, PartialEq)]
 pub struct Register {
     byte: &'static str,
+    word: &'static str,
     dword: &'static str,
+    qword: &'static str,
 }
 
 impl Register {
-    pub fn new(byte: &'static str, dword: &'static str) -> Self {
-        return Self { byte, dword };
+    pub fn new(
+        byte: &'static str,
+        word: &'static str,
+        dword: &'static str,
+        qword: &'static str,
+    ) -> Self {
+        return Self {
+            byte,
+            word,
+            dword,
+            qword,
+        };
     }
 
     pub fn byte(&self) -> &'static str {
         self.byte
     }
 
+    pub fn word(&self) -> &'static str {
+        self.word
+    }
+
     pub fn dword(&self) -> &'static str {
         self.dword
+    }
+
+    pub fn qword(&self) -> &'static str {
+        self.qword
     }
 }
 

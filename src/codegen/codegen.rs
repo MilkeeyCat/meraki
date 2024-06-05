@@ -1,37 +1,30 @@
-use super::{Register, RegisterAllocator};
 use crate::{
-    parser::{BinOp, Expr, ExprBinary, ExprLit, ExprUnary, Stmt, StmtVarDecl, Type, UnOp},
-    symtable::{Symbol, SymbolTable},
+    archs::{Architecture, LoadItem},
+    parser::{BinOp, Expr, ExprBinary, ExprUnary, Stmt, StmtVarDecl, UnOp},
+    register_allocator::{Register, RegisterAllocator},
+    symtable::SymbolTable,
 };
-use indoc::{formatdoc, writedoc};
-use std::{fmt::Write, fs::File};
+use indoc::formatdoc;
+use std::fs::File;
+use std::io::Write;
 
-enum LoadItem {
-    Lit(ExprLit),
-    //Register(Register),
-    Symbol(Symbol),
-}
-
-pub struct CodeGen {
+pub struct CodeGen<Arch: Architecture> {
     symtable: SymbolTable,
     registers: RegisterAllocator,
+    arch: Arch,
     data_section: String,
     text_section: String,
     bss_section: String,
 }
 
-impl CodeGen {
+impl<Arch: Architecture> CodeGen<Arch> {
     pub fn new(symtable: SymbolTable) -> Self {
+        let (registers, arch) = Arch::new();
+
         Self {
             symtable,
-            registers: RegisterAllocator::new(vec![
-                Register::new("", "r8"),
-                Register::new("", "r9"),
-                Register::new("", "rdi"),
-                Register::new("", "rsi"),
-                Register::new("", "rdx"),
-                Register::new("", "rcx"),
-            ]),
+            arch,
+            registers: RegisterAllocator::new(registers),
             bss_section: "section .bss\n".to_string(),
             data_section: "section .data\n".to_string(),
             text_section: formatdoc!(
@@ -46,24 +39,15 @@ impl CodeGen {
     }
 
     fn declare(&mut self, var: &StmtVarDecl) {
-        let size = self.size(&var.type_);
-
-        writedoc!(
-            self.bss_section,
-            "
-            \t{} resb {size}
-            ",
-            &var.name
-        )
-        .unwrap();
+        self.bss_section.push_str(&self.arch.declare(&var));
     }
 
     fn expr(&mut self, expr: &Expr) -> Register {
         match expr {
             Expr::Binary(bin_expr) => self.bin_expr(bin_expr),
-            Expr::Lit(lit) => self.load(&LoadItem::Lit(lit.clone())),
+            Expr::Lit(lit) => self.load(LoadItem::Lit(lit.clone())),
             Expr::Unary(unary_expr) => self.unary_expr(unary_expr),
-            Expr::Ident(ident) => self.load(&LoadItem::Symbol(
+            Expr::Ident(ident) => self.load(LoadItem::Symbol(
                 self.symtable.find(ident).unwrap().to_owned(),
             )),
             _ => panic!("nono"),
@@ -131,66 +115,13 @@ impl CodeGen {
         }
     }
 
-    fn size(&self, type_: &Type) -> usize {
-        match type_ {
-            Type::I8 | Type::U8 | Type::Bool => 1,
-        }
-    }
-
     fn mov(&mut self, label: &str, r: &Register) {
-        writedoc!(
-            self.text_section,
-            "
-            \tmov [{}], {}
-            ",
-            &label,
-            r.dword(),
-        )
-        .unwrap();
+        self.text_section.push_str(&self.arch.mov(label, r));
     }
 
-    fn load(&mut self, item: &LoadItem) -> Register {
+    fn load(&mut self, item: LoadItem) -> Register {
         let r = self.registers.alloc().unwrap();
-
-        match item {
-            LoadItem::Lit(literal) => match literal {
-                ExprLit::Int(integer) => {
-                    writedoc!(
-                        self.text_section,
-                        "
-                        \tmov {}, {}
-                        ",
-                        r.dword(),
-                        integer.to_string(),
-                    )
-                    .unwrap();
-                }
-                ExprLit::Bool(value) => {
-                    writedoc!(
-                        self.text_section,
-                        "
-                        \tmov {}, {}
-                        ",
-                        r.dword(),
-                        *value as u8
-                    )
-                    .unwrap();
-                }
-            },
-            LoadItem::Symbol(symbol) => match symbol {
-                Symbol::GlobalVar(global_var) => {
-                    writedoc!(
-                        self.text_section,
-                        "
-                        \tmov {}, [{}]
-                        ",
-                        r.dword(),
-                        global_var.name,
-                    )
-                    .unwrap();
-                }
-            },
-        }
+        self.text_section.push_str(&self.arch.load(&r, item));
 
         r
     }
@@ -208,74 +139,26 @@ impl CodeGen {
     }
 
     fn negate(&mut self, r: &Register) {
-        writedoc!(
-            self.text_section,
-            "
-            \tneg {}
-            ",
-            r.dword(),
-        )
-        .unwrap();
+        self.text_section.push_str(&self.arch.negate(r));
     }
 
     fn add(&mut self, r1: &Register, r2: Register) {
-        writedoc!(
-            self.text_section,
-            "
-            \tadd {}, {}
-            ",
-            r1.dword(),
-            r2.dword(),
-        )
-        .unwrap();
-
+        self.text_section.push_str(&self.arch.add(r1, &r2));
         self.registers.free(r2).unwrap();
     }
 
     fn sub(&mut self, r1: &Register, r2: Register) {
-        writedoc!(
-            self.text_section,
-            "
-            \tsub {}, {}
-            ",
-            r1.dword(),
-            r2.dword(),
-        )
-        .unwrap();
-
+        self.text_section.push_str(&self.arch.sub(r1, &r2));
         self.registers.free(r2).unwrap();
     }
 
     fn mul(&mut self, r1: &Register, r2: Register) {
-        writedoc!(
-            self.text_section,
-            "
-            \timul {}, {}
-            ",
-            r1.dword(),
-            r2.dword(),
-        )
-        .unwrap();
-
+        self.text_section.push_str(&self.arch.mul(r1, &r2));
         self.registers.free(r2).unwrap();
     }
 
-    //NOTE: if mafs doesn't works, prolly because of this
     fn div(&mut self, r1: &Register, r2: Register) {
-        writedoc!(
-            self.text_section,
-            "
-            \tmov rax, {}
-            \tcqo
-            \tidiv {}
-            \tmov {}, rax
-            ",
-            r1.dword(),
-            r2.dword(),
-            r1.dword(),
-        )
-        .unwrap();
-
+        self.text_section.push_str(&self.arch.div(r1, &r2));
         self.registers.free(r2).unwrap();
     }
 
@@ -285,8 +168,6 @@ impl CodeGen {
         for stmt in program {
             self.stmt(&stmt);
         }
-
-        use std::io::Write;
 
         file.write_all(self.bss_section.as_bytes())
             .expect("Failed to write generated .bss section to output file");

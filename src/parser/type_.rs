@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use crate::archs::Architecture;
+
 #[derive(Debug)]
 pub enum TypeError {
     Promotion(Type, Type),
@@ -127,5 +129,12 @@ impl Type {
         }
 
         return Err(TypeError::Cast(self, type_));
+    }
+
+    pub fn size<Arch: Architecture>(&self) -> usize {
+        match self {
+            Type::I8 | Type::U8 | Type::Bool => 1,
+            _ => Arch::size(self),
+        }
     }
 }
