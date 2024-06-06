@@ -1,6 +1,6 @@
 use crate::{
     archs::{Architecture, LoadItem},
-    parser::{BinOp, Expr, ExprBinary, ExprUnary, Stmt, StmtVarDecl, Type, UnOp},
+    parser::{BinOp, Expr, ExprBinary, ExprLit, ExprUnary, Stmt, StmtVarDecl, Type, UnOp},
     register_allocator::{Register, RegisterAllocator},
     symtable::SymbolTable,
 };
@@ -50,8 +50,17 @@ impl<Arch: Architecture> CodeGen<Arch> {
             Expr::Ident(ident) => self.load(LoadItem::Symbol(
                 self.symtable.find(ident).unwrap().to_owned(),
             )),
-            Expr::Cast(cast_expr) => self.expr(cast_expr.expr()),
-            _ => panic!("nono"),
+            Expr::Cast(cast_expr) => {
+                //TODO: move this elsewhere
+                let expr = if let Expr::Lit(ExprLit::Int(mut int_lit)) = cast_expr.expr().clone() {
+                    int_lit.resize(cast_expr.type_(&self.symtable).unwrap().size::<Arch>());
+                    Expr::Lit(ExprLit::Int(int_lit))
+                } else {
+                    cast_expr.expr().to_owned()
+                };
+
+                self.expr(&expr)
+            }
         }
     }
 

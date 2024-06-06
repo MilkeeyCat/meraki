@@ -95,6 +95,10 @@ impl IntLitRepr {
         //NOTE: currently da type can't be widen coz there's only 8 bit integers
         Err(IntLitReprError::TooLarge(self.bits() * 2))
     }
+
+    pub fn resize(&mut self, size: usize) {
+        self.bytes.resize(size, 0);
+    }
 }
 
 impl ToString for IntLitRepr {
