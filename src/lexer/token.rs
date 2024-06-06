@@ -49,18 +49,6 @@ pub enum Token {
     Bool,
 }
 
-impl Token {
-    pub fn precedence(&self) -> u8 {
-        match self {
-            Token::Bang => 3,
-            Token::Asterisk | Token::Slash => 3,
-            Token::Plus | Token::Minus => 2,
-            Token::Assign => 1,
-            _ => 0,
-        }
-    }
-}
-
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use Token::*;
