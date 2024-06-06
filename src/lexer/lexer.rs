@@ -102,8 +102,10 @@ impl Lexer {
                     "if" => Token::If,
                     "else" => Token::Else,
                     "return" => Token::Return,
-                    "i8" => Token::I8,
                     "u8" => Token::U8,
+                    "u16" => Token::U16,
+                    "i8" => Token::I8,
+                    "i16" => Token::I16,
                     "bool" => Token::Bool,
                     _ => Token::Ident(ident),
                 });

@@ -36,6 +36,16 @@ impl Register {
     pub fn qword(&self) -> &'static str {
         self.qword
     }
+
+    pub fn from_size(&self, size: usize) -> &'static str {
+        match size {
+            1 => self.byte(),
+            2 => self.word(),
+            4 => self.dword(),
+            8 => self.qword(),
+            _ => unreachable!(),
+        }
+    }
 }
 
 #[derive(Debug)]

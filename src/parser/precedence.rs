@@ -1,13 +1,13 @@
 use crate::lexer::Token;
 
-#[derive(Debug, PartialEq, PartialOrd, Default)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Default)]
 pub enum Precedence {
     #[default]
     Lowest,
-    Product,
-    Sum,
-    Prefix,
     Assign,
+    Sum,
+    Product,
+    Prefix,
 }
 
 impl From<&Token> for Precedence {
@@ -17,6 +17,7 @@ impl From<&Token> for Precedence {
         match value {
             Plus | Minus => Self::Sum,
             Asterisk | Slash => Self::Product,
+            Assign => Self::Assign,
             _ => Self::Lowest,
         }
     }

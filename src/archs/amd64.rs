@@ -76,13 +76,13 @@ impl Architecture for Amd64 {
         )
     }
 
-    fn mov(&self, label: &str, r: &Register) -> String {
+    fn mov(&self, label: &str, r: &Register, type_: Type) -> String {
         formatdoc!(
             "
             \tmov [{}], {}
             ",
             label,
-            r.qword(),
+            r.from_size(type_.size::<Self>()),
         )
     }
 

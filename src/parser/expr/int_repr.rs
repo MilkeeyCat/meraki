@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::parser::Type;
 
-const MAX_BITS_NUM_SUPPORTED: usize = 8;
+const MAX_BITS_NUM_SUPPORTED: usize = 16;
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct IntLitRepr {
@@ -82,6 +82,7 @@ impl IntLitRepr {
     pub fn type_(&self) -> Type {
         match self.bits() {
             8 => Type::U8,
+            16 => Type::U16,
             _ => unreachable!(),
         }
     }
@@ -221,7 +222,7 @@ mod test {
         let tests = [
             (IntLitRepr::try_from("0")?.to_string(), "0"),
             (IntLitRepr::try_from("255")?.to_string(), "255"),
-            //(IntLitRepr::from("65535").to_string(), "65535"),
+            (IntLitRepr::try_from("65535")?.to_string(), "65535"),
             //(IntLitRepr::from("4294967295").to_string(), "4294967295"),
             //(
             //    IntLitRepr::from("18446744073709551615").to_string(),
@@ -233,7 +234,7 @@ mod test {
             assert_eq!(actual, expected);
         }
 
-        assert!(IntLitRepr::try_from("256").is_err());
+        assert!(IntLitRepr::try_from("65536").is_err());
 
         Ok(())
     }

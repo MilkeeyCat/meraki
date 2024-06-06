@@ -26,7 +26,9 @@ impl Display for TypeError {
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Type {
     U8,
+    U16,
     I8,
+    I16,
     Bool,
 }
 
@@ -34,7 +36,9 @@ impl Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::U8 => write!(f, "u8"),
+            Self::U16 => write!(f, "u16"),
             Self::I8 => write!(f, "i8"),
+            Self::I16 => write!(f, "i16"),
             Self::Bool => write!(f, "bool"),
         }
     }
@@ -43,7 +47,7 @@ impl Display for Type {
 impl Type {
     fn int(&self) -> bool {
         match self {
-            Self::U8 | Self::I8 => true,
+            Self::U8 | Self::U16 | Self::I8 | Self::I16 => true,
             _ => false,
         }
     }
@@ -58,7 +62,7 @@ impl Type {
 
     fn signed(&self) -> bool {
         match self {
-            Self::I8 => true,
+            Self::I8 | Self::I16 => true,
             _ => false,
         }
     }
@@ -67,6 +71,9 @@ impl Type {
         match self {
             Self::U8 => {
                 *self = Self::I8;
+            }
+            Self::U16 => {
+                *self = Self::I16;
             }
             _ => {}
         }
@@ -134,6 +141,7 @@ impl Type {
     pub fn size<Arch: Architecture>(&self) -> usize {
         match self {
             Type::I8 | Type::U8 | Type::Bool => 1,
+            Type::I16 | Type::U16 => 2,
             _ => Arch::size(self),
         }
     }

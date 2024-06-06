@@ -116,7 +116,7 @@ impl Parser {
         Ok(stmts)
     }
 
-    fn expr(&mut self, precedence: u8) -> Result<Expr, ParserError> {
+    fn expr(&mut self, precedence: Precedence) -> Result<Expr, ParserError> {
         let mut left = match &self.cur_token {
             Token::Ident(_) => self.ident(),
             Token::Integer(_) => self.int_lit(),
@@ -126,7 +126,9 @@ impl Parser {
             token => Err(ParserError::Prefix(token.to_owned())),
         };
 
-        while !self.peek_token_is(Token::Semicolon) && precedence < self.peek_token.precedence() {
+        while !self.peek_token_is(Token::Semicolon)
+            && precedence < Precedence::from(&self.peek_token)
+        {
             self.next_token();
 
             left = match &self.cur_token {
@@ -144,14 +146,14 @@ impl Parser {
 
     fn stmt(&mut self) -> Result<Stmt, ParserError> {
         match &self.cur_token {
-            Token::U8 | Token::I8 | Token::Bool => {
+            Token::U8 | Token::U16 | Token::I8 | Token::I16 | Token::Bool => {
                 let type_ = self.parse_type()?;
                 let stmt = self.var_decl(type_);
 
                 stmt
             }
-            token => {
-                let expr = self.expr(token.precedence())?;
+            _ => {
+                let expr = self.expr(Precedence::default())?;
                 _ = expr.type_(&self.symtable);
                 let expr = Stmt::Expr(expr);
 
@@ -169,7 +171,9 @@ impl Parser {
 
         match token {
             Token::U8 => Ok(Type::U8),
+            Token::U16 => Ok(Type::U16),
             Token::I8 => Ok(Type::I8),
+            Token::I16 => Ok(Type::I16),
             Token::Bool => Ok(Type::Bool),
             token => Err(ParserError::ParseType(token)),
         }
@@ -227,7 +231,7 @@ impl Parser {
         self.next_token();
 
         let left = Box::new(left);
-        let right = Box::new(self.expr(token.precedence())?);
+        let right = Box::new(self.expr(Precedence::from(&token))?);
         let op = BinOp::try_from(&token).map_err(|e| ParserError::Operator(e))?;
 
         if op == BinOp::Assign {
@@ -244,7 +248,7 @@ impl Parser {
 
         let expr = Expr::Unary(ExprUnary::new(
             UnOp::try_from(&op_token).unwrap(),
-            Box::new(self.expr(Precedence::Prefix as u8)?),
+            Box::new(self.expr(Precedence::Prefix)?),
         ));
 
         Ok(expr)
@@ -257,12 +261,12 @@ impl Parser {
             Token::U8 | Token::I8 => {
                 let type_ = self.parse_type()?;
                 self.expect(Token::RParen)?;
-                let expr = self.expr(self.cur_token.precedence())?;
+                let expr = self.expr(Precedence::from(&self.cur_token))?;
 
                 Ok(Expr::Cast(ExprCast::new(type_, Box::new(expr))))
             }
             _ => {
-                let expr = self.expr(Token::LParen.precedence());
+                let expr = self.expr(Precedence::default());
                 self.expect_peek(Token::RParen)?;
 
                 expr
@@ -290,7 +294,7 @@ mod test {
         let mut parser = Parser::new(Lexer::new(input.to_string()));
 
         assert_eq!(
-            parser.expr(Precedence::default() as u8).unwrap(),
+            parser.expr(Precedence::default()).unwrap(),
             Expr::Binary(ExprBinary::new(
                 BinOp::Add,
                 Box::new(Expr::Binary(ExprBinary::new(

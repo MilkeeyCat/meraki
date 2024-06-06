@@ -183,4 +183,8 @@ impl ExprCast {
 
         expr_type.cast(self.type_.clone())
     }
+
+    pub fn expr(&self) -> &Expr {
+        &self.expr
+    }
 }

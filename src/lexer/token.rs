@@ -43,7 +43,9 @@ pub enum Token {
     Return,
 
     I8,
+    I16,
     U8,
+    U16,
     Bool,
 }
 
@@ -100,8 +102,10 @@ impl Display for Token {
             If => write!(f, "if"),
             Else => write!(f, "else"),
             Return => write!(f, "return"),
-            I8 => write!(f, "i8"),
             U8 => write!(f, "u8"),
+            U16 => write!(f, "u16"),
+            I8 => write!(f, "i8"),
+            I16 => write!(f, "i16"),
             Bool => write!(f, "bool"),
         }
     }
