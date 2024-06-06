@@ -283,39 +283,94 @@ mod test {
     use crate::{
         lexer::Lexer,
         parser::{
-            precedence::Precedence, BinOp, Expr, ExprBinary, ExprCast, ExprLit, IntLitRepr,
-            IntLitReprError, Type,
+            precedence::Precedence, BinOp, Expr, ExprBinary, ExprCast, ExprLit, ExprUnary,
+            IntLitRepr, IntLitReprError, Stmt, StmtVarDecl, Type, UnOp,
         },
     };
 
     #[test]
     fn parse_arithmetic_expression() -> Result<(), IntLitReprError> {
-        let input = "1 * 2 + 3 / (4 + (u8)1);";
-        let mut parser = Parser::new(Lexer::new(input.to_string()));
-
-        assert_eq!(
-            parser.expr(Precedence::default()).unwrap(),
-            Expr::Binary(ExprBinary::new(
-                BinOp::Add,
-                Box::new(Expr::Binary(ExprBinary::new(
-                    BinOp::Mul,
-                    Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("1")?))),
-                    Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("2")?)))
-                ))),
-                Box::new(Expr::Binary(ExprBinary::new(
-                    BinOp::Div,
-                    Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("3")?))),
+        let tests = [
+            (
+                "1 * 2 + 3 / (4 + (u8)1);",
+                vec![Stmt::Expr(Expr::Binary(ExprBinary::new(
+                    BinOp::Add,
                     Box::new(Expr::Binary(ExprBinary::new(
-                        BinOp::Add,
-                        Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("4")?))),
-                        Box::new(Expr::Cast(ExprCast::new(
-                            Type::U8,
-                            Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("1")?))),
+                        BinOp::Mul,
+                        Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("1")?))),
+                        Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("2")?))),
+                    ))),
+                    Box::new(Expr::Binary(ExprBinary::new(
+                        BinOp::Div,
+                        Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("3")?))),
+                        Box::new(Expr::Binary(ExprBinary::new(
+                            BinOp::Add,
+                            Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("4")?))),
+                            Box::new(Expr::Cast(ExprCast::new(
+                                Type::U8,
+                                Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("1")?))),
+                            ))),
                         ))),
-                    )))
-                )))
-            ))
-        );
+                    ))),
+                )))],
+            ),
+            (
+                "
+                u8 foo;
+                foo = (u8)-1 + 5;
+                ",
+                vec![
+                    Stmt::VarDecl(StmtVarDecl::new(Type::U8, "foo".to_owned(), None)),
+                    Stmt::Expr(Expr::Binary(ExprBinary::new(
+                        BinOp::Assign,
+                        Box::new(Expr::Ident("foo".to_owned())),
+                        Box::new(Expr::Binary(ExprBinary::new(
+                            BinOp::Add,
+                            Box::new(Expr::Cast(ExprCast::new(
+                                Type::U8,
+                                Box::new(Expr::Unary(ExprUnary::new(
+                                    UnOp::Negative,
+                                    Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("1")?))),
+                                ))),
+                            ))),
+                            Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("5")?))),
+                        ))),
+                    ))),
+                ],
+            ),
+            (
+                "
+                u8 foo;
+                i8 bar;
+                bar = (i8)foo + 5 / 10;
+                ",
+                vec![
+                    Stmt::VarDecl(StmtVarDecl::new(Type::U8, "foo".to_owned(), None)),
+                    Stmt::VarDecl(StmtVarDecl::new(Type::I8, "bar".to_owned(), None)),
+                    Stmt::Expr(Expr::Binary(ExprBinary::new(
+                        BinOp::Assign,
+                        Box::new(Expr::Ident("bar".to_owned())),
+                        Box::new(Expr::Binary(ExprBinary::new(
+                            BinOp::Add,
+                            Box::new(Expr::Cast(ExprCast::new(
+                                Type::I8,
+                                Box::new(Expr::Ident("foo".to_owned())),
+                            ))),
+                            Box::new(Expr::Binary(ExprBinary::new(
+                                BinOp::Div,
+                                Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("5")?))),
+                                Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("10")?))),
+                            ))),
+                        ))),
+                    ))),
+                ],
+            ),
+        ];
+
+        for (input, expected) in tests {
+            let mut parser = Parser::new(Lexer::new(input.to_string()));
+            assert_eq!(parser.parse().unwrap(), expected);
+        }
 
         Ok(())
     }
