@@ -8,6 +8,7 @@ pub enum Precedence {
     Sum,
     Product,
     Prefix,
+    Highest,
 }
 
 impl From<&Token> for Precedence {

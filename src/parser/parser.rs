@@ -1,5 +1,3 @@
-use std::fmt::Display;
-
 use super::{
     expr::{BinOp, ExprBinary, ExprLit, ExprUnary, IntLitRepr, UnOp},
     precedence::Precedence,
@@ -10,6 +8,7 @@ use crate::{
     lexer::{Lexer, Token},
     symtable::{Symbol, SymbolGlobalVar, SymbolTable},
 };
+use std::fmt::Display;
 
 #[derive(Debug)]
 pub enum ParserError {
@@ -221,7 +220,6 @@ impl Parser {
         match &self.cur_token {
             Token::True => Ok(Expr::Lit(ExprLit::Bool(true))),
             Token::False => Ok(Expr::Lit(ExprLit::Bool(false))),
-            //FIXME: FIIIIIIX
             token => Err(ParserError::UnexpectedToken(token.clone(), token.clone())),
         }
     }
@@ -257,11 +255,11 @@ impl Parser {
     fn grouped_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect(Token::LParen)?;
 
-        let expr = match &self.cur_token {
+        match &self.cur_token {
             Token::U8 | Token::I8 => {
                 let type_ = self.parse_type()?;
                 self.expect(Token::RParen)?;
-                let expr = self.expr(Precedence::from(&self.cur_token))?;
+                let expr = self.expr(Precedence::Highest)?;
 
                 Ok(Expr::Cast(ExprCast::new(type_, Box::new(expr))))
             }
@@ -271,9 +269,7 @@ impl Parser {
 
                 expr
             }
-        };
-
-        expr
+        }
     }
 }
 
@@ -283,8 +279,8 @@ mod test {
     use crate::{
         lexer::Lexer,
         parser::{
-            precedence::Precedence, BinOp, Expr, ExprBinary, ExprCast, ExprLit, ExprUnary,
-            IntLitRepr, IntLitReprError, Stmt, StmtVarDecl, Type, UnOp,
+            BinOp, Expr, ExprBinary, ExprCast, ExprLit, ExprUnary, IntLitRepr, IntLitReprError,
+            Stmt, StmtVarDecl, Type, UnOp,
         },
     };
 
@@ -364,6 +360,23 @@ mod test {
                         ))),
                     ))),
                 ],
+            ),
+            (
+                "
+                (i8)1 + 2 / 3;
+                ",
+                vec![Stmt::Expr(Expr::Binary(ExprBinary::new(
+                    BinOp::Add,
+                    Box::new(Expr::Cast(ExprCast::new(
+                        Type::I8,
+                        Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("1")?))),
+                    ))),
+                    Box::new(Expr::Binary(ExprBinary::new(
+                        BinOp::Div,
+                        Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("2")?))),
+                        Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("3")?))),
+                    ))),
+                )))],
             ),
         ];
 
