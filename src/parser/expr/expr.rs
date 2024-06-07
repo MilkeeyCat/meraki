@@ -157,9 +157,9 @@ impl ExprUnary {
             if self.op == UnOp::Negative {
                 if int.first_bit_set() {
                     expr_type = int.widen_type().unwrap();
-                } else {
-                    expr_type.to_signed();
                 }
+
+                expr_type.to_signed();
             }
         }
 

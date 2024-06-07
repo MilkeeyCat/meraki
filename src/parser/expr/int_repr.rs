@@ -92,8 +92,10 @@ impl IntLitRepr {
     }
 
     pub fn widen_type(&self) -> Result<Type, IntLitReprError> {
-        //NOTE: currently da type can't be widen coz there's only 8 bit integers
-        Err(IntLitReprError::TooLarge(self.bits() * 2))
+        match self.type_() {
+            Type::U8 => Ok(Type::I16),
+            _ => Err(IntLitReprError::TooLarge(self.bits() * 2)),
+        }
     }
 
     pub fn resize(&mut self, size: usize) {
