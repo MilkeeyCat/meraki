@@ -74,12 +74,7 @@ pub enum Expr {
 impl Expr {
     pub fn type_(&self, symtable: &SymbolTable) -> Result<Type, TypeError> {
         match self {
-            Self::Binary(expr) => {
-                let left_type = expr.left.as_ref().type_(symtable)?;
-                let right_type = expr.right.as_ref().type_(symtable)?;
-
-                Type::promote(left_type, right_type)
-            }
+            Self::Binary(expr) => expr.type_(symtable),
             Self::Unary(expr) => expr.type_(symtable),
             Self::Lit(literal) => literal.type_(),
             Self::Ident(ident) => match symtable
@@ -103,6 +98,27 @@ pub struct ExprBinary {
 impl ExprBinary {
     pub fn new(op: BinOp, left: Box<Expr>, right: Box<Expr>) -> Self {
         Self { op, left, right }
+    }
+
+    pub fn type_(&self, symtable: &SymbolTable) -> Result<Type, TypeError> {
+        match &self.op {
+            BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div => {
+                let left_type = self.left.as_ref().type_(symtable)?;
+                let right_type = self.right.as_ref().type_(symtable)?;
+
+                Type::promote(left_type, right_type)
+            }
+            BinOp::Assign => self
+                .left
+                .type_(symtable)?
+                .assign(self.right.type_(symtable)?),
+            BinOp::LessThan
+            | BinOp::GreaterThan
+            | BinOp::LessEqual
+            | BinOp::GreaterEqual
+            | BinOp::Equal
+            | BinOp::NotEqual => Ok(Type::Bool),
+        }
     }
 }
 

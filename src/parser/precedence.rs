@@ -5,6 +5,8 @@ pub enum Precedence {
     #[default]
     Lowest,
     Assign,
+    Comparison,
+    Equality,
     Sum,
     Product,
     Prefix,
@@ -18,6 +20,8 @@ impl From<&Token> for Precedence {
         match value {
             Plus | Minus => Self::Sum,
             Asterisk | Slash => Self::Product,
+            LessThan | LessEqual | GreaterThan | GreaterEqual => Self::Comparison,
+            Equal | NotEqual => Self::Equality,
             Assign => Self::Assign,
             _ => Self::Lowest,
         }

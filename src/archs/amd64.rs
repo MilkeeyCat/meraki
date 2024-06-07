@@ -1,4 +1,7 @@
-use super::{arch::Architecture, LoadItem};
+use super::{
+    arch::{Architecture, Cmp},
+    LoadItem,
+};
 use crate::{
     parser::{ExprLit, StmtVarDecl, Type},
     register_allocator::Register,
@@ -137,6 +140,27 @@ impl Architecture for Amd64 {
             r1.qword(),
             r2.qword(),
             r1.qword(),
+        )
+    }
+
+    fn cmp(&self, r1: &Register, r2: &Register, cmp: Cmp) -> String {
+        let ins = match cmp {
+            Cmp::LessThan => formatdoc!("setl {}", r1.byte()),
+            Cmp::LessEqual => formatdoc!("setle {}", r1.byte()),
+            Cmp::GreaterThan => formatdoc!("setg {}", r1.byte()),
+            Cmp::GreaterEqual => formatdoc!("setge {}", r1.byte()),
+            Cmp::Equal => formatdoc!("sete {}", r1.byte()),
+            Cmp::NotEqual => formatdoc!("setne {}", r1.byte()),
+        };
+
+        formatdoc!(
+            "
+           \tcmp {}, {}
+           \t{}
+           ",
+            r1.qword(),
+            r2.qword(),
+            ins,
         )
     }
 }

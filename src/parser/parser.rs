@@ -131,9 +131,17 @@ impl Parser {
             self.next_token();
 
             left = match &self.cur_token {
-                Token::Plus | Token::Minus | Token::Asterisk | Token::Slash | Token::Assign => {
-                    self.bin_expr(left?)
-                }
+                Token::Plus
+                | Token::Minus
+                | Token::Asterisk
+                | Token::Slash
+                | Token::Assign
+                | Token::LessThan
+                | Token::LessEqual
+                | Token::GreaterThan
+                | Token::GreaterEqual
+                | Token::Equal
+                | Token::NotEqual => self.bin_expr(left?),
                 token => {
                     return Err(ParserError::Infix(token.to_owned()));
                 }
@@ -153,7 +161,7 @@ impl Parser {
             }
             _ => {
                 let expr = self.expr(Precedence::default())?;
-                _ = expr.type_(&self.symtable);
+                expr.type_(&self.symtable)?;
                 let expr = Stmt::Expr(expr);
 
                 self.next_token();
@@ -232,11 +240,6 @@ impl Parser {
         let right = Box::new(self.expr(Precedence::from(&token))?);
         let op = BinOp::try_from(&token).map_err(|e| ParserError::Operator(e))?;
 
-        if op == BinOp::Assign {
-            left.type_(&self.symtable)?
-                .assign(right.type_(&self.symtable)?)?;
-        }
-
         Ok(Expr::Binary(ExprBinary::new(op, left, right)))
     }
 
@@ -256,7 +259,7 @@ impl Parser {
         self.expect(Token::LParen)?;
 
         match &self.cur_token {
-            Token::U8 | Token::I8 => {
+            Token::U8 | Token::I8 | Token::U16 | Token::I16 | Token::Bool => {
                 let type_ = self.parse_type()?;
                 self.expect(Token::RParen)?;
                 let expr = self.expr(Precedence::Highest)?;
