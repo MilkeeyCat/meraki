@@ -1,6 +1,6 @@
 use crate::{
-    archs::{Architecture, Cmp, LoadItem},
-    parser::{BinOp, Expr, ExprBinary, ExprLit, ExprUnary, Stmt, StmtVarDecl, Type, UnOp},
+    archs::{Architecture, LoadItem},
+    parser::{BinOp, CmpOp, Expr, ExprBinary, ExprLit, ExprUnary, Stmt, StmtVarDecl, Type, UnOp},
     register_allocator::{Register, RegisterAllocator},
     symtable::SymbolTable,
 };
@@ -121,7 +121,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
                 let left = self.expr(expr.left.as_ref());
                 let right = self.expr(expr.right.as_ref());
 
-                self.cmp(&left, right, Cmp::try_from(&expr.op).unwrap());
+                self.cmp(&left, right, CmpOp::try_from(&expr.op).unwrap());
 
                 left
             }
@@ -197,7 +197,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
         self.registers.free(r2).unwrap();
     }
 
-    fn cmp(&mut self, r1: &Register, r2: Register, cmp: Cmp) {
+    fn cmp(&mut self, r1: &Register, r2: Register, cmp: CmpOp) {
         self.text_section.push_str(&self.arch.cmp(r1, &r2, cmp));
         self.registers.free(r2).unwrap();
     }

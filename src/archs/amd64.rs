@@ -1,9 +1,6 @@
-use super::{
-    arch::{Architecture, Cmp},
-    LoadItem,
-};
+use super::{arch::Architecture, LoadItem};
 use crate::{
-    parser::{ExprLit, StmtVarDecl, Type},
+    parser::{CmpOp, ExprLit, StmtVarDecl, Type},
     register_allocator::Register,
     symtable::Symbol,
 };
@@ -172,14 +169,14 @@ impl Architecture for Amd64 {
         )
     }
 
-    fn cmp(&self, r1: &Register, r2: &Register, cmp: Cmp) -> String {
+    fn cmp(&self, r1: &Register, r2: &Register, cmp: CmpOp) -> String {
         let ins = match cmp {
-            Cmp::LessThan => formatdoc!("setl {}", r1.byte()),
-            Cmp::LessEqual => formatdoc!("setle {}", r1.byte()),
-            Cmp::GreaterThan => formatdoc!("setg {}", r1.byte()),
-            Cmp::GreaterEqual => formatdoc!("setge {}", r1.byte()),
-            Cmp::Equal => formatdoc!("sete {}", r1.byte()),
-            Cmp::NotEqual => formatdoc!("setne {}", r1.byte()),
+            CmpOp::LessThan => formatdoc!("setl {}", r1.byte()),
+            CmpOp::LessEqual => formatdoc!("setle {}", r1.byte()),
+            CmpOp::GreaterThan => formatdoc!("setg {}", r1.byte()),
+            CmpOp::GreaterEqual => formatdoc!("setge {}", r1.byte()),
+            CmpOp::Equal => formatdoc!("sete {}", r1.byte()),
+            CmpOp::NotEqual => formatdoc!("setne {}", r1.byte()),
         };
 
         formatdoc!(

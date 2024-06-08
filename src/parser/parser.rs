@@ -1,8 +1,8 @@
 use super::{
-    expr::{BinOp, ExprBinary, ExprLit, ExprUnary, IntLitRepr, UnOp},
+    expr::{ExprBinary, ExprLit, ExprUnary, IntLitRepr},
     precedence::Precedence,
     type_::{Type, TypeError},
-    Expr, ExprCast, IntLitReprError, OpParseError, Stmt, StmtVarDecl,
+    BinOp, Expr, ExprCast, IntLitReprError, OpParseError, Stmt, StmtVarDecl, UnOp,
 };
 use crate::{
     lexer::{Lexer, Token},
