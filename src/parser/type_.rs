@@ -1,6 +1,5 @@
-use std::fmt::Display;
-
 use crate::archs::Architecture;
+use std::fmt::Display;
 
 #[derive(Debug)]
 pub enum TypeError {
@@ -60,7 +59,7 @@ impl Type {
         }
     }
 
-    fn signed(&self) -> bool {
+    pub fn signed(&self) -> bool {
         match self {
             Self::I8 | Self::I16 => true,
             _ => false,

@@ -73,7 +73,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
                     assert!(self.symtable.exists(name));
                     let right = self.expr(expr.right.as_ref());
 
-                    self.mov(name, &right, left.type_(&self.symtable).unwrap());
+                    self.save(name, &right, left.type_(&self.symtable).unwrap());
 
                     right
                 } else {
@@ -137,8 +137,8 @@ impl<Arch: Architecture> CodeGen<Arch> {
         }
     }
 
-    fn mov(&mut self, label: &str, r: &Register, type_: Type) {
-        self.text_section.push_str(&self.arch.mov(label, r, type_));
+    fn save(&mut self, label: &str, r: &Register, type_: Type) {
+        self.text_section.push_str(&self.arch.save(label, r, type_));
     }
 
     fn load(&mut self, item: LoadItem) -> Register {

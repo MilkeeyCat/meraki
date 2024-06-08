@@ -9,7 +9,7 @@ use crate::{
 };
 use indoc::formatdoc;
 
-pub struct Amd64 {}
+pub struct Amd64;
 
 impl Architecture for Amd64 {
     fn new() -> (Vec<Register>, Self) {
@@ -29,6 +29,16 @@ impl Architecture for Amd64 {
     fn size(type_: &Type) -> usize {
         match type_ {
             _ => unreachable!(),
+        }
+    }
+
+    fn size_name(size: usize) -> &'static str {
+        match size {
+            1 => "byte",
+            2 => "word",
+            4 => "dword",
+            8 => "qword",
+            _ => panic!("im done"),
         }
     }
 
@@ -56,11 +66,19 @@ impl Architecture for Amd64 {
             },
             LoadItem::Symbol(symbol) => match symbol {
                 Symbol::GlobalVar(global_var) => {
+                    let ins = if global_var.type_.signed() {
+                        "movsx"
+                    } else {
+                        "movzx"
+                    };
+
                     formatdoc!(
                         "
-                        \tmov {}, [{}]
+                        \t{} {}, {} [{}]
                         ",
+                        ins,
                         r.qword(),
+                        Self::size_name(Type::size::<Self>(&global_var.type_)),
                         global_var.name,
                     )
                 }
@@ -79,7 +97,7 @@ impl Architecture for Amd64 {
         )
     }
 
-    fn mov(&self, label: &str, r: &Register, type_: Type) -> String {
+    fn save(&self, label: &str, r: &Register, type_: Type) -> String {
         formatdoc!(
             "
             \tmov [{}], {}

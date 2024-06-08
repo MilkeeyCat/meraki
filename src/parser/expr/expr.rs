@@ -1,11 +1,10 @@
-use std::fmt::Display;
-
 use super::IntLitRepr;
 use crate::{
     lexer::Token,
     parser::{type_::TypeError, Type},
     symtable::{Symbol, SymbolTable},
 };
+use std::fmt::Display;
 
 #[derive(Debug)]
 pub enum OpParseError {
