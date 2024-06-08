@@ -9,4 +9,4 @@ pub use expr::*;
 pub use op::{BinOp, CmpOp, OpParseError, UnOp};
 pub use parser::Parser;
 pub use stmt::{Stmt, StmtVarDecl};
-pub use type_::Type;
+pub use type_::{Type, TypeError};

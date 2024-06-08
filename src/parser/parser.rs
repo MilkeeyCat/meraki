@@ -8,7 +8,6 @@ use crate::{
     lexer::{Lexer, Token},
     symtable::{Symbol, SymbolGlobalVar, SymbolTable},
 };
-use std::fmt::Display;
 
 #[derive(Debug)]
 pub enum ParserError {
@@ -22,7 +21,9 @@ pub enum ParserError {
     Redeclaration(String),
 }
 
-impl Display for ParserError {
+impl std::error::Error for ParserError {}
+
+impl std::fmt::Display for ParserError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::UnexpectedToken(expected, actual) => {
@@ -101,8 +102,8 @@ impl Parser {
         }
     }
 
-    pub fn into_parts(mut self) -> (Result<Vec<Stmt>, ParserError>, SymbolTable) {
-        (self.parse(), self.symtable)
+    pub fn into_parts(mut self) -> Result<(Vec<Stmt>, SymbolTable), ParserError> {
+        Ok((self.parse()?, self.symtable))
     }
 
     pub fn parse(&mut self) -> Result<Vec<Stmt>, ParserError> {

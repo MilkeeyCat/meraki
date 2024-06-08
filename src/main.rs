@@ -5,36 +5,35 @@ mod parser;
 mod register_allocator;
 mod symtable;
 
+use crate::archs::Amd64;
 use codegen::CodeGen;
 use lexer::Lexer;
 use parser::Parser;
 
-use crate::archs::Amd64;
-
 fn main() {
     let lexer = Lexer::new(
         "
-        bool bar;
-        bool bar1;
-        bool bar2;
-        bar = true;
-        bar = false;
+        i8 foo;
+        i8 bar;
+
+        bar = foo;
         "
         .to_string(),
     );
 
-    let parser = Parser::new(lexer);
-    let (stmts, symtable) = parser.into_parts();
-    let stmts = match stmts {
-        Ok(stmts) => stmts,
-        Err(e) => {
-            println!("Achtung:  {}", e);
-            std::process::exit(1)
-        }
-    };
+    let (stmts, symtable) = Parser::new(lexer)
+        .into_parts()
+        .unwrap_or_else(|e| giveup(Box::new(e)));
 
     dbg!(&stmts);
     dbg!(&symtable);
 
-    CodeGen::<Amd64>::new(symtable).compile(stmts, "./nasm/main.nasm");
+    CodeGen::<Amd64>::new(symtable)
+        .compile(stmts, "./nasm/main.nasm")
+        .unwrap_or_else(|e| giveup(Box::new(e)));
+}
+
+fn giveup(error: Box<dyn std::error::Error>) -> ! {
+    println!("Achtung:  {}", error);
+    std::process::exit(1)
 }
