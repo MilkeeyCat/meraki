@@ -156,12 +156,25 @@ impl<Arch: Architecture> CodeGen<Arch> {
 
                 r
             }
-            _ => panic!("not unary operator is not supported yet"),
+            UnOp::Not => {
+                let r = self.expr(unary_expr.expr.as_ref());
+
+                self.not(r)
+            }
         }
     }
 
     fn negate(&mut self, r: &Register) {
         self.text_section.push_str(&self.arch.negate(r));
+    }
+
+    fn not(&mut self, r2: Register) -> Register {
+        let r = self.registers.alloc().unwrap();
+
+        self.text_section.push_str(&self.arch.not(&r, &r2));
+        self.registers.free(r2).unwrap();
+
+        r
     }
 
     fn add(&mut self, r1: &Register, r2: Register) {

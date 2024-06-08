@@ -167,19 +167,22 @@ impl ExprUnary {
     }
 
     pub fn type_(&self, symtable: &SymbolTable) -> Result<Type, TypeError> {
-        let mut expr_type = self.expr.type_(symtable)?;
+        match &self.op {
+            UnOp::Negative => {
+                let mut expr_type = self.expr.type_(symtable)?;
 
-        if let Expr::Lit(ExprLit::Int(int)) = self.expr.as_ref() {
-            if self.op == UnOp::Negative {
-                if int.first_bit_set() {
-                    expr_type = int.widen_type().unwrap();
+                if let Expr::Lit(ExprLit::Int(int)) = self.expr.as_ref() {
+                    if int.first_bit_set() {
+                        expr_type = int.widen_type().unwrap();
+                    }
                 }
 
                 expr_type.to_signed();
-            }
-        }
 
-        Ok(expr_type)
+                Ok(expr_type)
+            }
+            UnOp::Not => Ok(Type::Bool),
+        }
     }
 }
 

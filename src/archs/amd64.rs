@@ -98,6 +98,17 @@ impl Architecture for Amd64 {
         )
     }
 
+    fn not(&self, r1: &Register, r2: &Register) -> String {
+        formatdoc!(
+            "
+            \tcmp {}, 0
+            \tsete {}
+            ",
+            r2.qword(),
+            r1.byte(),
+        )
+    }
+
     fn add(&self, r1: &Register, r2: &Register) -> String {
         formatdoc!(
             "

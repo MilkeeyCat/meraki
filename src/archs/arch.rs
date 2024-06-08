@@ -42,6 +42,7 @@ pub trait Architecture {
     fn declare(&self, var: &StmtVarDecl) -> String;
     fn mov(&self, label: &str, r: &Register, type_: Type) -> String;
     fn negate(&self, r: &Register) -> String;
+    fn not(&self, r1: &Register, r2: &Register) -> String;
     fn add(&self, r1: &Register, r2: &Register) -> String;
     fn sub(&self, r1: &Register, r2: &Register) -> String;
     fn mul(&self, r1: &Register, r2: &Register) -> String;
