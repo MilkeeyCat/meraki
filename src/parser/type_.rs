@@ -123,16 +123,12 @@ impl Type {
     }
 
     pub fn cast(self, type_: Self) -> Result<Self, TypeError> {
-        if self.int() && type_.int() {
+        if (self == type_) || (self.int() && type_.int()) {
             return Ok(type_);
         }
 
-        if self.bool() && type_.int() {
+        if (self.bool() && type_.int()) || (self.int() && type_.bool()) {
             return Ok(type_);
-        }
-
-        if type_.int() && self.bool() {
-            return Ok(self);
         }
 
         return Err(TypeError::Cast(self, type_));
@@ -166,6 +162,63 @@ mod test {
 
         for (types, expected) in tests {
             assert_eq!(Type::promote(types.0, types.1)?, expected);
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn casting() -> Result<(), TypeError> {
+        let tests = [
+            //8
+            (Type::U8, Type::U8),
+            (Type::U8, Type::I8),
+            (Type::I8, Type::U8),
+            (Type::I8, Type::I8),
+            //16
+            (Type::U16, Type::U16),
+            (Type::U16, Type::I16),
+            (Type::I16, Type::U16),
+            (Type::I16, Type::I16),
+            //8-16
+            (Type::U8, Type::U16),
+            (Type::U8, Type::I16),
+            (Type::I8, Type::U16),
+            (Type::I8, Type::I16),
+            //16-8
+            (Type::U16, Type::U8),
+            (Type::I16, Type::U8),
+            (Type::U16, Type::I8),
+            (Type::I16, Type::I8),
+            //8-bool
+            (Type::U8, Type::Bool),
+            (Type::I8, Type::Bool),
+            (Type::Bool, Type::U8),
+            (Type::Bool, Type::I8),
+            //bool-8
+            (Type::Bool, Type::U8),
+            (Type::Bool, Type::I8),
+            (Type::U8, Type::Bool),
+            (Type::I8, Type::Bool),
+            //16-bool
+            (Type::U16, Type::Bool),
+            (Type::I16, Type::Bool),
+            (Type::Bool, Type::U16),
+            (Type::Bool, Type::I16),
+            //bool-16
+            (Type::Bool, Type::U16),
+            (Type::Bool, Type::I16),
+            (Type::U16, Type::Bool),
+            (Type::I16, Type::Bool),
+        ];
+
+        for (type1, type2) in tests {
+            assert!(
+                Type::cast(type1.clone(), type2.clone()).is_ok(),
+                "{}, {} big oops",
+                type1,
+                type2
+            );
         }
 
         Ok(())
