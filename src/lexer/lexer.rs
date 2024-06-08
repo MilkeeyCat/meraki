@@ -1,6 +1,11 @@
 use super::Token;
 
 #[derive(Debug)]
+pub enum LexerError {
+    UnknownCharacter(char),
+}
+
+#[derive(Debug)]
 pub struct Lexer {
     input: Vec<u8>,
     position: usize,
@@ -32,8 +37,9 @@ impl Lexer {
         self.read_position += 1;
     }
 
-    pub fn next_token(&mut self) -> Result<Token, Box<dyn std::error::Error>> {
+    pub fn next_token(&mut self) -> Result<Token, LexerError> {
         self.skip_whitespace();
+
         let token = match self.ch {
             b'=' => {
                 if self.peek() == b'=' {
@@ -52,7 +58,15 @@ impl Lexer {
                 }
             }
             b'+' => Token::Plus,
-            b'/' => Token::Slash,
+            b'/' => {
+                if self.peek() == b'/' {
+                    self.skip_comment();
+
+                    self.next_token()?
+                } else {
+                    Token::Slash
+                }
+            }
             b'.' => Token::Period,
             b'&' => Token::Ampersand,
             b'!' => {
@@ -114,7 +128,7 @@ impl Lexer {
                 return Ok(Token::Integer(self.read_int()));
             }
             0 => Token::Eof,
-            c => panic!("Coudn't parse char {}, skill issue", char::from(c)),
+            c => return Err(LexerError::UnknownCharacter(char::from(c))),
         };
 
         self.read_char();
@@ -169,15 +183,21 @@ impl Lexer {
             self.read_char();
         }
     }
+
+    fn skip_comment(&mut self) {
+        while self.ch != b'\n' {
+            self.read_char();
+        }
+    }
 }
 
 #[cfg(test)]
 mod test {
-    use super::Lexer;
+    use super::{Lexer, LexerError};
     use crate::lexer::Token;
 
     #[test]
-    fn source_into_tokens() -> Result<(), Box<dyn std::error::Error>> {
+    fn source_into_tokens() -> Result<(), LexerError> {
         let input = r#"
             [>.<]->!-+/==!=:true,false<=>=
 
