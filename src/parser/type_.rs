@@ -146,3 +146,28 @@ impl Type {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::{Type, TypeError};
+
+    #[test]
+    fn int_promotion() -> Result<(), TypeError> {
+        let tests = [
+            ((Type::U8, Type::U8), Type::U8),
+            ((Type::U8, Type::I8), Type::I8),
+            ((Type::I8, Type::U8), Type::I8),
+            ((Type::I8, Type::I8), Type::I8),
+            ((Type::U8, Type::U16), Type::U16),
+            ((Type::U8, Type::I16), Type::I16),
+            ((Type::I8, Type::U16), Type::I16),
+            ((Type::I8, Type::I16), Type::I16),
+        ];
+
+        for (types, expected) in tests {
+            assert_eq!(Type::promote(types.0, types.1)?, expected);
+        }
+
+        Ok(())
+    }
+}
