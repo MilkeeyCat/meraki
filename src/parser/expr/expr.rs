@@ -28,6 +28,7 @@ impl Expr {
                 .ok_or(TypeError::IdentNotFound(ident.to_owned()))?
             {
                 Symbol::GlobalVar(global_var) => Ok(global_var.type_.clone()),
+                Symbol::LocalVar(local) => Ok(local.type_.clone()),
             },
             Self::Cast(cast) => cast.type_(symtable),
         }

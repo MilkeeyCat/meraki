@@ -1,11 +1,12 @@
 use crate::{
-    archs::{Architecture, LoadItem},
+    archs::{Architecture, LoadItem, SaveItem},
     parser::{
-        BinOp, CmpOp, Expr, ExprBinary, ExprLit, ExprUnary, OpParseError, Stmt, StmtVarDecl, Type,
-        TypeError, UnOp,
+        BinOp, CmpOp, Expr, ExprBinary, ExprLit, ExprUnary, OpParseError, Stmt, StmtFunction,
+        StmtVarDecl, Type, TypeError, UnOp,
     },
     register_allocator::{AllocatorError, Register, RegisterAllocator},
-    symtable::SymbolTable,
+    scope::Scope,
+    symtable::{Symbol, SymbolTable},
 };
 use indoc::formatdoc;
 use std::fs::File;
@@ -57,6 +58,7 @@ pub struct CodeGen<Arch: Architecture> {
     data_section: String,
     text_section: String,
     bss_section: String,
+    scope: Scope,
 }
 
 impl<Arch: Architecture> CodeGen<Arch> {
@@ -74,23 +76,50 @@ impl<Arch: Architecture> CodeGen<Arch> {
                 section .text
                     global main
 
-                main:
                 "
             ),
+            scope: Scope::default(),
         }
     }
 
-    fn declare(&mut self, var: &StmtVarDecl) {
-        self.bss_section.push_str(&self.arch.declare(&var));
+    fn declare(&mut self, var: StmtVarDecl) {
+        if let Scope::Global = self.scope {
+            self.bss_section.push_str(&self.arch.declare(var));
+        }
     }
 
-    fn expr(&mut self, expr: &Expr) -> Result<Register, CodeGenError> {
+    fn function(&mut self, mut func: StmtFunction) {
+        self.symtable.enter(Box::new(func.symtable));
+        let mut offset: usize = 0;
+
+        for stmt in &mut func.body {
+            if let Stmt::VarDecl(var_decl) = stmt {
+                if let Symbol::LocalVar(local) = self.symtable.find_mut(&var_decl.name).unwrap() {
+                    local.offset = offset;
+                    offset += local.type_.size::<Arch>();
+                }
+            }
+        }
+
+        self.text_section
+            .push_str(&self.arch.fn_preamble(&func.name, offset));
+        self.scope = Scope::Local;
+
+        for stmt in func.body {
+            self.stmt(stmt).unwrap();
+        }
+
+        self.scope = Scope::Global;
+        self.symtable.leave();
+    }
+
+    fn expr(&mut self, expr: Expr) -> Result<Register, CodeGenError> {
         match expr {
             Expr::Binary(bin_expr) => self.bin_expr(bin_expr),
             Expr::Lit(lit) => self.load(LoadItem::Lit(lit.clone())),
             Expr::Unary(unary_expr) => self.unary_expr(unary_expr),
             Expr::Ident(ident) => self.load(LoadItem::Symbol(
-                self.symtable.find(ident).unwrap().to_owned(),
+                self.symtable.find(&ident).unwrap().to_owned(),
             )),
             Expr::Cast(cast_expr) => {
                 //TODO: move this elsewhere
@@ -101,21 +130,34 @@ impl<Arch: Architecture> CodeGen<Arch> {
                     cast_expr.expr().to_owned()
                 };
 
-                self.expr(&expr)
+                self.expr(expr)
             }
         }
     }
 
-    fn bin_expr(&mut self, expr: &ExprBinary) -> Result<Register, CodeGenError> {
+    fn bin_expr(&mut self, expr: ExprBinary) -> Result<Register, CodeGenError> {
         match &expr.op {
             BinOp::Assign => {
                 let left = expr.left.as_ref();
 
                 if let Expr::Ident(name) = left {
                     assert!(self.symtable.exists(name));
-                    let right = self.expr(expr.right.as_ref())?;
+                    let right = self.expr(*expr.right)?;
 
-                    self.save(name, &right, left.type_(&self.symtable)?);
+                    if let Scope::Global = self.scope {
+                        self.save(SaveItem::Global(name), &right, left.type_(&self.symtable)?);
+                    } else {
+                        let symbol = self.symtable.find(name).unwrap();
+                        if let Symbol::LocalVar(symbol) = symbol {
+                            self.save(
+                                SaveItem::Local(symbol.offset),
+                                &right,
+                                left.type_(&self.symtable)?,
+                            );
+                        } else {
+                            panic!("FUCK");
+                        }
+                    }
 
                     Ok(right)
                 } else {
@@ -123,32 +165,32 @@ impl<Arch: Architecture> CodeGen<Arch> {
                 }
             }
             BinOp::Add => {
-                let left = self.expr(expr.left.as_ref())?;
-                let right = self.expr(expr.right.as_ref())?;
+                let left = self.expr(*expr.left)?;
+                let right = self.expr(*expr.right)?;
 
                 self.add(&left, right)?;
 
                 Ok(left)
             }
             BinOp::Sub => {
-                let left = self.expr(expr.left.as_ref())?;
-                let right = self.expr(expr.right.as_ref())?;
+                let left = self.expr(*expr.left)?;
+                let right = self.expr(*expr.right)?;
 
                 self.sub(&left, right)?;
 
                 Ok(left)
             }
             BinOp::Mul => {
-                let left = self.expr(expr.left.as_ref())?;
-                let right = self.expr(expr.right.as_ref())?;
+                let left = self.expr(*expr.left)?;
+                let right = self.expr(*expr.right)?;
 
                 self.mul(&left, right)?;
 
                 Ok(left)
             }
             BinOp::Div => {
-                let left = self.expr(expr.left.as_ref())?;
-                let right = self.expr(expr.right.as_ref())?;
+                let left = self.expr(*expr.left)?;
+                let right = self.expr(*expr.right)?;
 
                 self.div(&left, right)?;
 
@@ -160,8 +202,8 @@ impl<Arch: Architecture> CodeGen<Arch> {
             | BinOp::GreaterEqual
             | BinOp::Equal
             | BinOp::NotEqual => {
-                let left = self.expr(expr.left.as_ref())?;
-                let right = self.expr(expr.right.as_ref())?;
+                let left = self.expr(*expr.left)?;
+                let right = self.expr(*expr.right)?;
 
                 self.cmp(&left, right, CmpOp::try_from(&expr.op)?)?;
 
@@ -170,15 +212,16 @@ impl<Arch: Architecture> CodeGen<Arch> {
         }
     }
 
-    fn stmt(&mut self, stmt: &Stmt) -> Result<(), CodeGenError> {
+    fn stmt(&mut self, stmt: Stmt) -> Result<(), CodeGenError> {
         match stmt {
             Stmt::Expr(expr) => self.expr(expr).map(|_| ()),
             Stmt::VarDecl(var_decl) => Ok(self.declare(var_decl)),
+            Stmt::Function(func) => Ok(self.function(func)),
         }
     }
 
-    fn save(&mut self, label: &str, r: &Register, type_: Type) {
-        self.text_section.push_str(&self.arch.save(label, r, type_));
+    fn save(&mut self, item: SaveItem, r: &Register, type_: Type) {
+        self.text_section.push_str(&self.arch.save(item, r, type_));
     }
 
     fn load(&mut self, item: LoadItem) -> Result<Register, CodeGenError> {
@@ -189,16 +232,16 @@ impl<Arch: Architecture> CodeGen<Arch> {
         Ok(r)
     }
 
-    fn unary_expr(&mut self, unary_expr: &ExprUnary) -> Result<Register, CodeGenError> {
+    fn unary_expr(&mut self, unary_expr: ExprUnary) -> Result<Register, CodeGenError> {
         match unary_expr.op {
             UnOp::Negative => {
-                let r = self.expr(unary_expr.expr.as_ref())?;
+                let r = self.expr(*unary_expr.expr)?;
                 self.negate(&r);
 
                 Ok(r)
             }
             UnOp::Not => {
-                let r = self.expr(unary_expr.expr.as_ref())?;
+                let r = self.expr(*unary_expr.expr)?;
 
                 self.not(r)
             }
@@ -257,7 +300,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
         let mut file = File::create(path).expect(&format!("Failed to open a file {}", path));
 
         for stmt in program {
-            self.stmt(&stmt)?;
+            self.stmt(stmt)?;
         }
 
         file.write_all(self.bss_section.as_bytes())
@@ -269,7 +312,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
         file.write_all(self.text_section.as_bytes())
             .expect("Failed to write generated .text section to output file");
         //TODO: remove this hack
-        file.write_all("\tret".as_bytes()).unwrap();
+        file.write_all("\tleave\n\tret".as_bytes()).unwrap();
 
         Ok(())
     }

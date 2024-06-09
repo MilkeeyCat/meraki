@@ -1,4 +1,7 @@
-use super::{arch::Architecture, LoadItem};
+use super::{
+    arch::{Architecture, SaveItem},
+    LoadItem,
+};
 use crate::{
     parser::{CmpOp, ExprLit, StmtVarDecl, Type},
     register_allocator::Register,
@@ -79,11 +82,28 @@ impl Architecture for Amd64 {
                         global_var.name,
                     )
                 }
+                Symbol::LocalVar(local) => {
+                    let ins = if local.type_.signed() {
+                        "movsx"
+                    } else {
+                        "movzx"
+                    };
+
+                    formatdoc!(
+                        "
+                        \t{} {}, {} [rbp - {}]
+                        ",
+                        ins,
+                        r.qword(),
+                        Self::size_name(Type::size::<Self>(&local.type_)),
+                        local.offset,
+                    )
+                }
             },
         }
     }
 
-    fn declare(&self, var: &StmtVarDecl) -> String {
+    fn declare(&self, var: StmtVarDecl) -> String {
         let size = &var.type_.size::<Self>();
 
         formatdoc!(
@@ -94,14 +114,27 @@ impl Architecture for Amd64 {
         )
     }
 
-    fn save(&self, label: &str, r: &Register, type_: Type) -> String {
-        formatdoc!(
-            "
-            \tmov [{}], {}
-            ",
-            label,
-            r.from_size(type_.size::<Self>()),
-        )
+    fn save(&self, item: SaveItem, r: &Register, type_: Type) -> String {
+        match item {
+            SaveItem::Local(local) => {
+                formatdoc!(
+                    "
+                    \tmov [rbp - {}], {}
+                    ",
+                    local,
+                    r.from_size(type_.size::<Self>()),
+                )
+            }
+            SaveItem::Global(global) => {
+                formatdoc!(
+                    "
+                    \tmov [{}], {}
+                    ",
+                    global,
+                    r.from_size(type_.size::<Self>()),
+                )
+            }
+        }
     }
 
     fn negate(&self, r: &Register) -> String {
@@ -187,6 +220,19 @@ impl Architecture for Amd64 {
             r1.qword(),
             r2.qword(),
             ins,
+        )
+    }
+
+    fn fn_preamble(&self, name: &str, stackframe: usize) -> String {
+        formatdoc!(
+            "
+            {}:
+                push rbp
+                mov rbp, rsp
+                sub rsp, {}
+            ",
+            name,
+            stackframe,
         )
     }
 }

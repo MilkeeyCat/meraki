@@ -3,6 +3,7 @@ mod codegen;
 mod lexer;
 mod parser;
 mod register_allocator;
+mod scope;
 mod symtable;
 
 use crate::archs::Amd64;
@@ -13,10 +14,13 @@ use parser::Parser;
 fn main() {
     let lexer = Lexer::new(
         "
-        i8 foo;
-        i8 bar;
+        u8 main() {
+            u16 foo;
+            u8 bar;
 
-        bar = foo;
+            bar = 69;
+            foo = bar;
+        }
         "
         .to_string(),
     );

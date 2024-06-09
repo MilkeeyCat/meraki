@@ -2,11 +2,12 @@ use super::{
     expr::{ExprBinary, ExprLit, ExprUnary, IntLitRepr},
     precedence::Precedence,
     type_::{Type, TypeError},
-    BinOp, Expr, ExprCast, IntLitReprError, OpParseError, Stmt, StmtVarDecl, UnOp,
+    BinOp, Expr, ExprCast, IntLitReprError, OpParseError, Stmt, StmtFunction, StmtVarDecl, UnOp,
 };
 use crate::{
     lexer::{Lexer, Token},
-    symtable::{Symbol, SymbolGlobalVar, SymbolTable},
+    scope::Scope,
+    symtable::{Symbol, SymbolGlobalVar, SymbolLocalVar, SymbolTable},
 };
 
 #[derive(Debug)]
@@ -51,6 +52,7 @@ pub struct Parser {
     symtable: SymbolTable,
     cur_token: Token,
     peek_token: Token,
+    scope: Scope,
 }
 
 impl Parser {
@@ -60,6 +62,7 @@ impl Parser {
             peek_token: lexer.next_token().unwrap(),
             symtable: SymbolTable::new(),
             lexer,
+            scope: Scope::default(),
         }
     }
 
@@ -156,9 +159,12 @@ impl Parser {
         match &self.cur_token {
             Token::U8 | Token::U16 | Token::I8 | Token::I16 | Token::Bool => {
                 let type_ = self.parse_type()?;
-                let stmt = self.var_decl(type_);
 
-                stmt
+                if self.peek_token_is(Token::Semicolon) {
+                    self.var_decl(type_)
+                } else {
+                    self.function(type_)
+                }
             }
             _ => {
                 let expr = self.expr(Precedence::default())?;
@@ -199,14 +205,90 @@ impl Parser {
             return Err(ParserError::Redeclaration(name));
         }
 
-        self.symtable.push(Symbol::GlobalVar(SymbolGlobalVar {
-            name: name.clone(),
-            type_: type_.clone(),
-        }));
+        if let Scope::Local = self.scope {
+            self.symtable.push(Symbol::LocalVar(SymbolLocalVar {
+                name: name.clone(),
+                type_: type_.clone(),
+                offset: 0,
+            }));
+        } else {
+            self.symtable.push(Symbol::GlobalVar(SymbolGlobalVar {
+                name: name.clone(),
+                type_: type_.clone(),
+            }));
+        }
 
         self.next_token();
         self.expect(Token::Semicolon)?;
+
         Ok(Stmt::VarDecl(StmtVarDecl::new(type_, name, None)))
+    }
+
+    fn function(&mut self, type_: Type) -> Result<Stmt, ParserError> {
+        let name = match &self.cur_token {
+            Token::Ident(ident) => ident.to_owned(),
+            _ => {
+                return Err(ParserError::ParseType(self.cur_token.to_owned()));
+            }
+        };
+        self.next_token();
+
+        if self.symtable.exists(&name) {
+            return Err(ParserError::Redeclaration(name));
+        }
+
+        self.expect(Token::LParen)?;
+        self.symtable.enter(Box::new(SymbolTable::new()));
+
+        let params = self.params(Token::Comma, Token::RParen)?;
+        self.scope = Scope::Local;
+        let body = self.function_body()?;
+        self.scope = Scope::Global;
+
+        Ok(Stmt::Function(StmtFunction {
+            return_type: type_,
+            name,
+            params,
+            body,
+            symtable: self.symtable.inner(),
+        }))
+    }
+
+    fn params(&mut self, delim: Token, end: Token) -> Result<Vec<(String, Type)>, ParserError> {
+        let mut params = Vec::new();
+
+        while !self.cur_token_is(end.clone()) {
+            let type_ = self.parse_type()?;
+            let name = match &self.cur_token {
+                Token::Ident(ident) => ident.to_owned(),
+                _ => panic!("jkasdlj"),
+            };
+
+            self.next_token();
+            params.push((name, type_));
+
+            if !self.cur_token_is(end.clone()) {
+                self.expect(delim.clone())?;
+            }
+        }
+
+        self.expect(end)?;
+
+        Ok(params)
+    }
+
+    fn function_body(&mut self) -> Result<Vec<Stmt>, ParserError> {
+        let mut stmts = Vec::new();
+
+        self.expect(Token::LBrace)?;
+
+        while !self.cur_token_is(Token::RBrace) {
+            stmts.push(self.stmt()?);
+        }
+
+        self.expect(Token::RBrace)?;
+
+        Ok(stmts)
     }
 
     fn ident(&mut self) -> Result<Expr, ParserError> {
