@@ -6,6 +6,7 @@ pub enum Stmt {
     VarDecl(StmtVarDecl),
     Expr(Expr),
     Function(StmtFunction),
+    Return(StmtReturn),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -19,6 +20,12 @@ impl StmtVarDecl {
     pub fn new(type_: Type, name: String, value: Option<Expr>) -> Self {
         Self { type_, name, value }
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct StmtReturn {
+    pub expr: Option<Expr>,
+    pub label: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]

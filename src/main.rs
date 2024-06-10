@@ -14,12 +14,23 @@ use parser::Parser;
 fn main() {
     let lexer = Lexer::new(
         "
+        u16 foo() {
+            u8 a;
+            a = 9;
+            u16 b;
+            b = (u16)a;
+
+            return b;
+        }
+
         u8 main() {
             u16 foo;
             u8 bar;
 
             bar = 69;
             foo = bar;
+
+            return foo;
         }
         "
         .to_string(),

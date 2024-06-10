@@ -1,6 +1,7 @@
 use super::{
     expr::{ExprBinary, ExprLit, ExprUnary, IntLitRepr},
     precedence::Precedence,
+    stmt::StmtReturn,
     type_::{Type, TypeError},
     BinOp, Expr, ExprCast, IntLitReprError, OpParseError, Stmt, StmtFunction, StmtVarDecl, UnOp,
 };
@@ -166,6 +167,7 @@ impl Parser {
                     self.function(type_)
                 }
             }
+            Token::Return => self.parse_return(),
             _ => {
                 let expr = self.expr(Precedence::default())?;
                 expr.type_(&self.symtable)?;
@@ -193,6 +195,28 @@ impl Parser {
         }
     }
 
+    fn parse_return(&mut self) -> Result<Stmt, ParserError> {
+        self.expect(Token::Return)?;
+
+        let mut expr = None;
+        if !self.cur_token_is(Token::Semicolon) {
+            expr = Some(self.expr(Precedence::default())?);
+            self.next_token();
+        }
+
+        self.expect(Token::Semicolon)?;
+
+        if let Scope::Local(name) = &self.scope {
+            Ok(Stmt::Return(StmtReturn {
+                expr,
+                //TODO: it's not a good idea
+                label: name.to_owned() + "_ret",
+            }))
+        } else {
+            panic!("wat");
+        }
+    }
+
     fn var_decl(&mut self, type_: Type) -> Result<Stmt, ParserError> {
         let name = match &self.cur_token {
             Token::Ident(ident) => ident.to_owned(),
@@ -205,7 +229,7 @@ impl Parser {
             return Err(ParserError::Redeclaration(name));
         }
 
-        if let Scope::Local = self.scope {
+        if let Scope::Local(_) = self.scope {
             self.symtable.push(Symbol::LocalVar(SymbolLocalVar {
                 name: name.clone(),
                 type_: type_.clone(),
@@ -241,7 +265,7 @@ impl Parser {
         self.symtable.enter(Box::new(SymbolTable::new()));
 
         let params = self.params(Token::Comma, Token::RParen)?;
-        self.scope = Scope::Local;
+        self.scope = Scope::Local(name.clone());
         let body = self.function_body()?;
         self.scope = Scope::Global;
 

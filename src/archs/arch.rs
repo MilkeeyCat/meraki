@@ -29,4 +29,7 @@ pub trait Architecture {
     fn div(&self, r1: &Register, r2: &Register) -> String;
     fn cmp(&self, r1: &Register, r2: &Register, cmp: CmpOp) -> String;
     fn fn_preamble(&self, name: &str, stackframe: usize) -> String;
+    fn fn_postamble(&self, name: &str, stackframe: usize) -> String;
+    fn ret(&self, r: &Register, type_: Type) -> String;
+    fn jmp(&self, label: &str) -> String;
 }

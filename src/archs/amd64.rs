@@ -235,4 +235,38 @@ impl Architecture for Amd64 {
             stackframe,
         )
     }
+
+    fn fn_postamble(&self, name: &str, stackframe: usize) -> String {
+        formatdoc!(
+            "
+            {}_ret:
+                add rsp, {}
+                leave
+                ret
+            ",
+            name,
+            stackframe,
+        )
+    }
+
+    fn ret(&self, r: &Register, type_: Type) -> String {
+        let ins = if type_.signed() { "movsx" } else { "movzx" };
+
+        formatdoc!(
+            "
+            \t{} rax, {}
+            ",
+            ins,
+            r.from_size(Type::size::<Self>(&type_)),
+        )
+    }
+
+    fn jmp(&self, label: &str) -> String {
+        formatdoc!(
+            "
+            \tjmp {}
+            ",
+            label
+        )
+    }
 }

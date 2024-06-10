@@ -2,7 +2,7 @@ use crate::{
     archs::{Architecture, LoadItem, SaveItem},
     parser::{
         BinOp, CmpOp, Expr, ExprBinary, ExprLit, ExprUnary, OpParseError, Stmt, StmtFunction,
-        StmtVarDecl, Type, TypeError, UnOp,
+        StmtReturn, StmtVarDecl, Type, TypeError, UnOp,
     },
     register_allocator::{AllocatorError, Register, RegisterAllocator},
     scope::Scope,
@@ -103,14 +103,34 @@ impl<Arch: Architecture> CodeGen<Arch> {
 
         self.text_section
             .push_str(&self.arch.fn_preamble(&func.name, offset));
-        self.scope = Scope::Local;
+        self.scope = Scope::Local(func.name.clone());
 
         for stmt in func.body {
             self.stmt(stmt).unwrap();
         }
 
         self.scope = Scope::Global;
+        self.text_section
+            .push_str(&self.arch.fn_postamble(&func.name, offset));
         self.symtable.leave();
+    }
+
+    fn ret(&mut self, ret: StmtReturn) -> Result<(), CodeGenError> {
+        let label = &ret.label;
+        if let Some(expr) = ret.expr {
+            let type_ = expr.type_(&self.symtable)?;
+            let r = self.expr(expr)?;
+
+            self.text_section.push_str(&self.arch.ret(&r, type_));
+        }
+
+        self.jmp(label);
+
+        Ok(())
+    }
+
+    fn jmp(&mut self, label: &str) {
+        self.text_section.push_str(&self.arch.jmp(label));
     }
 
     fn expr(&mut self, expr: Expr) -> Result<Register, CodeGenError> {
@@ -217,6 +237,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
             Stmt::Expr(expr) => self.expr(expr).map(|_| ()),
             Stmt::VarDecl(var_decl) => Ok(self.declare(var_decl)),
             Stmt::Function(func) => Ok(self.function(func)),
+            Stmt::Return(ret) => self.ret(ret),
         }
     }
 
@@ -311,8 +332,6 @@ impl<Arch: Architecture> CodeGen<Arch> {
         file.write(&[10]).unwrap();
         file.write_all(self.text_section.as_bytes())
             .expect("Failed to write generated .text section to output file");
-        //TODO: remove this hack
-        file.write_all("\tleave\n\tret".as_bytes()).unwrap();
 
         Ok(())
     }
