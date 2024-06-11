@@ -161,7 +161,6 @@ impl<Arch: Architecture> CodeGen<Arch> {
                 let left = expr.left.as_ref();
 
                 if let Expr::Ident(name) = left {
-                    assert!(self.symtable.exists(name));
                     let right = self.expr(*expr.right)?;
 
                     if let Scope::Global = self.scope {

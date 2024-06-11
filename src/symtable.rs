@@ -8,6 +8,15 @@ pub enum Symbol {
     LocalVar(SymbolLocalVar),
 }
 
+impl Symbol {
+    pub fn name(&self) -> &str {
+        match self {
+            Self::GlobalVar(global_var) => &global_var.name,
+            Self::LocalVar(local) => &local.name,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct SymbolGlobalVar {
     pub name: String,
@@ -19,6 +28,19 @@ pub struct SymbolLocalVar {
     pub name: String,
     pub offset: usize,
     pub type_: Type,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum SymbolTableError {
+    Redeclaration(String),
+}
+
+impl std::fmt::Display for SymbolTableError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Redeclaration(name) => write!(f, "Redeclaration of '{}'", name),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -52,45 +74,36 @@ impl SymbolTable {
     }
 
     pub fn find(&self, name: &str) -> Option<&Symbol> {
-        self.symtable().symbols.iter().find(|symbol| match symbol {
-            Symbol::GlobalVar(global_var) => global_var.name == name,
-            Symbol::LocalVar(local) => local.name == name,
-        })
+        self.inner
+            .as_deref()
+            .and_then(|inner| inner.find(name))
+            .or_else(|| self.symbols.iter().find(|symbol| symbol.name() == name))
     }
 
     pub fn find_mut(&mut self, name: &str) -> Option<&mut Symbol> {
-        self.symtable_mut()
-            .symbols
-            .iter_mut()
-            .find(|symbol| match symbol {
-                Symbol::GlobalVar(global_var) => global_var.name == name,
-                Symbol::LocalVar(local) => local.name == name,
-            })
+        self.inner
+            .as_deref_mut()
+            .and_then(|inner| inner.find_mut(name))
+            .or_else(|| self.symbols.iter_mut().find(|symbol| symbol.name() == name))
     }
 
-    pub fn exists(&self, name: &str) -> bool {
-        for symbol in &self.symtable().symbols {
-            match symbol {
-                Symbol::GlobalVar(global_var) => {
-                    if global_var.name == name {
-                        return true;
-                    }
-                }
-                Symbol::LocalVar(local) => {
-                    if local.name == name {
-                        return true;
-                    }
-                }
-            }
-        }
-
-        false
-    }
-
-    pub fn push(&mut self, symbol: Symbol) {
+    pub fn push(&mut self, symbol: Symbol) -> Result<(), SymbolTableError> {
         assert!(self.symtable().symbols.len() < MAX_SYMBOLS);
 
-        self.symtable_mut().symbols.push(symbol);
+        if self
+            .symtable()
+            .symbols
+            .iter()
+            .map(|symbol| symbol.name())
+            .collect::<Vec<&str>>()
+            .contains(&symbol.name())
+        {
+            Err(SymbolTableError::Redeclaration(symbol.name().to_owned()))
+        } else {
+            self.symtable_mut().symbols.push(symbol);
+
+            Ok(())
+        }
     }
 
     pub fn enter(&mut self, symtable: Box<SymbolTable>) {
@@ -114,5 +127,68 @@ impl SymbolTable {
 
     pub fn inner(&mut self) -> Self {
         *std::mem::take(&mut self.inner).unwrap()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{parser::Type, symtable::SymbolLocalVar};
+
+    use super::{Symbol, SymbolGlobalVar, SymbolTable, SymbolTableError};
+
+    #[test]
+    fn scopes() -> Result<(), SymbolTableError> {
+        let mut symtable = SymbolTable::new();
+        let symbol = Symbol::GlobalVar(SymbolGlobalVar {
+            name: "foo".to_owned(),
+            type_: Type::U8,
+        });
+
+        symtable.push(symbol.clone())?;
+
+        let symbol2 = Symbol::GlobalVar(SymbolGlobalVar {
+            name: "foo".to_owned(),
+            type_: Type::U8,
+        });
+
+        assert_eq!(
+            symtable.push(symbol2),
+            Err(SymbolTableError::Redeclaration("foo".to_owned()))
+        );
+
+        symtable.enter(Box::new(SymbolTable::new()));
+
+        assert_eq!(
+            symtable.find("foo"),
+            Some(&Symbol::GlobalVar(SymbolGlobalVar {
+                name: "foo".to_owned(),
+                type_: Type::U8,
+            }))
+        );
+
+        let symbol3 = Symbol::LocalVar(SymbolLocalVar {
+            name: "foo".to_owned(),
+            type_: Type::U16,
+            offset: 0,
+        });
+
+        symtable.push(symbol3.clone())?;
+
+        assert_eq!(symtable.find("foo"), Some(&symbol3));
+
+        symtable.push(Symbol::LocalVar(SymbolLocalVar {
+            name: "bar".to_owned(),
+            type_: Type::I16,
+            offset: 0,
+        }))?;
+
+        assert!(symtable.find("bar").is_some());
+
+        symtable.leave();
+
+        assert_eq!(symtable.find("bar"), None);
+        assert_eq!(symtable.find("foo"), Some(&symbol));
+
+        Ok(())
     }
 }

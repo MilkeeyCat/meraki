@@ -8,7 +8,7 @@ use super::{
 use crate::{
     lexer::{Lexer, Token},
     scope::Scope,
-    symtable::{Symbol, SymbolGlobalVar, SymbolLocalVar, SymbolTable},
+    symtable::{Symbol, SymbolGlobalVar, SymbolLocalVar, SymbolTable, SymbolTableError},
 };
 
 #[derive(Debug)]
@@ -20,7 +20,7 @@ pub enum ParserError {
     Type(TypeError),
     Operator(OpParseError),
     Int(IntLitReprError),
-    Redeclaration(String),
+    SymbolTable(SymbolTableError),
 }
 
 impl std::error::Error for ParserError {}
@@ -37,7 +37,7 @@ impl std::fmt::Display for ParserError {
             Self::Type(e) => write!(f, "{}", e),
             Self::Operator(e) => write!(f, "{}", e),
             Self::Int(e) => write!(f, "{}", e),
-            Self::Redeclaration(name) => write!(f, "Redeclaration of '{}'", name),
+            Self::SymbolTable(e) => write!(f, "{}", e),
         }
     }
 }
@@ -45,6 +45,12 @@ impl std::fmt::Display for ParserError {
 impl From<TypeError> for ParserError {
     fn from(value: TypeError) -> Self {
         ParserError::Type(value)
+    }
+}
+
+impl From<SymbolTableError> for ParserError {
+    fn from(value: SymbolTableError) -> Self {
+        ParserError::SymbolTable(value)
     }
 }
 
@@ -225,21 +231,17 @@ impl Parser {
             }
         };
 
-        if self.symtable.exists(&name) {
-            return Err(ParserError::Redeclaration(name));
-        }
-
         if let Scope::Local(_) = self.scope {
             self.symtable.push(Symbol::LocalVar(SymbolLocalVar {
                 name: name.clone(),
                 type_: type_.clone(),
                 offset: 0,
-            }));
+            }))?;
         } else {
             self.symtable.push(Symbol::GlobalVar(SymbolGlobalVar {
                 name: name.clone(),
                 type_: type_.clone(),
-            }));
+            }))?;
         }
 
         self.next_token();
@@ -255,12 +257,8 @@ impl Parser {
                 return Err(ParserError::ParseType(self.cur_token.to_owned()));
             }
         };
+
         self.next_token();
-
-        if self.symtable.exists(&name) {
-            return Err(ParserError::Redeclaration(name));
-        }
-
         self.expect(Token::LParen)?;
         self.symtable.enter(Box::new(SymbolTable::new()));
 
