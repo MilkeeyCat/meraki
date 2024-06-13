@@ -103,7 +103,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
 
         self.text_section
             .push_str(&self.arch.fn_preamble(&func.name, offset));
-        self.scope = Scope::Local(func.name.clone());
+        self.scope = Scope::Local(func.name.clone(), func.return_type);
 
         for stmt in func.body {
             self.stmt(stmt).unwrap();

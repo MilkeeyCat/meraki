@@ -212,7 +212,7 @@ impl Parser {
 
         self.expect(Token::Semicolon)?;
 
-        if let Scope::Local(name) = &self.scope {
+        if let Scope::Local(name, _) = &self.scope {
             Ok(Stmt::Return(StmtReturn {
                 expr,
                 //TODO: it's not a good idea
@@ -231,7 +231,7 @@ impl Parser {
             }
         };
 
-        if let Scope::Local(_) = self.scope {
+        if let Scope::Local(_, _) = self.scope {
             self.symtable.push(Symbol::LocalVar(SymbolLocalVar {
                 name: name.clone(),
                 type_: type_.clone(),
@@ -263,7 +263,7 @@ impl Parser {
         self.symtable.enter(Box::new(SymbolTable::new()));
 
         let params = self.params(Token::Comma, Token::RParen)?;
-        self.scope = Scope::Local(name.clone());
+        self.scope = Scope::Local(name.clone(), type_.clone());
         let body = self.function_body()?;
         self.scope = Scope::Global;
 
