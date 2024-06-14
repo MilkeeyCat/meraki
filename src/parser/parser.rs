@@ -164,7 +164,7 @@ impl Parser {
 
     fn stmt(&mut self) -> Result<Stmt, ParserError> {
         match &self.cur_token {
-            Token::U8 | Token::U16 | Token::I8 | Token::I16 | Token::Bool => {
+            Token::U8 | Token::U16 | Token::I8 | Token::I16 | Token::Bool | Token::Void => {
                 let type_ = self.parse_type()?;
 
                 if self.peek_token_is(Token::Semicolon) {
@@ -197,6 +197,7 @@ impl Parser {
             Token::I8 => Ok(Type::I8),
             Token::I16 => Ok(Type::I16),
             Token::Bool => Ok(Type::Bool),
+            Token::Void => Ok(Type::Void),
             token => Err(ParserError::ParseType(token)),
         }
     }
@@ -205,14 +206,23 @@ impl Parser {
         self.expect(Token::Return)?;
 
         let mut expr = None;
+        let type_;
         if !self.cur_token_is(Token::Semicolon) {
             expr = Some(self.expr(Precedence::default())?);
             self.next_token();
+            type_ = expr.as_ref().unwrap().type_(&self.symtable)?;
+        } else {
+            type_ = Type::Void;
         }
 
         self.expect(Token::Semicolon)?;
 
-        if let Scope::Local(name, _) = &self.scope {
+        if let Scope::Local(name, return_type) = &self.scope {
+            type_.assign(return_type.clone()).map_err(|e| match e {
+                TypeError::Assignment(left, right) => TypeError::Return(left, right),
+                e => e,
+            })?;
+
             Ok(Stmt::Return(StmtReturn {
                 expr,
                 //TODO: it's not a good idea
@@ -364,7 +374,7 @@ impl Parser {
         self.expect(Token::LParen)?;
 
         match &self.cur_token {
-            Token::U8 | Token::I8 | Token::U16 | Token::I16 | Token::Bool => {
+            Token::U8 | Token::I8 | Token::U16 | Token::I16 | Token::Bool | Token::Void => {
                 let type_ = self.parse_type()?;
                 self.expect(Token::RParen)?;
                 let expr = self.expr(Precedence::Highest)?;

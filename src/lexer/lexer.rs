@@ -121,6 +121,7 @@ impl Lexer {
                     "i8" => Token::I8,
                     "i16" => Token::I16,
                     "bool" => Token::Bool,
+                    "void" => Token::Void,
                     _ => Token::Ident(ident),
                 });
             }

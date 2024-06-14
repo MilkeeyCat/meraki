@@ -7,6 +7,7 @@ pub enum TypeError {
     IdentNotFound(String),
     Assignment(Type, Type),
     Cast(Type, Type),
+    Return(Type, Type),
 }
 
 impl Display for TypeError {
@@ -18,6 +19,11 @@ impl Display for TypeError {
             }
             Self::Assignment(lhs, rhs) => write!(f, "Can't assign {} to {}", lhs, rhs),
             Self::Cast(from, to) => write!(f, "Can't cast {} into {}", from, to),
+            Self::Return(left, right) => write!(
+                f,
+                "Expected return value of type {},  got {} instead",
+                left, right
+            ),
         }
     }
 }
@@ -29,6 +35,7 @@ pub enum Type {
     I8,
     I16,
     Bool,
+    Void,
 }
 
 impl Display for Type {
@@ -39,6 +46,7 @@ impl Display for Type {
             Self::I8 => write!(f, "i8"),
             Self::I16 => write!(f, "i16"),
             Self::Bool => write!(f, "bool"),
+            Self::Void => write!(f, "void"),
         }
     }
 }
@@ -135,6 +143,7 @@ impl Type {
 
     pub fn size<Arch: Architecture>(&self) -> usize {
         match self {
+            Type::Void => 0,
             Type::I8 | Type::U8 | Type::Bool => 1,
             Type::I16 | Type::U16 => 2,
             _ => Arch::size(self),
@@ -218,6 +227,28 @@ mod test {
                 type1,
                 type2
             );
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn casting_to_void() -> Result<(), TypeError> {
+        let tests = [
+            (Type::U8, Type::Void),
+            (Type::Void, Type::U8),
+            (Type::I8, Type::Void),
+            (Type::Void, Type::I8),
+            (Type::U16, Type::Void),
+            (Type::Void, Type::U16),
+            (Type::I16, Type::Void),
+            (Type::Void, Type::I16),
+            (Type::Bool, Type::Void),
+            (Type::Void, Type::Bool),
+        ];
+
+        for (type1, type2) in tests {
+            assert!(Type::cast(type1.clone(), type2.clone()).is_err());
         }
 
         Ok(())

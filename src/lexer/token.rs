@@ -47,6 +47,7 @@ pub enum Token {
     U8,
     U16,
     Bool,
+    Void,
 }
 
 impl Display for Token {
@@ -95,6 +96,7 @@ impl Display for Token {
             I8 => write!(f, "i8"),
             I16 => write!(f, "i16"),
             Bool => write!(f, "bool"),
+            Void => write!(f, "void"),
         }
     }
 }
