@@ -234,6 +234,10 @@ impl Parser {
     }
 
     fn var_decl(&mut self, type_: Type) -> Result<Stmt, ParserError> {
+        if let Type::Void = type_ {
+            return Err(ParserError::Type(TypeError::VoidVariable));
+        }
+
         let name = match &self.cur_token {
             Token::Ident(ident) => ident.to_owned(),
             _ => {

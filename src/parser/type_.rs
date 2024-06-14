@@ -8,6 +8,7 @@ pub enum TypeError {
     Assignment(Type, Type),
     Cast(Type, Type),
     Return(Type, Type),
+    VoidVariable,
 }
 
 impl Display for TypeError {
@@ -24,6 +25,7 @@ impl Display for TypeError {
                 "Expected return value of type {},  got {} instead",
                 left, right
             ),
+            Self::VoidVariable => write!(f, "Variable can't be of type void"),
         }
     }
 }
