@@ -1,4 +1,4 @@
-use crate::parser::Type;
+use crate::type_::Type;
 
 const MAX_SYMBOLS: usize = 512;
 
@@ -132,7 +132,7 @@ impl SymbolTable {
 
 #[cfg(test)]
 mod test {
-    use crate::{parser::Type, symtable::SymbolLocalVar};
+    use crate::{symtable::SymbolLocalVar, type_::Type};
 
     use super::{Symbol, SymbolGlobalVar, SymbolTable, SymbolTableError};
 

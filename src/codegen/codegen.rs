@@ -2,11 +2,12 @@ use crate::{
     archs::{Architecture, LoadItem, SaveItem},
     parser::{
         BinOp, CmpOp, Expr, ExprBinary, ExprLit, ExprUnary, OpParseError, Stmt, StmtFunction,
-        StmtReturn, StmtVarDecl, Type, TypeError, UnOp,
+        StmtReturn, StmtVarDecl, UnOp,
     },
     register_allocator::{AllocatorError, Register, RegisterAllocator},
     scope::Scope,
     symtable::{Symbol, SymbolTable},
+    type_::{Type, TypeError},
 };
 use indoc::formatdoc;
 use std::fs::File;

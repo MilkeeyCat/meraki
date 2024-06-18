@@ -2,13 +2,13 @@ use super::{
     expr::{ExprBinary, ExprLit, ExprUnary, IntLitRepr},
     precedence::Precedence,
     stmt::StmtReturn,
-    type_::{Type, TypeError},
     BinOp, Expr, ExprCast, IntLitReprError, OpParseError, Stmt, StmtFunction, StmtVarDecl, UnOp,
 };
 use crate::{
     lexer::{Lexer, Token},
     scope::Scope,
     symtable::{Symbol, SymbolGlobalVar, SymbolLocalVar, SymbolTable, SymbolTableError},
+    type_::{Type, TypeError},
 };
 
 #[derive(Debug)]
@@ -402,8 +402,9 @@ mod test {
         lexer::Lexer,
         parser::{
             BinOp, Expr, ExprBinary, ExprCast, ExprLit, ExprUnary, IntLitRepr, IntLitReprError,
-            Stmt, StmtVarDecl, Type, UnOp,
+            Stmt, StmtVarDecl, UnOp,
         },
+        type_::Type,
     };
 
     #[test]

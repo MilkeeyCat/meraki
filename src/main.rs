@@ -5,6 +5,8 @@ mod parser;
 mod register_allocator;
 mod scope;
 mod symtable;
+mod type_table;
+mod type_;
 
 use crate::archs::Amd64;
 use codegen::CodeGen;

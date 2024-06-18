@@ -1,11 +1,8 @@
 use super::IntLitRepr;
 use crate::{
-    parser::{
-        op::{BinOp, UnOp},
-        type_::TypeError,
-        Type,
-    },
+    parser::op::{BinOp, UnOp},
     symtable::{Symbol, SymbolTable},
+    type_::{Type, TypeError},
 };
 
 #[derive(Debug, Clone, PartialEq)]

@@ -1,5 +1,6 @@
-use crate::parser::Type;
 use std::fmt::Display;
+
+use crate::type_::Type;
 
 const MAX_BITS_NUM_SUPPORTED: usize = 16;
 

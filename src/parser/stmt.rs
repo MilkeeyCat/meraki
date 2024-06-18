@@ -1,5 +1,5 @@
-use super::{type_::Type, Expr};
-use crate::symtable::SymbolTable;
+use super::Expr;
+use crate::{symtable::SymbolTable, type_::Type};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {

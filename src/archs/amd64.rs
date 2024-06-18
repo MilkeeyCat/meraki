@@ -3,9 +3,10 @@ use super::{
     LoadItem,
 };
 use crate::{
-    parser::{CmpOp, ExprLit, StmtVarDecl, Type},
+    parser::{CmpOp, ExprLit, StmtVarDecl},
     register_allocator::Register,
     symtable::Symbol,
+    type_::Type,
 };
 use indoc::formatdoc;
 
