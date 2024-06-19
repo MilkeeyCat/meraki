@@ -38,6 +38,7 @@ pub enum Type {
     I16,
     Bool,
     Void,
+    Struct(String),
 }
 
 impl Display for Type {
@@ -49,6 +50,7 @@ impl Display for Type {
             Self::I16 => write!(f, "i16"),
             Self::Bool => write!(f, "bool"),
             Self::Void => write!(f, "void"),
+            Self::Struct(name) => write!(f, "struct '{name}'"),
         }
     }
 }

@@ -9,6 +9,7 @@ use crate::{
     scope::Scope,
     symtable::{Symbol, SymbolGlobalVar, SymbolLocalVar, SymbolTable, SymbolTableError},
     type_::{Type, TypeError},
+    type_table::{TypeStruct, TypeTable},
 };
 
 #[derive(Debug)]
@@ -57,6 +58,7 @@ impl From<SymbolTableError> for ParserError {
 pub struct Parser {
     lexer: Lexer,
     symtable: SymbolTable,
+    type_table: TypeTable,
     cur_token: Token,
     peek_token: Token,
     scope: Scope,
@@ -68,6 +70,7 @@ impl Parser {
             cur_token: lexer.next_token().unwrap(),
             peek_token: lexer.next_token().unwrap(),
             symtable: SymbolTable::new(),
+            type_table: TypeTable::new(),
             lexer,
             scope: Scope::default(),
         }
@@ -120,7 +123,10 @@ impl Parser {
         let mut stmts = Vec::new();
 
         while !&self.cur_token_is(Token::Eof) {
-            stmts.push(self.stmt()?);
+            match self.cur_token {
+                Token::Struct => self.parse_struct()?,
+                _ => stmts.push(self.stmt()?),
+            }
         }
 
         Ok(stmts)
@@ -160,6 +166,26 @@ impl Parser {
         }
 
         left
+    }
+
+    fn parse_struct(&mut self) -> Result<(), ParserError> {
+        self.expect(Token::Struct)?;
+
+        let name;
+        if let Token::Ident(ref ident) = self.cur_token {
+            name = ident.to_owned();
+        } else {
+            panic!("Fuck");
+        }
+        self.next_token();
+        self.expect(Token::LBrace)?;
+
+        let fields = self.params(Token::Semicolon, Token::RBrace)?;
+
+        self.type_table
+            .define(crate::type_table::Type::Struct(TypeStruct { name, fields }));
+
+        Ok(())
     }
 
     fn stmt(&mut self) -> Result<Stmt, ParserError> {
