@@ -5,7 +5,7 @@ use super::{
     BinOp, Expr, ExprCast, IntLitReprError, OpParseError, Stmt, StmtFunction, StmtVarDecl, UnOp,
 };
 use crate::{
-    lexer::{Lexer, Token},
+    lexer::{Lexer, LexerError, Token},
     scope::Scope,
     symtable::{Symbol, SymbolGlobalVar, SymbolLocalVar, SymbolTable, SymbolTableError},
     type_::{Type, TypeError},
@@ -18,6 +18,7 @@ pub enum ParserError {
     ParseType(Token),
     Prefix(Token),
     Infix(Token),
+    Lexer(LexerError),
     Type(TypeError),
     Operator(OpParseError),
     Int(IntLitReprError),
@@ -35,6 +36,7 @@ impl std::fmt::Display for ParserError {
             Self::ParseType(token) => write!(f, "Failed to parse type, found {}", token),
             Self::Prefix(token) => write!(f, "Failed to parse prefix token {}", token),
             Self::Infix(token) => write!(f, "Failed to parse infix token {}", token),
+            Self::Lexer(e) => write!(f, "{}", e),
             Self::Type(e) => write!(f, "{}", e),
             Self::Operator(e) => write!(f, "{}", e),
             Self::Int(e) => write!(f, "{}", e),
@@ -55,6 +57,12 @@ impl From<SymbolTableError> for ParserError {
     }
 }
 
+impl From<LexerError> for ParserError {
+    fn from(value: LexerError) -> Self {
+        ParserError::Lexer(value)
+    }
+}
+
 pub struct Parser {
     lexer: Lexer,
     symtable: SymbolTable,
@@ -65,52 +73,55 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn new(mut lexer: Lexer) -> Self {
-        Self {
-            cur_token: lexer.next_token().unwrap(),
-            peek_token: lexer.next_token().unwrap(),
+    pub fn new(mut lexer: Lexer) -> Result<Self, ParserError> {
+        Ok(Self {
+            cur_token: lexer.next_token()?,
+            peek_token: lexer.next_token()?,
             symtable: SymbolTable::new(),
             type_table: TypeTable::new(),
             lexer,
             scope: Scope::default(),
-        }
+        })
     }
 
-    fn next_token(&mut self) {
-        self.cur_token = self.peek_token.clone();
-        self.peek_token = self.lexer.next_token().unwrap();
+    fn next_token(&mut self) -> Result<Token, ParserError> {
+        let mut token = self.lexer.next_token()?;
+        std::mem::swap(&mut self.cur_token, &mut self.peek_token);
+        std::mem::swap(&mut token, &mut self.peek_token);
+
+        Ok(token)
     }
 
-    fn cur_token_is(&self, token: Token) -> bool {
-        self.cur_token == token
+    fn cur_token_is(&self, token: &Token) -> bool {
+        &self.cur_token == token
     }
 
-    fn peek_token_is(&self, token: Token) -> bool {
-        self.peek_token == token
+    fn peek_token_is(&self, token: &Token) -> bool {
+        &self.peek_token == token
     }
 
-    fn expect_peek(&mut self, token: Token) -> Result<(), ParserError> {
-        if self.peek_token_is(token.clone()) {
-            self.next_token();
+    fn expect_peek(&mut self, token: &Token) -> Result<(), ParserError> {
+        if self.peek_token_is(token) {
+            self.next_token()?;
 
             Ok(())
         } else {
             Err(ParserError::UnexpectedToken(
-                token,
-                self.peek_token.to_owned(),
+                token.to_owned(),
+                self.peek_token.clone(),
             ))
         }
     }
 
-    fn expect(&mut self, token: Token) -> Result<(), ParserError> {
-        if self.cur_token_is(token.clone()) {
-            self.next_token();
+    fn expect(&mut self, token: &Token) -> Result<(), ParserError> {
+        if self.cur_token_is(token) {
+            self.next_token()?;
 
             Ok(())
         } else {
             Err(ParserError::UnexpectedToken(
-                token,
-                self.cur_token.to_owned(),
+                token.to_owned(),
+                self.cur_token.clone(),
             ))
         }
     }
@@ -122,7 +133,7 @@ impl Parser {
     pub fn parse(&mut self) -> Result<Vec<Stmt>, ParserError> {
         let mut stmts = Vec::new();
 
-        while !&self.cur_token_is(Token::Eof) {
+        while !&self.cur_token_is(&Token::Eof) {
             match self.cur_token {
                 Token::Struct => self.parse_struct()?,
                 _ => stmts.push(self.stmt()?),
@@ -142,10 +153,10 @@ impl Parser {
             token => Err(ParserError::Prefix(token.to_owned())),
         };
 
-        while !self.peek_token_is(Token::Semicolon)
+        while !self.peek_token_is(&Token::Semicolon)
             && precedence < Precedence::from(&self.peek_token)
         {
-            self.next_token();
+            self.next_token()?;
 
             left = match &self.cur_token {
                 Token::Plus
@@ -169,7 +180,7 @@ impl Parser {
     }
 
     fn parse_struct(&mut self) -> Result<(), ParserError> {
-        self.expect(Token::Struct)?;
+        self.expect(&Token::Struct)?;
 
         let name;
         if let Token::Ident(ref ident) = self.cur_token {
@@ -177,8 +188,8 @@ impl Parser {
         } else {
             panic!("Fuck");
         }
-        self.next_token();
-        self.expect(Token::LBrace)?;
+        self.next_token()?;
+        self.expect(&Token::LBrace)?;
 
         let fields = self.params(Token::Semicolon, Token::RBrace)?;
 
@@ -193,7 +204,7 @@ impl Parser {
             Token::U8 | Token::U16 | Token::I8 | Token::I16 | Token::Bool | Token::Void => {
                 let type_ = self.parse_type()?;
 
-                if self.peek_token_is(Token::Semicolon) {
+                if self.peek_token_is(&Token::Semicolon) {
                     self.var_decl(type_)
                 } else {
                     self.function(type_)
@@ -205,8 +216,8 @@ impl Parser {
                 expr.type_(&self.symtable)?;
                 let expr = Stmt::Expr(expr);
 
-                self.next_token();
-                self.expect(Token::Semicolon)?;
+                self.next_token()?;
+                self.expect(&Token::Semicolon)?;
 
                 Ok(expr)
             }
@@ -215,7 +226,7 @@ impl Parser {
 
     fn parse_type(&mut self) -> Result<Type, ParserError> {
         let token = self.cur_token.clone();
-        self.next_token();
+        self.next_token()?;
 
         match token {
             Token::U8 => Ok(Type::U8),
@@ -229,19 +240,19 @@ impl Parser {
     }
 
     fn parse_return(&mut self) -> Result<Stmt, ParserError> {
-        self.expect(Token::Return)?;
+        self.expect(&Token::Return)?;
 
         let mut expr = None;
         let type_;
-        if !self.cur_token_is(Token::Semicolon) {
+        if !self.cur_token_is(&Token::Semicolon) {
             expr = Some(self.expr(Precedence::default())?);
-            self.next_token();
+            self.next_token()?;
             type_ = expr.as_ref().unwrap().type_(&self.symtable)?;
         } else {
             type_ = Type::Void;
         }
 
-        self.expect(Token::Semicolon)?;
+        self.expect(&Token::Semicolon)?;
 
         if let Scope::Local(name, return_type) = &self.scope {
             type_.assign(return_type.clone()).map_err(|e| match e {
@@ -284,8 +295,8 @@ impl Parser {
             }))?;
         }
 
-        self.next_token();
-        self.expect(Token::Semicolon)?;
+        self.next_token()?;
+        self.expect(&Token::Semicolon)?;
 
         Ok(Stmt::VarDecl(StmtVarDecl::new(type_, name, None)))
     }
@@ -298,8 +309,8 @@ impl Parser {
             }
         };
 
-        self.next_token();
-        self.expect(Token::LParen)?;
+        self.next_token()?;
+        self.expect(&Token::LParen)?;
         self.symtable.enter(Box::new(SymbolTable::new()));
 
         let params = self.params(Token::Comma, Token::RParen)?;
@@ -319,22 +330,22 @@ impl Parser {
     fn params(&mut self, delim: Token, end: Token) -> Result<Vec<(String, Type)>, ParserError> {
         let mut params = Vec::new();
 
-        while !self.cur_token_is(end.clone()) {
+        while !self.cur_token_is(&end) {
             let type_ = self.parse_type()?;
             let name = match &self.cur_token {
                 Token::Ident(ident) => ident.to_owned(),
                 _ => panic!("jkasdlj"),
             };
 
-            self.next_token();
+            self.next_token()?;
             params.push((name, type_));
 
-            if !self.cur_token_is(end.clone()) {
-                self.expect(delim.clone())?;
+            if !self.cur_token_is(&end) {
+                self.expect(&delim)?;
             }
         }
 
-        self.expect(end)?;
+        self.expect(&end)?;
 
         Ok(params)
     }
@@ -342,13 +353,13 @@ impl Parser {
     fn function_body(&mut self) -> Result<Vec<Stmt>, ParserError> {
         let mut stmts = Vec::new();
 
-        self.expect(Token::LBrace)?;
+        self.expect(&Token::LBrace)?;
 
-        while !self.cur_token_is(Token::RBrace) {
+        while !self.cur_token_is(&Token::RBrace) {
             stmts.push(self.stmt()?);
         }
 
-        self.expect(Token::RBrace)?;
+        self.expect(&Token::RBrace)?;
 
         Ok(stmts)
     }
@@ -379,7 +390,7 @@ impl Parser {
 
     fn bin_expr(&mut self, left: Expr) -> Result<Expr, ParserError> {
         let token = self.cur_token.clone();
-        self.next_token();
+        self.next_token()?;
 
         let left = Box::new(left);
         let right = Box::new(self.expr(Precedence::from(&token))?);
@@ -390,10 +401,10 @@ impl Parser {
 
     fn unary_expr(&mut self) -> Result<Expr, ParserError> {
         let op_token = self.cur_token.clone();
-        self.next_token();
+        self.next_token()?;
 
         let expr = Expr::Unary(ExprUnary::new(
-            UnOp::try_from(&op_token).unwrap(),
+            UnOp::try_from(&op_token).map_err(|e| ParserError::Operator(e))?,
             Box::new(self.expr(Precedence::Prefix)?),
         ));
 
@@ -401,19 +412,19 @@ impl Parser {
     }
 
     fn grouped_expr(&mut self) -> Result<Expr, ParserError> {
-        self.expect(Token::LParen)?;
+        self.expect(&Token::LParen)?;
 
         match &self.cur_token {
             Token::U8 | Token::I8 | Token::U16 | Token::I16 | Token::Bool | Token::Void => {
                 let type_ = self.parse_type()?;
-                self.expect(Token::RParen)?;
+                self.expect(&Token::RParen)?;
                 let expr = self.expr(Precedence::Highest)?;
 
                 Ok(Expr::Cast(ExprCast::new(type_, Box::new(expr))))
             }
             _ => {
                 let expr = self.expr(Precedence::default());
-                self.expect_peek(Token::RParen)?;
+                self.expect_peek(&Token::RParen)?;
 
                 expr
             }
@@ -530,7 +541,7 @@ mod test {
         ];
 
         for (input, expected) in tests {
-            let mut parser = Parser::new(Lexer::new(input.to_string()));
+            let mut parser = Parser::new(Lexer::new(input.to_string())).unwrap();
             assert_eq!(parser.parse().unwrap(), expected);
         }
 

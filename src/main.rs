@@ -39,6 +39,7 @@ fn main() {
     );
 
     let (stmts, symtable) = Parser::new(lexer)
+        .unwrap_or_else(|e| giveup(Box::new(e)))
         .into_parts()
         .unwrap_or_else(|e| giveup(Box::new(e)));
 
