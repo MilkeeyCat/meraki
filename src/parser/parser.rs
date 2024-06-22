@@ -2,14 +2,15 @@ use super::{
     expr::{ExprBinary, ExprLit, ExprUnary, IntLitRepr},
     precedence::Precedence,
     stmt::StmtReturn,
-    BinOp, Expr, ExprCast, IntLitReprError, OpParseError, Stmt, StmtFunction, StmtVarDecl, UnOp,
+    BinOp, Expr, ExprCast, ExprStruct, IntLitReprError, OpParseError, Stmt, StmtFunction,
+    StmtVarDecl, UnOp,
 };
 use crate::{
     lexer::{Lexer, LexerError, Token},
     scope::Scope,
     symtable::{Symbol, SymbolGlobalVar, SymbolLocalVar, SymbolTable, SymbolTableError},
     type_::{Type, TypeError},
-    type_table::{TypeStruct, TypeTable},
+    type_table::{self, TypeStruct, TypeTable},
 };
 use std::collections::HashMap;
 
@@ -146,7 +147,10 @@ impl Parser {
 
     fn expr(&mut self, precedence: Precedence) -> Result<Expr, ParserError> {
         let mut left = match &self.cur_token {
-            Token::Ident(_) => self.ident(),
+            Token::Ident(_) => match self.peek_token {
+                Token::LBrace => self.struct_expr(),
+                _ => self.ident(),
+            },
             Token::Integer(_) => self.int_lit(),
             Token::True | Token::False => self.bool(),
             Token::Minus | Token::Bang => self.unary_expr(),
@@ -377,6 +381,42 @@ impl Parser {
             Token::Ident(ident) => Ok(Expr::Ident(ident.to_owned())),
             _ => Err(ParserError::ParseType(self.cur_token.to_owned())),
         }
+    }
+
+    fn struct_expr(&mut self) -> Result<Expr, ParserError> {
+        let name = match self.next_token()? {
+            Token::Ident(ident) => ident,
+            _ => todo!("Don't know what error to return yet"),
+        };
+
+        self.expect(&Token::LBrace)?;
+        let mut fields = HashMap::new();
+
+        while !self.cur_token_is(&Token::RBrace) {
+            if let Token::Ident(field) = self.next_token()? {
+                if !match self.type_table.find(&name).expect("Type doesn't exist") {
+                    type_table::Type::Struct(type_struct) => {
+                        type_struct.fields.contains_key(&field)
+                    }
+                } {
+                    todo!("Field {field} doesn't exist in struct {name}");
+                }
+
+                self.expect(&Token::Colon)?;
+                let expr = self.expr(Precedence::Lowest)?;
+                self.next_token()?;
+                self.expect(&Token::Comma)?;
+
+                fields.insert(field, expr);
+            } else {
+                todo!("Don't know what error to return yet");
+            }
+        }
+
+        //TODO: if I uncomment it, everything breaks xd
+        //self.expect(&Token::RBrace)?;
+
+        Ok(Expr::Struct(ExprStruct::new(name, fields)))
     }
 
     fn int_lit(&self) -> Result<Expr, ParserError> {

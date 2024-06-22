@@ -153,6 +153,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
 
                 self.expr(expr)
             }
+            _ => todo!(),
         }
     }
 

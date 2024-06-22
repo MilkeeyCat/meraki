@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use super::IntLitRepr;
 use crate::{
     parser::op::{BinOp, UnOp},
@@ -12,6 +14,7 @@ pub enum Expr {
     Cast(ExprCast),
     Lit(ExprLit),
     Ident(String),
+    Struct(ExprStruct),
 }
 
 impl Expr {
@@ -28,6 +31,7 @@ impl Expr {
                 Symbol::LocalVar(local) => Ok(local.type_.clone()),
             },
             Self::Cast(cast) => cast.type_(symtable),
+            Self::Struct(expr_struct) => Ok(expr_struct.type_()),
         }
     }
 }
@@ -78,6 +82,22 @@ impl ExprLit {
             ExprLit::Int(int) => Ok(int.type_()),
             ExprLit::Bool(_) => Ok(Type::Bool),
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExprStruct {
+    name: String,
+    fields: HashMap<String, Expr>,
+}
+
+impl ExprStruct {
+    pub fn new(name: String, fields: HashMap<String, Expr>) -> Self {
+        Self { name, fields }
+    }
+
+    pub fn type_(&self) -> Type {
+        Type::Struct(self.name.clone())
     }
 }
 
