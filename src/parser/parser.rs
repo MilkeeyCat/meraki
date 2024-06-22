@@ -11,6 +11,7 @@ use crate::{
     type_::{Type, TypeError},
     type_table::{TypeStruct, TypeTable},
 };
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub enum ParserError {
@@ -186,7 +187,7 @@ impl Parser {
         if let Token::Ident(ref ident) = self.cur_token {
             name = ident.to_owned();
         } else {
-            panic!("Fuck");
+            todo!("Don't know what error to return yet");
         }
         self.next_token()?;
         self.expect(&Token::LBrace)?;
@@ -195,6 +196,8 @@ impl Parser {
 
         self.type_table
             .define(crate::type_table::Type::Struct(TypeStruct { name, fields }));
+
+        dbg!(&self.type_table);
 
         Ok(())
     }
@@ -266,7 +269,7 @@ impl Parser {
                 label: name.to_owned() + "_ret",
             }))
         } else {
-            panic!("wat");
+            todo!("Don't know what error to return yet");
         }
     }
 
@@ -327,18 +330,23 @@ impl Parser {
         }))
     }
 
-    fn params(&mut self, delim: Token, end: Token) -> Result<Vec<(String, Type)>, ParserError> {
-        let mut params = Vec::new();
+    fn params(&mut self, delim: Token, end: Token) -> Result<HashMap<String, Type>, ParserError> {
+        let mut params = HashMap::new();
 
         while !self.cur_token_is(&end) {
             let type_ = self.parse_type()?;
             let name = match &self.cur_token {
                 Token::Ident(ident) => ident.to_owned(),
-                _ => panic!("jkasdlj"),
+                _ => todo!("Don't know what error to return yet"),
             };
 
             self.next_token()?;
-            params.push((name, type_));
+
+            if params.contains_key(&name) {
+                todo!("Don't know yet what error to return");
+            } else {
+                params.insert(name, type_);
+            }
 
             if !self.cur_token_is(&end) {
                 self.expect(&delim)?;

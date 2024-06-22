@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use super::Expr;
 use crate::{symtable::SymbolTable, type_::Type};
 
@@ -32,7 +34,7 @@ pub struct StmtReturn {
 pub struct StmtFunction {
     pub return_type: Type,
     pub name: String,
-    pub params: Vec<(String, Type)>,
+    pub params: HashMap<String, Type>,
     pub body: Vec<Stmt>,
     pub symtable: SymbolTable,
 }

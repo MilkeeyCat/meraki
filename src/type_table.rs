@@ -1,14 +1,14 @@
+use std::collections::HashMap;
+
 #[derive(Debug)]
 pub enum Type {
     Struct(TypeStruct),
 }
 
-type Field = (String, crate::type_::Type);
-
 #[derive(Debug)]
 pub struct TypeStruct {
     pub name: String,
-    pub fields: Vec<Field>,
+    pub fields: HashMap<String, crate::type_::Type>,
 }
 
 #[derive(Debug)]
