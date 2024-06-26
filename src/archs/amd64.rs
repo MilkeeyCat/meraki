@@ -55,6 +55,15 @@ impl Architecture for Amd64 {
                         integer.to_string(),
                     )
                 }
+                ExprLit::UInt(integer) => {
+                    formatdoc!(
+                        "
+                        \tmov {}, {}
+                        ",
+                        r.qword(),
+                        integer.to_string(),
+                    )
+                }
                 ExprLit::Bool(value) => {
                     formatdoc!(
                         "

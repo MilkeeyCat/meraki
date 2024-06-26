@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::IntLitRepr;
+use super::{int_repr::UIntLitRepr, IntLitRepr};
 use crate::{
     parser::op::{BinOp, UnOp},
     symtable::{Symbol, SymbolTable},
@@ -73,6 +73,7 @@ impl ExprBinary {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExprLit {
     Int(IntLitRepr),
+    UInt(UIntLitRepr),
     Bool(bool),
 }
 
@@ -80,6 +81,7 @@ impl ExprLit {
     pub fn type_(&self) -> Result<Type, TypeError> {
         match self {
             ExprLit::Int(int) => Ok(int.type_()),
+            ExprLit::UInt(uint) => Ok(uint.type_()),
             ExprLit::Bool(_) => Ok(Type::Bool),
         }
     }
@@ -127,8 +129,8 @@ impl ExprUnary {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprCast {
-    expr: Box<Expr>,
-    type_: Type,
+    pub expr: Box<Expr>,
+    pub type_: Type,
 }
 
 impl ExprCast {
@@ -140,9 +142,5 @@ impl ExprCast {
         let expr_type = self.expr.type_(symbtable)?;
 
         expr_type.cast(self.type_.clone())
-    }
-
-    pub fn expr(&self) -> &Expr {
-        &self.expr
     }
 }

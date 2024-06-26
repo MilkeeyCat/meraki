@@ -3,7 +3,7 @@ use super::{
     precedence::Precedence,
     stmt::StmtReturn,
     BinOp, Expr, ExprCast, ExprStruct, IntLitReprError, OpParseError, Stmt, StmtFunction,
-    StmtVarDecl, UnOp,
+    StmtVarDecl, UIntLitRepr, UnOp,
 };
 use crate::{
     lexer::{Lexer, LexerError, Token},
@@ -421,8 +421,8 @@ impl Parser {
 
     fn int_lit(&self) -> Result<Expr, ParserError> {
         match &self.cur_token {
-            Token::Integer(num_str) => Ok(Expr::Lit(ExprLit::Int(
-                IntLitRepr::try_from(&num_str[..]).map_err(|e| ParserError::Int(e))?,
+            Token::Integer(num_str) => Ok(Expr::Lit(ExprLit::UInt(
+                UIntLitRepr::try_from(&num_str[..]).map_err(|e| ParserError::Int(e))?,
             ))),
             _ => Err(ParserError::ParseType(self.cur_token.to_owned())),
         }
@@ -452,15 +452,18 @@ impl Parser {
         self.next_token()?;
 
         let op = UnOp::try_from(&op_token).map_err(|e| ParserError::Operator(e))?;
-        let mut expr = Box::new(self.expr(Precedence::Prefix)?);
+        let mut expr = self.expr(Precedence::Prefix)?;
 
         if let UnOp::Negative = op {
-            if let Expr::Lit(ExprLit::Int(int_repr)) = expr.as_mut() {
+            if let Expr::Lit(ExprLit::UInt(uint_repr)) = expr {
+                let mut int_repr = IntLitRepr::try_from(uint_repr).unwrap();
                 int_repr.negate();
+
+                expr = Expr::Lit(ExprLit::Int(int_repr))
             }
         }
 
-        Ok(Expr::Unary(ExprUnary::new(op, expr)))
+        Ok(Expr::Unary(ExprUnary::new(op, Box::new(expr))))
     }
 
     fn grouped_expr(&mut self) -> Result<Expr, ParserError> {
@@ -491,7 +494,7 @@ mod test {
         lexer::Lexer,
         parser::{
             BinOp, Expr, ExprBinary, ExprCast, ExprLit, ExprUnary, IntLitRepr, IntLitReprError,
-            Stmt, StmtVarDecl, UnOp,
+            Stmt, StmtVarDecl, UIntLitRepr, UnOp,
         },
         type_::Type,
     };
@@ -505,18 +508,18 @@ mod test {
                     BinOp::Add,
                     Box::new(Expr::Binary(ExprBinary::new(
                         BinOp::Mul,
-                        Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("1")?))),
-                        Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("2")?))),
+                        Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(1)))),
+                        Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(2)))),
                     ))),
                     Box::new(Expr::Binary(ExprBinary::new(
                         BinOp::Div,
-                        Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("3")?))),
+                        Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(3)))),
                         Box::new(Expr::Binary(ExprBinary::new(
                             BinOp::Add,
-                            Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("4")?))),
+                            Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(4)))),
                             Box::new(Expr::Cast(ExprCast::new(
                                 Type::U8,
-                                Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("1")?))),
+                                Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(1)))),
                             ))),
                         ))),
                     ))),
@@ -538,13 +541,10 @@ mod test {
                                 Type::U8,
                                 Box::new(Expr::Unary(ExprUnary::new(
                                     UnOp::Negative,
-                                    Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::new(
-                                        vec![255],
-                                        true,
-                                    )))),
+                                    Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::new(-1)))),
                                 ))),
                             ))),
-                            Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("5")?))),
+                            Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(5)))),
                         ))),
                     ))),
                 ],
@@ -569,8 +569,8 @@ mod test {
                             ))),
                             Box::new(Expr::Binary(ExprBinary::new(
                                 BinOp::Div,
-                                Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("5")?))),
-                                Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("10")?))),
+                                Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(5)))),
+                                Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(10)))),
                             ))),
                         ))),
                     ))),
@@ -584,12 +584,12 @@ mod test {
                     BinOp::Add,
                     Box::new(Expr::Cast(ExprCast::new(
                         Type::I8,
-                        Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("1")?))),
+                        Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(1)))),
                     ))),
                     Box::new(Expr::Binary(ExprBinary::new(
                         BinOp::Div,
-                        Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("2")?))),
-                        Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("3")?))),
+                        Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(2)))),
+                        Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(3)))),
                     ))),
                 )))],
             ),

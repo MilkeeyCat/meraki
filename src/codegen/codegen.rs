@@ -144,11 +144,19 @@ impl<Arch: Architecture> CodeGen<Arch> {
             )),
             Expr::Cast(cast_expr) => {
                 //TODO: move this elsewhere
-                let expr = if let Expr::Lit(ExprLit::Int(mut int_lit)) = cast_expr.expr().clone() {
-                    int_lit.resize(cast_expr.type_(&self.symtable)?.size::<Arch>());
-                    Expr::Lit(ExprLit::Int(int_lit))
-                } else {
-                    cast_expr.expr().to_owned()
+                let type_size = cast_expr.type_(&self.symtable)?.size::<Arch>();
+                let expr = match *cast_expr.expr {
+                    Expr::Lit(ExprLit::Int(mut int)) => {
+                        int.zero_except_n_bytes(type_size);
+
+                        Expr::Lit(ExprLit::Int(int))
+                    }
+                    Expr::Lit(ExprLit::UInt(mut uint)) => {
+                        uint.zero_except_n_bytes(type_size);
+
+                        Expr::Lit(ExprLit::UInt(uint))
+                    }
+                    expr => expr,
                 };
 
                 self.expr(expr)
