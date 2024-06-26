@@ -7,7 +7,7 @@ const MAX_BITS_NUM_SUPPORTED: usize = 16;
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct IntLitRepr {
     bytes: Vec<u8>,
-    signed: bool,
+    negative: bool,
 }
 
 impl IntLitRepr {
@@ -80,9 +80,11 @@ impl IntLitRepr {
     }
 
     pub fn type_(&self) -> Type {
-        match self.bits() {
-            8 => Type::U8,
-            16 => Type::U16,
+        match (self.bytes.len(), self.negative) {
+            (1, false) => Type::U8,
+            (1, true) => Type::I8,
+            (2, false) => Type::U16,
+            (2, true) => Type::I16,
             _ => unreachable!(),
         }
     }
@@ -101,18 +103,42 @@ impl IntLitRepr {
     pub fn resize(&mut self, size: usize) {
         self.bytes.resize(size, 0);
     }
+
+    pub fn negate(&mut self) {
+        if self.bytes.iter().all(|byte| byte == &0) {
+            return;
+        }
+
+        if !self.negative {
+            if self.bytes.iter().last().unwrap() > &0x80
+                || (self.bytes.len() > 0 && !self.bytes.iter().skip(1).all(|byte| byte > &0))
+            {
+                self.bytes.push(0);
+            }
+        }
+
+        self.negative = !self.negative;
+
+        *self.bytes.first_mut().unwrap() = self.bytes.first_mut().unwrap().wrapping_sub(1);
+        self.bytes.iter_mut().for_each(|byte| *byte ^= 0xff);
+
+        if self.bytes.iter().last().unwrap() == &0 {
+            self.bytes.remove(self.bytes.len() - 1);
+        }
+    }
 }
 
 impl ToString for IntLitRepr {
     fn to_string(&self) -> String {
+        let mut clone = self.clone();
         let mut res = String::from("0");
 
-        for (i, byte) in self.bytes.iter().rev().enumerate() {
-            for j in 0..8 {
-                if i == 0 && j == 0 && self.signed {
-                    continue;
-                }
+        if self.negative {
+            clone.negate();
+        }
 
+        for byte in clone.bytes.iter().rev() {
+            for j in 0..8 {
                 let bit = (byte << j) & 0b1000_0000;
                 res = Self::mul2(&res);
 
@@ -122,7 +148,7 @@ impl ToString for IntLitRepr {
             }
         }
 
-        if self.signed {
+        if self.negative {
             res.insert(0, '-');
         }
 
@@ -148,7 +174,7 @@ impl TryFrom<&str> for IntLitRepr {
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         let mut int_repr = Self {
-            signed: false,
+            negative: false,
             bytes: vec![0],
         };
         let mut result = value.to_owned();
@@ -243,5 +269,28 @@ mod test {
         assert!(IntLitRepr::try_from("65536").is_err());
 
         Ok(())
+    }
+
+    #[test]
+    fn negation() {
+        for i in u16::MIN..=u16::MAX {
+            let int_repr = IntLitRepr::try_from(i.to_string().as_str()).unwrap();
+
+            assert_eq!(int_repr.to_string(), i.to_string());
+        }
+
+        for i in i16::MIN..=i16::MAX {
+            let mut int_repr = if i < 0 {
+                IntLitRepr::try_from(&i.to_string().as_str()[1..]).unwrap()
+            } else {
+                IntLitRepr::try_from(i.to_string().as_str()).unwrap()
+            };
+
+            if i <= 0 {
+                int_repr.negate();
+            }
+
+            assert_eq!(int_repr.to_string(), i.to_string());
+        }
     }
 }
