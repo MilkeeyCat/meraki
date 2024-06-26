@@ -451,12 +451,16 @@ impl Parser {
         let op_token = self.cur_token.clone();
         self.next_token()?;
 
-        let expr = Expr::Unary(ExprUnary::new(
-            UnOp::try_from(&op_token).map_err(|e| ParserError::Operator(e))?,
-            Box::new(self.expr(Precedence::Prefix)?),
-        ));
+        let op = UnOp::try_from(&op_token).map_err(|e| ParserError::Operator(e))?;
+        let mut expr = Box::new(self.expr(Precedence::Prefix)?);
 
-        Ok(expr)
+        if let UnOp::Negative = op {
+            if let Expr::Lit(ExprLit::Int(int_repr)) = expr.as_mut() {
+                int_repr.negate();
+            }
+        }
+
+        Ok(Expr::Unary(ExprUnary::new(op, expr)))
     }
 
     fn grouped_expr(&mut self) -> Result<Expr, ParserError> {
@@ -534,7 +538,10 @@ mod test {
                                 Type::U8,
                                 Box::new(Expr::Unary(ExprUnary::new(
                                     UnOp::Negative,
-                                    Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("1")?))),
+                                    Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::new(
+                                        vec![255],
+                                        true,
+                                    )))),
                                 ))),
                             ))),
                             Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::try_from("5")?))),

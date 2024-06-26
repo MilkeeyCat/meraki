@@ -116,13 +116,6 @@ impl ExprUnary {
         match &self.op {
             UnOp::Negative => {
                 let mut expr_type = self.expr.type_(symtable)?;
-
-                if let Expr::Lit(ExprLit::Int(int)) = self.expr.as_ref() {
-                    if int.first_bit_set() {
-                        expr_type = int.widen_type().unwrap();
-                    }
-                }
-
                 expr_type.to_signed();
 
                 Ok(expr_type)

@@ -11,6 +11,10 @@ pub struct IntLitRepr {
 }
 
 impl IntLitRepr {
+    pub fn new(bytes: Vec<u8>, negative: bool) -> Self {
+        Self { bytes, negative }
+    }
+
     fn mul2(num: &str) -> String {
         let mut result = Vec::new();
         let mut carry = 0;
