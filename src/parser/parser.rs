@@ -8,7 +8,7 @@ use super::{
 use crate::{
     lexer::{Lexer, LexerError, Token},
     scope::Scope,
-    symtable::{Symbol, SymbolGlobalVar, SymbolLocalVar, SymbolTable, SymbolTableError},
+    symbol_table::{Symbol, SymbolGlobalVar, SymbolLocalVar, SymbolTable, SymbolTableError},
     type_::{Type, TypeError},
     type_table::{self, TypeStruct, TypeTable},
 };

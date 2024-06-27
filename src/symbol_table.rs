@@ -132,9 +132,8 @@ impl SymbolTable {
 
 #[cfg(test)]
 mod test {
-    use crate::{symtable::SymbolLocalVar, type_::Type};
-
     use super::{Symbol, SymbolGlobalVar, SymbolTable, SymbolTableError};
+    use crate::{symbol_table::SymbolLocalVar, type_::Type};
 
     #[test]
     fn scopes() -> Result<(), SymbolTableError> {

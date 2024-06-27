@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use super::Expr;
-use crate::{symtable::SymbolTable, type_::Type};
+use crate::{symbol_table::SymbolTable, type_::Type};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {

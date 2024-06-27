@@ -4,7 +4,7 @@ mod lexer;
 mod parser;
 mod register_allocator;
 mod scope;
-mod symtable;
+mod symbol_table;
 mod type_;
 mod type_table;
 

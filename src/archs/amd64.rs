@@ -5,7 +5,7 @@ use super::{
 use crate::{
     parser::{CmpOp, ExprLit, StmtVarDecl},
     register_allocator::Register,
-    symtable::Symbol,
+    symbol_table::Symbol,
     type_::Type,
 };
 use indoc::formatdoc;

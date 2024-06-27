@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use super::{int_repr::UIntLitRepr, IntLitRepr};
 use crate::{
     parser::op::{BinOp, UnOp},
-    symtable::{Symbol, SymbolTable},
+    symbol_table::{Symbol, SymbolTable},
     type_::{Type, TypeError},
 };
 

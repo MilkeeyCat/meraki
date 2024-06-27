@@ -6,7 +6,7 @@ use crate::{
     },
     register_allocator::{AllocatorError, Register, RegisterAllocator},
     scope::Scope,
-    symtable::{Symbol, SymbolTable},
+    symbol_table::{Symbol, SymbolTable},
     type_::{Type, TypeError},
 };
 use indoc::formatdoc;
