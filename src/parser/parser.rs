@@ -2,8 +2,8 @@ use super::{
     expr::{ExprBinary, ExprLit, ExprUnary, IntLitRepr},
     precedence::Precedence,
     stmt::StmtReturn,
-    BinOp, Expr, ExprCast, ExprStruct, IntLitReprError, OpParseError, Stmt, StmtFunction,
-    StmtVarDecl, UIntLitRepr, UnOp,
+    BinOp, Expr, ExprCast, ExprStruct, Expression, IntLitReprError, OpParseError, Stmt,
+    StmtFunction, StmtVarDecl, UIntLitRepr, UnOp,
 };
 use crate::{
     lexer::{Lexer, LexerError, Token},

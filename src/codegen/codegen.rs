@@ -1,8 +1,8 @@
 use crate::{
     archs::{Architecture, LoadItem, SaveItem},
     parser::{
-        BinOp, CmpOp, Expr, ExprBinary, ExprLit, ExprUnary, OpParseError, Stmt, StmtFunction,
-        StmtReturn, StmtVarDecl, UnOp,
+        BinOp, CmpOp, Expr, ExprBinary, ExprLit, ExprUnary, Expression, OpParseError, Stmt,
+        StmtFunction, StmtReturn, StmtVarDecl, UnOp,
     },
     register_allocator::{AllocatorError, Register, RegisterAllocator},
     scope::Scope,

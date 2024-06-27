@@ -1,11 +1,14 @@
-use std::collections::HashMap;
-
 use super::{int_repr::UIntLitRepr, IntLitRepr};
 use crate::{
     parser::op::{BinOp, UnOp},
     symbol_table::{Symbol, SymbolTable},
     type_::{Type, TypeError},
 };
+use std::collections::HashMap;
+
+pub trait Expression {
+    fn type_(&self, symtable: &SymbolTable) -> Result<Type, TypeError>;
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
@@ -17,12 +20,12 @@ pub enum Expr {
     Struct(ExprStruct),
 }
 
-impl Expr {
-    pub fn type_(&self, symtable: &SymbolTable) -> Result<Type, TypeError> {
+impl Expression for Expr {
+    fn type_(&self, symtable: &SymbolTable) -> Result<Type, TypeError> {
         match self {
             Self::Binary(expr) => expr.type_(symtable),
             Self::Unary(expr) => expr.type_(symtable),
-            Self::Lit(literal) => literal.type_(),
+            Self::Lit(literal) => literal.type_(symtable),
             Self::Ident(ident) => match symtable
                 .find(ident)
                 .ok_or(TypeError::IdentNotFound(ident.to_owned()))?
@@ -31,7 +34,7 @@ impl Expr {
                 Symbol::LocalVar(local) => Ok(local.type_.clone()),
             },
             Self::Cast(cast) => cast.type_(symtable),
-            Self::Struct(expr_struct) => Ok(expr_struct.type_()),
+            Self::Struct(expr_struct) => expr_struct.type_(symtable),
         }
     }
 }
@@ -47,8 +50,10 @@ impl ExprBinary {
     pub fn new(op: BinOp, left: Box<Expr>, right: Box<Expr>) -> Self {
         Self { op, left, right }
     }
+}
 
-    pub fn type_(&self, symtable: &SymbolTable) -> Result<Type, TypeError> {
+impl Expression for ExprBinary {
+    fn type_(&self, symtable: &SymbolTable) -> Result<Type, TypeError> {
         match &self.op {
             BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div => {
                 let left_type = self.left.as_ref().type_(symtable)?;
@@ -77,8 +82,8 @@ pub enum ExprLit {
     Bool(bool),
 }
 
-impl ExprLit {
-    pub fn type_(&self) -> Result<Type, TypeError> {
+impl Expression for ExprLit {
+    fn type_(&self, _: &SymbolTable) -> Result<Type, TypeError> {
         match self {
             ExprLit::Int(int) => Ok(int.type_()),
             ExprLit::UInt(uint) => Ok(uint.type_()),
@@ -97,9 +102,11 @@ impl ExprStruct {
     pub fn new(name: String, fields: HashMap<String, Expr>) -> Self {
         Self { name, fields }
     }
+}
 
-    pub fn type_(&self) -> Type {
-        Type::Struct(self.name.clone())
+impl Expression for ExprStruct {
+    fn type_(&self, _: &SymbolTable) -> Result<Type, TypeError> {
+        Ok(Type::Struct(self.name.clone()))
     }
 }
 
@@ -113,8 +120,10 @@ impl ExprUnary {
     pub fn new(op: UnOp, expr: Box<Expr>) -> Self {
         Self { op, expr }
     }
+}
 
-    pub fn type_(&self, symtable: &SymbolTable) -> Result<Type, TypeError> {
+impl Expression for ExprUnary {
+    fn type_(&self, symtable: &SymbolTable) -> Result<Type, TypeError> {
         match &self.op {
             UnOp::Negative => {
                 let mut expr_type = self.expr.type_(symtable)?;
@@ -137,8 +146,10 @@ impl ExprCast {
     pub fn new(type_: Type, expr: Box<Expr>) -> Self {
         Self { type_, expr }
     }
+}
 
-    pub fn type_(&self, symbtable: &SymbolTable) -> Result<Type, TypeError> {
+impl Expression for ExprCast {
+    fn type_(&self, symbtable: &SymbolTable) -> Result<Type, TypeError> {
         let expr_type = self.expr.type_(symbtable)?;
 
         expr_type.cast(self.type_.clone())
