@@ -81,8 +81,8 @@ impl Architecture for Amd64 {
                 }
             },
             LoadItem::Symbol(symbol) => match symbol {
-                Symbol::GlobalVar(global_var) => {
-                    let ins = if global_var.type_.signed() {
+                Symbol::Global(global) => {
+                    let ins = if global.type_.signed() {
                         "movsx"
                     } else {
                         "movzx"
@@ -94,11 +94,11 @@ impl Architecture for Amd64 {
                         ",
                         ins,
                         r.qword(),
-                        Self::size_name(Type::size::<Self>(&global_var.type_)),
-                        global_var.name,
+                        Self::size_name(Type::size::<Self>(&global.type_)),
+                        global.name,
                     )
                 }
-                Symbol::LocalVar(local) => {
+                Symbol::Local(local) => {
                     let ins = if local.type_.signed() {
                         "movsx"
                     } else {
@@ -115,6 +115,7 @@ impl Architecture for Amd64 {
                         local.offset,
                     )
                 }
+                Symbol::Param(param) => todo!(),
             },
         }
     }

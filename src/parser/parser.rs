@@ -8,7 +8,7 @@ use super::{
 use crate::{
     lexer::{Lexer, LexerError, Token},
     scope::Scope,
-    symbol_table::{Symbol, SymbolGlobalVar, SymbolLocalVar, SymbolTable, SymbolTableError},
+    symbol_table::{Symbol, SymbolGlobal, SymbolLocal, SymbolParam, SymbolTable, SymbolTableError},
     type_::{Type, TypeError},
     type_table::{self, TypeStruct, TypeTable},
 };
@@ -290,13 +290,13 @@ impl Parser {
         };
 
         if let Scope::Local(_, _) = self.scope {
-            self.symtable.push(Symbol::LocalVar(SymbolLocalVar {
+            self.symtable.push(Symbol::Local(SymbolLocal {
                 name: name.clone(),
                 type_: type_.clone(),
                 offset: 0,
             }))?;
         } else {
-            self.symtable.push(Symbol::GlobalVar(SymbolGlobalVar {
+            self.symtable.push(Symbol::Global(SymbolGlobal {
                 name: name.clone(),
                 type_: type_.clone(),
             }))?;
@@ -322,6 +322,13 @@ impl Parser {
 
         let params = self.params(Token::Comma, Token::RParen)?;
         self.scope = Scope::Local(name.clone(), type_.clone());
+        for (i, (name, type_)) in params.iter().enumerate() {
+            self.symtable.push(Symbol::Param(SymbolParam {
+                name: name.to_owned(),
+                n: i,
+                type_: type_.to_owned(),
+            }))?;
+        }
         let body = self.function_body()?;
         self.scope = Scope::Global;
 

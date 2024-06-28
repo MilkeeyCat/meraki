@@ -95,7 +95,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
 
         for stmt in &mut func.body {
             if let Stmt::VarDecl(var_decl) = stmt {
-                if let Symbol::LocalVar(local) = self.symtable.find_mut(&var_decl.name).unwrap() {
+                if let Symbol::Local(local) = self.symtable.find_mut(&var_decl.name).unwrap() {
                     local.offset = offset;
                     offset += local.type_.size::<Arch>();
                 }
@@ -177,7 +177,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
                         self.save(SaveItem::Global(name), &right, left.type_(&self.symtable)?);
                     } else {
                         let symbol = self.symtable.find(name).unwrap();
-                        if let Symbol::LocalVar(symbol) = symbol {
+                        if let Symbol::Local(symbol) = symbol {
                             self.save(
                                 SaveItem::Local(symbol.offset),
                                 &right,

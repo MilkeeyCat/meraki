@@ -30,8 +30,9 @@ impl Expression for Expr {
                 .find(ident)
                 .ok_or(TypeError::IdentNotFound(ident.to_owned()))?
             {
-                Symbol::GlobalVar(global_var) => Ok(global_var.type_.clone()),
-                Symbol::LocalVar(local) => Ok(local.type_.clone()),
+                Symbol::Global(global_var) => Ok(global_var.type_.clone()),
+                Symbol::Local(local) => Ok(local.type_.clone()),
+                Symbol::Param(param) => Ok(param.type_.clone()),
             },
             Self::Cast(cast) => cast.type_(symtable),
             Self::Struct(expr_struct) => expr_struct.type_(symtable),

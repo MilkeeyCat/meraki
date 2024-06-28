@@ -4,29 +4,38 @@ const MAX_SYMBOLS: usize = 512;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Symbol {
-    GlobalVar(SymbolGlobalVar),
-    LocalVar(SymbolLocalVar),
+    Global(SymbolGlobal),
+    Local(SymbolLocal),
+    Param(SymbolParam),
 }
 
 impl Symbol {
     pub fn name(&self) -> &str {
         match self {
-            Self::GlobalVar(global_var) => &global_var.name,
-            Self::LocalVar(local) => &local.name,
+            Self::Global(global) => &global.name,
+            Self::Local(local) => &local.name,
+            Self::Param(param) => &param.name,
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct SymbolGlobalVar {
+pub struct SymbolGlobal {
     pub name: String,
     pub type_: Type,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct SymbolLocalVar {
+pub struct SymbolLocal {
     pub name: String,
     pub offset: usize,
+    pub type_: Type,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SymbolParam {
+    pub name: String,
+    pub n: usize,
     pub type_: Type,
 }
 
@@ -132,20 +141,20 @@ impl SymbolTable {
 
 #[cfg(test)]
 mod test {
-    use super::{Symbol, SymbolGlobalVar, SymbolTable, SymbolTableError};
-    use crate::{symbol_table::SymbolLocalVar, type_::Type};
+    use super::{Symbol, SymbolGlobal, SymbolTable, SymbolTableError};
+    use crate::{symbol_table::SymbolLocal, type_::Type};
 
     #[test]
     fn scopes() -> Result<(), SymbolTableError> {
         let mut symtable = SymbolTable::new();
-        let symbol = Symbol::GlobalVar(SymbolGlobalVar {
+        let symbol = Symbol::Global(SymbolGlobal {
             name: "foo".to_owned(),
             type_: Type::U8,
         });
 
         symtable.push(symbol.clone())?;
 
-        let symbol2 = Symbol::GlobalVar(SymbolGlobalVar {
+        let symbol2 = Symbol::Global(SymbolGlobal {
             name: "foo".to_owned(),
             type_: Type::U8,
         });
@@ -159,13 +168,13 @@ mod test {
 
         assert_eq!(
             symtable.find("foo"),
-            Some(&Symbol::GlobalVar(SymbolGlobalVar {
+            Some(&Symbol::Global(SymbolGlobal {
                 name: "foo".to_owned(),
                 type_: Type::U8,
             }))
         );
 
-        let symbol3 = Symbol::LocalVar(SymbolLocalVar {
+        let symbol3 = Symbol::Local(SymbolLocal {
             name: "foo".to_owned(),
             type_: Type::U16,
             offset: 0,
@@ -175,7 +184,7 @@ mod test {
 
         assert_eq!(symtable.find("foo"), Some(&symbol3));
 
-        symtable.push(Symbol::LocalVar(SymbolLocalVar {
+        symtable.push(Symbol::Local(SymbolLocal {
             name: "bar".to_owned(),
             type_: Type::I16,
             offset: 0,
