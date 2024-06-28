@@ -16,12 +16,18 @@ impl Architecture for Amd64 {
     fn new() -> (Vec<Register>, Self) {
         (
             vec![
+                Register::new("r15b", "r15w", "r15d", "r15"),
+                Register::new("r14b", "r14w", "r14d", "r14"),
+                Register::new("r13b", "r13w", "r13d", "r13"),
+                Register::new("r12b", "r12w", "r12d", "r12"),
+                Register::new("r11b", "r11w", "r11d", "r11"),
+                Register::new("r10b", "r10w", "r10d", "r10"),
+                Register::new("r9b", "r9w", "r9d", "r9"),
                 Register::new("r8b", "r8w", "r8d", "r8"),
-                Register::new("r8b", "r9w", "r8d", "r9"),
-                Register::new("dil", "di", "edi", "rdi"),
-                Register::new("sil", "si", "esi", "rsi"),
-                Register::new("dl", "dx", "edx", "rdx"),
                 Register::new("cl", "cx", "ecx", "rcx"),
+                Register::new("dl", "dx", "edx", "rdx"),
+                Register::new("sil", "si", "esi", "rsi"),
+                Register::new("dil", "di", "edi", "rdi"),
             ],
             Self {},
         )
