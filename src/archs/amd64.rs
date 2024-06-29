@@ -346,7 +346,6 @@ impl Architecture for Amd64 {
     fn finish(&self) -> Vec<u8> {
         let mut buf: Vec<u8> = Vec::new();
 
-        buf.extend_from_slice(&[1, 12, 2, 14]);
         buf.extend_from_slice(self.bss_section.as_bytes());
         buf.push(10); // \n
         buf.extend_from_slice(self.data_section.as_bytes());
