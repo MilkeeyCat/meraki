@@ -4,18 +4,32 @@ use super::{
 };
 use crate::{
     parser::{CmpOp, ExprLit, StmtVarDecl},
-    register_allocator::Register,
+    register_allocator::{AllocatorError, Register, RegisterAllocator},
     symbol_table::Symbol,
     type_::Type,
 };
 use indoc::formatdoc;
 
-pub struct Amd64;
+pub struct Amd64 {
+    bss_section: String,
+    data_section: String,
+    text_section: String,
+    registers: RegisterAllocator,
+}
 
 impl Architecture for Amd64 {
-    fn new() -> (Vec<Register>, Self) {
-        (
-            vec![
+    fn new() -> Self {
+        Self {
+            bss_section: "section .bss\n".to_string(),
+            data_section: "section .data\n".to_string(),
+            text_section: formatdoc!(
+                "
+                section .text
+                    global main
+
+                "
+            ),
+            registers: RegisterAllocator::new(vec![
                 Register::new("r15b", "r15w", "r15d", "r15"),
                 Register::new("r14b", "r14w", "r14d", "r14"),
                 Register::new("r13b", "r13w", "r13d", "r13"),
@@ -28,9 +42,8 @@ impl Architecture for Amd64 {
                 Register::new("dl", "dx", "edx", "rdx"),
                 Register::new("sil", "si", "esi", "rsi"),
                 Register::new("dil", "di", "edi", "rdi"),
-            ],
-            Self {},
-        )
+            ]),
+        }
     }
 
     fn size(type_: &Type) -> usize {
@@ -49,90 +62,112 @@ impl Architecture for Amd64 {
         }
     }
 
-    fn load(&self, r: &Register, item: LoadItem) -> String {
-        match item {
+    fn load(&mut self, item: LoadItem) -> Result<Register, AllocatorError> {
+        let (ins, r) = match item {
             LoadItem::Lit(literal) => match literal {
                 ExprLit::Int(integer) => {
-                    formatdoc!(
-                        "
+                    let r = self.registers.alloc()?;
+                    (
+                        formatdoc!(
+                            "
                         \tmov {}, {}
                         ",
-                        r.qword(),
-                        integer.to_string(),
+                            r.qword(),
+                            integer.to_string(),
+                        ),
+                        r,
                     )
                 }
                 ExprLit::UInt(integer) => {
-                    formatdoc!(
-                        "
+                    let r = self.registers.alloc()?;
+                    (
+                        formatdoc!(
+                            "
                         \tmov {}, {}
                         ",
-                        r.qword(),
-                        integer.to_string(),
+                            r.qword(),
+                            integer.to_string(),
+                        ),
+                        r,
                     )
                 }
                 ExprLit::Bool(value) => {
-                    formatdoc!(
-                        "
+                    let r = self.registers.alloc()?;
+                    (
+                        formatdoc!(
+                            "
                         \tmov {}, {}
                         ",
-                        r.qword(),
-                        value as u8
+                            r.qword(),
+                            value as u8
+                        ),
+                        r,
                     )
                 }
             },
             LoadItem::Symbol(symbol) => match symbol {
                 Symbol::Global(global) => {
+                    let r = self.registers.alloc()?;
                     let ins = if global.type_.signed() {
                         "movsx"
                     } else {
                         "movzx"
                     };
 
-                    formatdoc!(
-                        "
+                    (
+                        formatdoc!(
+                            "
                         \t{} {}, {} [{}]
                         ",
-                        ins,
-                        r.qword(),
-                        Self::size_name(Type::size::<Self>(&global.type_)),
-                        global.name,
+                            ins,
+                            r.qword(),
+                            Self::size_name(Type::size::<Self>(&global.type_)),
+                            global.name,
+                        ),
+                        r,
                     )
                 }
                 Symbol::Local(local) => {
+                    let r = self.registers.alloc()?;
                     let ins = if local.type_.signed() {
                         "movsx"
                     } else {
                         "movzx"
                     };
 
-                    formatdoc!(
-                        "
+                    (
+                        formatdoc!(
+                            "
                         \t{} {}, {} [rbp - {}]
                         ",
-                        ins,
-                        r.qword(),
-                        Self::size_name(Type::size::<Self>(&local.type_)),
-                        local.offset,
+                            ins,
+                            r.qword(),
+                            Self::size_name(Type::size::<Self>(&local.type_)),
+                            local.offset,
+                        ),
+                        r,
                     )
                 }
-                Symbol::Param(param) => todo!(),
+                Symbol::Param(_) => todo!(),
             },
-        }
+        };
+        self.text_section.push_str(&ins);
+
+        Ok(r)
     }
 
-    fn declare(&self, var: StmtVarDecl) -> String {
-        let size = &var.type_.size::<Self>();
-
-        formatdoc!(
+    fn declare(&mut self, var: StmtVarDecl) {
+        self.bss_section.push_str(&formatdoc!(
             "
-            \t{} resb {size}
+            \t{} resb {}
             ",
             var.name,
-        )
+            var.type_.size::<Self>(),
+        ));
     }
 
-    fn save(&self, item: SaveItem, r: &Register, type_: Type) -> String {
-        match item {
+    fn save(&mut self, item: SaveItem, r: &Register, type_: Type) {
+        let ins = match item {
             SaveItem::Local(local) => {
                 formatdoc!(
                     "
@@ -151,62 +186,78 @@ impl Architecture for Amd64 {
                     r.from_size(type_.size::<Self>()),
                 )
             }
-        }
+        };
+
+        self.text_section.push_str(&ins);
     }
 
-    fn negate(&self, r: &Register) -> String {
-        formatdoc!(
+    fn negate(&mut self, r: &Register) {
+        self.text_section.push_str(&formatdoc!(
             "
             \tneg {}
             ",
             r.qword(),
-        )
+        ));
     }
 
-    fn not(&self, r1: &Register, r2: &Register) -> String {
-        formatdoc!(
+    fn not(&mut self, r1: Register) -> Result<Register, AllocatorError> {
+        let r2 = self.registers.alloc()?;
+
+        self.text_section.push_str(&formatdoc!(
             "
             \tcmp {}, 0
             \tsete {}
             ",
-            r2.qword(),
-            r1.byte(),
-        )
+            r1.qword(),
+            r2.byte(),
+        ));
+        self.registers.free(r1)?;
+
+        Ok(r2)
     }
 
-    fn add(&self, r1: &Register, r2: &Register) -> String {
-        formatdoc!(
+    fn add(&mut self, r1: &Register, r2: Register) -> Result<(), AllocatorError> {
+        self.text_section.push_str(&formatdoc!(
             "
             \tadd {}, {}
             ",
             r1.qword(),
             r2.qword(),
-        )
+        ));
+        self.registers.free(r2)?;
+
+        Ok(())
     }
 
-    fn sub(&self, r1: &Register, r2: &Register) -> String {
-        formatdoc!(
+    fn sub(&mut self, r1: &Register, r2: Register) -> Result<(), AllocatorError> {
+        self.text_section.push_str(&formatdoc!(
             "
             \tsub {}, {}
             ",
             r1.qword(),
             r2.qword(),
-        )
+        ));
+        self.registers.free(r2)?;
+
+        Ok(())
     }
 
-    fn mul(&self, r1: &Register, r2: &Register) -> String {
-        formatdoc!(
+    fn mul(&mut self, r1: &Register, r2: Register) -> Result<(), AllocatorError> {
+        self.text_section.push_str(&formatdoc!(
             "
             \timul {}, {}
             ",
             r1.qword(),
             r2.qword(),
-        )
+        ));
+        self.registers.free(r2)?;
+
+        Ok(())
     }
 
     //NOTE: if mafs doesn't works, prolly because of this
-    fn div(&self, r1: &Register, r2: &Register) -> String {
-        formatdoc!(
+    fn div(&mut self, r1: &Register, r2: Register) -> Result<(), AllocatorError> {
+        self.text_section.push_str(&formatdoc!(
             "
             \tmov rax, {}
             \tcqo
@@ -216,10 +267,13 @@ impl Architecture for Amd64 {
             r1.qword(),
             r2.qword(),
             r1.qword(),
-        )
+        ));
+        self.registers.free(r2)?;
+
+        Ok(())
     }
 
-    fn cmp(&self, r1: &Register, r2: &Register, cmp: CmpOp) -> String {
+    fn cmp(&mut self, r1: &Register, r2: Register, cmp: CmpOp) -> Result<(), AllocatorError> {
         let ins = match cmp {
             CmpOp::LessThan => formatdoc!("setl {}", r1.byte()),
             CmpOp::LessEqual => formatdoc!("setle {}", r1.byte()),
@@ -229,7 +283,7 @@ impl Architecture for Amd64 {
             CmpOp::NotEqual => formatdoc!("setne {}", r1.byte()),
         };
 
-        formatdoc!(
+        self.text_section.push_str(&formatdoc!(
             "
            \tcmp {}, {}
            \t{}
@@ -237,11 +291,13 @@ impl Architecture for Amd64 {
             r1.qword(),
             r2.qword(),
             ins,
-        )
+        ));
+
+        self.registers.free(r2)
     }
 
-    fn fn_preamble(&self, name: &str, stackframe: usize) -> String {
-        formatdoc!(
+    fn fn_preamble(&mut self, name: &str, stackframe: usize) {
+        self.text_section.push_str(&formatdoc!(
             "
             {}:
                 push rbp
@@ -250,11 +306,11 @@ impl Architecture for Amd64 {
             ",
             name,
             stackframe,
-        )
+        ));
     }
 
-    fn fn_postamble(&self, name: &str, stackframe: usize) -> String {
-        formatdoc!(
+    fn fn_postamble(&mut self, name: &str, stackframe: usize) {
+        self.text_section.push_str(&formatdoc!(
             "
             {}_ret:
                 add rsp, {}
@@ -263,27 +319,40 @@ impl Architecture for Amd64 {
             ",
             name,
             stackframe,
-        )
+        ));
     }
 
-    fn ret(&self, r: &Register, type_: Type) -> String {
+    fn ret(&mut self, r: &Register, type_: Type) {
         let ins = if type_.signed() { "movsx" } else { "movzx" };
 
-        formatdoc!(
+        self.text_section.push_str(&formatdoc!(
             "
             \t{} rax, {}
             ",
             ins,
             r.from_size(Type::size::<Self>(&type_)),
-        )
+        ));
     }
 
-    fn jmp(&self, label: &str) -> String {
-        formatdoc!(
+    fn jmp(&mut self, label: &str) {
+        self.text_section.push_str(&formatdoc!(
             "
             \tjmp {}
             ",
             label
-        )
+        ));
+    }
+
+    fn finish(&self) -> Vec<u8> {
+        let mut buf: Vec<u8> = Vec::new();
+
+        buf.extend_from_slice(&[1, 12, 2, 14]);
+        buf.extend_from_slice(self.bss_section.as_bytes());
+        buf.push(10); // \n
+        buf.extend_from_slice(self.data_section.as_bytes());
+        buf.push(10); // \n
+        buf.extend_from_slice(self.text_section.as_bytes());
+
+        buf
     }
 }

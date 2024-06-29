@@ -4,12 +4,11 @@ use crate::{
         BinOp, CmpOp, Expr, ExprBinary, ExprLit, ExprUnary, Expression, OpParseError, Stmt,
         StmtFunction, StmtReturn, StmtVarDecl, UnOp,
     },
-    register_allocator::{AllocatorError, Register, RegisterAllocator},
+    register_allocator::{AllocatorError, Register},
     scope::Scope,
     symbol_table::{Symbol, SymbolTable},
     type_::{Type, TypeError},
 };
-use indoc::formatdoc;
 use std::fs::File;
 use std::io::Write;
 
@@ -54,38 +53,24 @@ impl From<OpParseError> for CodeGenError {
 
 pub struct CodeGen<Arch: Architecture> {
     symtable: SymbolTable,
-    registers: RegisterAllocator,
     arch: Arch,
-    data_section: String,
-    text_section: String,
-    bss_section: String,
     scope: Scope,
 }
 
 impl<Arch: Architecture> CodeGen<Arch> {
     pub fn new(symtable: SymbolTable) -> Self {
-        let (registers, arch) = Arch::new();
+        let arch = Arch::new();
 
         Self {
             symtable,
             arch,
-            registers: RegisterAllocator::new(registers),
-            bss_section: "section .bss\n".to_string(),
-            data_section: "section .data\n".to_string(),
-            text_section: formatdoc!(
-                "
-                section .text
-                    global main
-
-                "
-            ),
             scope: Scope::default(),
         }
     }
 
-    fn declare(&mut self, var: StmtVarDecl) {
+    fn declare(&mut self, variable: StmtVarDecl) {
         if let Scope::Global = self.scope {
-            self.bss_section.push_str(&self.arch.declare(var));
+            self.arch.declare(variable)
         }
     }
 
@@ -102,8 +87,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
             }
         }
 
-        self.text_section
-            .push_str(&self.arch.fn_preamble(&func.name, offset));
+        self.arch.fn_preamble(&func.name, offset);
         self.scope = Scope::Local(func.name.clone(), func.return_type);
 
         for stmt in func.body {
@@ -111,8 +95,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
         }
 
         self.scope = Scope::Global;
-        self.text_section
-            .push_str(&self.arch.fn_postamble(&func.name, offset));
+        self.arch.fn_postamble(&func.name, offset);
         self.symtable.leave();
     }
 
@@ -122,7 +105,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
             let type_ = expr.type_(&self.symtable)?;
             let r = self.expr(expr)?;
 
-            self.text_section.push_str(&self.arch.ret(&r, type_));
+            self.arch.ret(&r, type_);
         }
 
         self.jmp(label);
@@ -131,17 +114,17 @@ impl<Arch: Architecture> CodeGen<Arch> {
     }
 
     fn jmp(&mut self, label: &str) {
-        self.text_section.push_str(&self.arch.jmp(label));
+        self.arch.jmp(label);
     }
 
     fn expr(&mut self, expr: Expr) -> Result<Register, CodeGenError> {
         match expr {
             Expr::Binary(bin_expr) => self.bin_expr(bin_expr),
-            Expr::Lit(lit) => self.load(LoadItem::Lit(lit.clone())),
+            Expr::Lit(lit) => Ok(self.arch.load(LoadItem::Lit(lit.clone()))?),
             Expr::Unary(unary_expr) => self.unary_expr(unary_expr),
-            Expr::Ident(ident) => self.load(LoadItem::Symbol(
+            Expr::Ident(ident) => Ok(self.arch.load(LoadItem::Symbol(
                 self.symtable.find(&ident).unwrap().to_owned(),
-            )),
+            ))?),
             Expr::Cast(cast_expr) => {
                 //TODO: move this elsewhere
                 let type_size = cast_expr.type_(&self.symtable)?.size::<Arch>();
@@ -174,11 +157,12 @@ impl<Arch: Architecture> CodeGen<Arch> {
                     let right = self.expr(*expr.right)?;
 
                     if let Scope::Global = self.scope {
-                        self.save(SaveItem::Global(name), &right, left.type_(&self.symtable)?);
+                        self.arch
+                            .save(SaveItem::Global(name), &right, left.type_(&self.symtable)?);
                     } else {
                         let symbol = self.symtable.find(name).unwrap();
                         if let Symbol::Local(symbol) = symbol {
-                            self.save(
+                            self.arch.save(
                                 SaveItem::Local(symbol.offset),
                                 &right,
                                 left.type_(&self.symtable)?,
@@ -197,7 +181,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
                 let left = self.expr(*expr.left)?;
                 let right = self.expr(*expr.right)?;
 
-                self.add(&left, right)?;
+                self.arch.add(&left, right)?;
 
                 Ok(left)
             }
@@ -205,7 +189,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
                 let left = self.expr(*expr.left)?;
                 let right = self.expr(*expr.right)?;
 
-                self.sub(&left, right)?;
+                self.arch.sub(&left, right)?;
 
                 Ok(left)
             }
@@ -213,7 +197,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
                 let left = self.expr(*expr.left)?;
                 let right = self.expr(*expr.right)?;
 
-                self.mul(&left, right)?;
+                self.arch.mul(&left, right)?;
 
                 Ok(left)
             }
@@ -221,7 +205,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
                 let left = self.expr(*expr.left)?;
                 let right = self.expr(*expr.right)?;
 
-                self.div(&left, right)?;
+                self.arch.div(&left, right)?;
 
                 Ok(left)
             }
@@ -234,7 +218,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
                 let left = self.expr(*expr.left)?;
                 let right = self.expr(*expr.right)?;
 
-                self.cmp(&left, right, CmpOp::try_from(&expr.op)?)?;
+                self.arch.cmp(&left, right, CmpOp::try_from(&expr.op)?)?;
 
                 Ok(left)
             }
@@ -250,80 +234,20 @@ impl<Arch: Architecture> CodeGen<Arch> {
         }
     }
 
-    fn save(&mut self, item: SaveItem, r: &Register, type_: Type) {
-        self.text_section.push_str(&self.arch.save(item, r, type_));
-    }
-
-    fn load(&mut self, item: LoadItem) -> Result<Register, CodeGenError> {
-        let r = self.registers.alloc()?;
-
-        self.text_section.push_str(&self.arch.load(&r, item));
-
-        Ok(r)
-    }
-
     fn unary_expr(&mut self, unary_expr: ExprUnary) -> Result<Register, CodeGenError> {
         match unary_expr.op {
             UnOp::Negative => {
                 let r = self.expr(*unary_expr.expr)?;
-                self.negate(&r);
+                self.arch.negate(&r);
 
                 Ok(r)
             }
             UnOp::Not => {
                 let r = self.expr(*unary_expr.expr)?;
 
-                self.not(r)
+                Ok(self.arch.not(r)?)
             }
         }
-    }
-
-    fn negate(&mut self, r: &Register) {
-        self.text_section.push_str(&self.arch.negate(r));
-    }
-
-    fn not(&mut self, r2: Register) -> Result<Register, CodeGenError> {
-        let r = self.registers.alloc()?;
-
-        self.text_section.push_str(&self.arch.not(&r, &r2));
-        self.registers.free(r2)?;
-
-        Ok(r)
-    }
-
-    fn add(&mut self, r1: &Register, r2: Register) -> Result<(), CodeGenError> {
-        self.text_section.push_str(&self.arch.add(r1, &r2));
-        self.registers.free(r2)?;
-
-        Ok(())
-    }
-
-    fn sub(&mut self, r1: &Register, r2: Register) -> Result<(), CodeGenError> {
-        self.text_section.push_str(&self.arch.sub(r1, &r2));
-        self.registers.free(r2)?;
-
-        Ok(())
-    }
-
-    fn mul(&mut self, r1: &Register, r2: Register) -> Result<(), CodeGenError> {
-        self.text_section.push_str(&self.arch.mul(r1, &r2));
-        self.registers.free(r2)?;
-
-        Ok(())
-    }
-
-    fn div(&mut self, r1: &Register, r2: Register) -> Result<(), CodeGenError> {
-        self.text_section.push_str(&self.arch.div(r1, &r2));
-        self.registers.free(r2)?;
-
-        Ok(())
-    }
-
-    fn cmp(&mut self, r1: &Register, r2: Register, cmp: CmpOp) -> Result<(), CodeGenError> {
-        self.text_section.push_str(&self.arch.cmp(r1, &r2, cmp));
-        self.registers.free(r2)?;
-
-        Ok(())
     }
 
     pub fn compile(&mut self, program: Vec<Stmt>, path: &str) -> Result<(), CodeGenError> {
@@ -333,14 +257,8 @@ impl<Arch: Architecture> CodeGen<Arch> {
             self.stmt(stmt)?;
         }
 
-        file.write_all(self.bss_section.as_bytes())
-            .expect("Failed to write generated .bss section to output file");
-        file.write(&[10]).unwrap();
-        file.write_all(self.data_section.as_bytes())
-            .expect("Failed to write generated .data section to output file");
-        file.write(&[10]).unwrap();
-        file.write_all(self.text_section.as_bytes())
-            .expect("Failed to write generated .text section to output file");
+        file.write_all(&self.arch.finish())
+            .expect("Failed to write generated code to output file");
 
         Ok(())
     }
