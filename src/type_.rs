@@ -23,7 +23,7 @@ impl Display for TypeError {
             Self::Return(left, right) => write!(
                 f,
                 "Expected return value of type {},  got {} instead",
-                left, right
+                right, left
             ),
             Self::VoidVariable => write!(f, "Variable can't be of type void"),
         }

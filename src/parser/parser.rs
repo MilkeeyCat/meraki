@@ -262,7 +262,7 @@ impl Parser {
         self.expect(&Token::Semicolon)?;
 
         if let Scope::Local(name, return_type) = &self.scope {
-            type_.assign(return_type.clone()).map_err(|e| match e {
+            return_type.to_owned().assign(type_).map_err(|e| match e {
                 TypeError::Assignment(left, right) => TypeError::Return(left, right),
                 e => e,
             })?;
