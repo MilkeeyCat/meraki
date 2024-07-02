@@ -7,6 +7,7 @@ pub enum Symbol {
     Global(SymbolGlobal),
     Local(SymbolLocal),
     Param(SymbolParam),
+    Function(SymbolFunction),
 }
 
 impl Symbol {
@@ -15,6 +16,7 @@ impl Symbol {
             Self::Global(global) => &global.name,
             Self::Local(local) => &local.name,
             Self::Param(param) => &param.name,
+            Self::Function(function) => &function.name,
         }
     }
 }
@@ -37,6 +39,13 @@ pub struct SymbolParam {
     pub name: String,
     pub n: usize,
     pub type_: Type,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SymbolFunction {
+    pub name: String,
+    pub return_type: Type,
+    pub parameters: Vec<Type>,
 }
 
 #[derive(Debug, PartialEq)]

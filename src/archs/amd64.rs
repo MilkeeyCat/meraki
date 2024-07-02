@@ -149,6 +149,7 @@ impl Architecture for Amd64 {
                     )
                 }
                 Symbol::Param(_) => todo!(),
+                Symbol::Function(_) => todo!(),
             },
         };
         self.text_section.push_str(&ins);

@@ -7,7 +7,7 @@ use crate::{
     register_allocator::{AllocatorError, Register},
     scope::Scope,
     symbol_table::{Symbol, SymbolTable},
-    type_::{Type, TypeError},
+    type_::TypeError,
 };
 use std::fs::File;
 use std::io::Write;

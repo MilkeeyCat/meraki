@@ -7,8 +7,12 @@ use super::{
 };
 use crate::{
     lexer::{Lexer, LexerError, Token},
+    parser::ExprFunctionCall,
     scope::Scope,
-    symbol_table::{Symbol, SymbolGlobal, SymbolLocal, SymbolParam, SymbolTable, SymbolTableError},
+    symbol_table::{
+        Symbol, SymbolFunction, SymbolGlobal, SymbolLocal, SymbolParam, SymbolTable,
+        SymbolTableError,
+    },
     type_::{Type, TypeError},
     type_table::{self, TypeStruct, TypeTable},
 };
@@ -25,6 +29,7 @@ pub enum ParserError {
     Operator(OpParseError),
     Int(IntLitReprError),
     SymbolTable(SymbolTableError),
+    UndeclaredFunction(String),
 }
 
 impl std::error::Error for ParserError {}
@@ -43,6 +48,7 @@ impl std::fmt::Display for ParserError {
             Self::Operator(e) => write!(f, "{}", e),
             Self::Int(e) => write!(f, "{}", e),
             Self::SymbolTable(e) => write!(f, "{}", e),
+            Self::UndeclaredFunction(name) => write!(f, "Call to undeclared function {name}"),
         }
     }
 }
@@ -174,7 +180,8 @@ impl Parser {
                 | Token::GreaterThan
                 | Token::GreaterEqual
                 | Token::Equal
-                | Token::NotEqual => self.bin_expr(left?),
+                | Token::NotEqual
+                | Token::LParen => self.bin_expr(left?),
                 token => {
                     return Err(ParserError::Infix(token.to_owned()));
                 }
@@ -331,13 +338,19 @@ impl Parser {
         }
         let body = self.function_body()?;
         self.scope = Scope::Global;
+        let symtable = self.symtable.inner();
+        self.symtable.push(Symbol::Function(SymbolFunction {
+            name: name.clone(),
+            return_type: type_.clone(),
+            parameters: params.clone().into_values().collect(),
+        }))?;
 
         Ok(Stmt::Function(StmtFunction {
             return_type: type_,
             name,
             params,
             body,
-            symtable: self.symtable.inner(),
+            symtable,
         }))
     }
 
@@ -447,11 +460,25 @@ impl Parser {
         let token = self.cur_token.clone();
         self.next_token()?;
 
-        let left = Box::new(left);
-        let right = Box::new(self.expr(Precedence::from(&token))?);
-        let op = BinOp::try_from(&token).map_err(|e| ParserError::Operator(e))?;
+        if token == Token::LParen {
+            if let Expr::Ident(ident) = left {
+                if let Some(Symbol::Function(_)) = self.symtable.find(&ident) {
+                    let args = self.expr_list()?;
 
-        Ok(Expr::Binary(ExprBinary::new(op, left, right)))
+                    Ok(Expr::FunctionCall(ExprFunctionCall::new(ident, args)))
+                } else {
+                    return Err(ParserError::UndeclaredFunction(ident));
+                }
+            } else {
+                todo!("Don't know what error to return yet");
+            }
+        } else {
+            let left = Box::new(left);
+            let right = Box::new(self.expr(Precedence::from(&token))?);
+            let op = BinOp::try_from(&token).map_err(|e| ParserError::Operator(e))?;
+
+            Ok(Expr::Binary(ExprBinary::new(op, left, right)))
+        }
     }
 
     fn unary_expr(&mut self) -> Result<Expr, ParserError> {
@@ -471,6 +498,18 @@ impl Parser {
         }
 
         Ok(Expr::Unary(ExprUnary::new(op, Box::new(expr))))
+    }
+
+    fn expr_list(&mut self) -> Result<Vec<Expr>, ParserError> {
+        let mut exprs = Vec::new();
+
+        while !self.cur_token_is(&Token::RParen) {
+            exprs.push(self.expr(Precedence::default())?);
+        }
+
+        //self.expect(&Token::RParen)?;
+
+        Ok(exprs)
     }
 
     fn grouped_expr(&mut self) -> Result<Expr, ParserError> {

@@ -18,6 +18,7 @@ pub enum Expr {
     Lit(ExprLit),
     Ident(String),
     Struct(ExprStruct),
+    FunctionCall(ExprFunctionCall),
 }
 
 impl Expression for Expr {
@@ -33,9 +34,16 @@ impl Expression for Expr {
                 Symbol::Global(global_var) => Ok(global_var.type_.clone()),
                 Symbol::Local(local) => Ok(local.type_.clone()),
                 Symbol::Param(param) => Ok(param.type_.clone()),
+                _ => unreachable!(),
             },
             Self::Cast(cast) => cast.type_(symtable),
             Self::Struct(expr_struct) => expr_struct.type_(symtable),
+            Self::FunctionCall(function_call) => {
+                match symtable.find(&function_call.name).unwrap() {
+                    Symbol::Function(function) => Ok(function.return_type.to_owned()),
+                    _ => unreachable!(),
+                }
+            }
         }
     }
 }
@@ -97,6 +105,18 @@ impl Expression for ExprLit {
 pub struct ExprStruct {
     name: String,
     fields: HashMap<String, Expr>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExprFunctionCall {
+    name: String,
+    arguments: Vec<Expr>,
+}
+
+impl ExprFunctionCall {
+    pub fn new(name: String, arguments: Vec<Expr>) -> Self {
+        Self { name, arguments }
+    }
 }
 
 impl ExprStruct {

@@ -10,6 +10,7 @@ pub enum Precedence {
     Sum,
     Product,
     Prefix,
+    Call,
     Highest,
 }
 
@@ -23,6 +24,7 @@ impl From<&Token> for Precedence {
             LessThan | LessEqual | GreaterThan | GreaterEqual => Self::Comparison,
             Equal | NotEqual => Self::Equality,
             Assign => Self::Assign,
+            LParen => Self::Call,
             _ => Self::Lowest,
         }
     }
