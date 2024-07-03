@@ -5,7 +5,7 @@ use super::{
 use crate::{
     parser::{CmpOp, ExprLit, StmtVarDecl},
     register_allocator::{AllocatorError, Register, RegisterAllocator},
-    symbol_table::Symbol,
+    symbol_table::{Symbol, SymbolParam},
     type_::Type,
 };
 use indoc::formatdoc;
@@ -148,7 +148,7 @@ impl Architecture for Amd64 {
                         r,
                     )
                 }
-                Symbol::Param(_) => todo!(),
+                Symbol::Param(param) => self.get_param(param),
                 Symbol::Function(_) => todo!(),
             },
         };
@@ -344,6 +344,33 @@ impl Architecture for Amd64 {
         ));
     }
 
+    fn call_fn(&mut self, name: &str) -> Register {
+        let r = self.registers.alloc().unwrap();
+
+        self.text_section.push_str(&formatdoc!(
+            "
+            \tcall {name}
+            \tmov {}, rax
+            ",
+            r.qword()
+        ));
+
+        r
+    }
+
+    fn move_function_argument(&mut self, r: Register, i: usize) {
+        self.text_section.push_str(&formatdoc!(
+            "
+            \tmov {}, {}
+            ",
+            self.registers
+                .get(self.registers.len() - i - 1)
+                .unwrap()
+                .qword(),
+            r.qword(),
+        ));
+    }
+
     fn finish(&self) -> Vec<u8> {
         let mut buf: Vec<u8> = Vec::new();
 
@@ -354,5 +381,29 @@ impl Architecture for Amd64 {
         buf.extend_from_slice(self.text_section.as_bytes());
 
         buf
+    }
+}
+
+impl Amd64 {
+    pub fn get_param(&mut self, param: SymbolParam) -> (String, Register) {
+        //NOTE: only 6 params are allowed in register, others go on stack
+        if param.n < 6 {
+            let r = self.registers.alloc().unwrap();
+            (
+                formatdoc!(
+                    "
+                    \tmov {}, {}
+                    ",
+                    r.qword(),
+                    self.registers
+                        .get(self.registers.len() - param.n - 1)
+                        .unwrap()
+                        .qword()
+                ),
+                r,
+            )
+        } else {
+            todo!();
+        }
     }
 }

@@ -109,8 +109,8 @@ pub struct ExprStruct {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprFunctionCall {
-    name: String,
-    arguments: Vec<Expr>,
+    pub name: String,
+    pub arguments: Vec<Expr>,
 }
 
 impl ExprFunctionCall {

@@ -16,8 +16,16 @@ use parser::Parser;
 fn main() {
     let lexer = Lexer::new(
         "
-        i8 foo;
-        foo = -128;
+        u8 foo(u8 a, u8 b) {
+            return a + b;
+        }
+
+        u8 main(u8 bar, u8 baz) {
+            u8 b;
+            b = foo(50, 20);
+
+            return b;
+        }
         "
         .to_string(),
     );

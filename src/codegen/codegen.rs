@@ -1,8 +1,8 @@
 use crate::{
     archs::{Architecture, LoadItem, SaveItem},
     parser::{
-        BinOp, CmpOp, Expr, ExprBinary, ExprLit, ExprUnary, Expression, OpParseError, Stmt,
-        StmtFunction, StmtReturn, StmtVarDecl, UnOp,
+        BinOp, CmpOp, Expr, ExprBinary, ExprFunctionCall, ExprLit, ExprUnary, Expression,
+        OpParseError, Stmt, StmtFunction, StmtReturn, StmtVarDecl, UnOp,
     },
     register_allocator::{AllocatorError, Register},
     scope::Scope,
@@ -144,6 +144,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
 
                 self.expr(expr)
             }
+            Expr::FunctionCall(func_call) => self.call_function(func_call),
             _ => todo!(),
         }
     }
@@ -248,6 +249,20 @@ impl<Arch: Architecture> CodeGen<Arch> {
                 Ok(self.arch.not(r)?)
             }
         }
+    }
+
+    fn call_function(&mut self, call: ExprFunctionCall) -> Result<Register, CodeGenError> {
+        if call.arguments.len() > 6 {
+            panic!("Can't call function with more than 6 arguments");
+        }
+
+        for (i, argument) in call.arguments.into_iter().enumerate() {
+            let r = self.expr(argument)?;
+
+            self.arch.move_function_argument(r, i);
+        }
+
+        Ok(self.arch.call_fn(&call.name))
     }
 
     pub fn compile(&mut self, program: Vec<Stmt>, path: &str) -> Result<(), CodeGenError> {

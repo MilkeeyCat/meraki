@@ -33,5 +33,7 @@ pub trait Architecture {
     fn fn_postamble(&mut self, name: &str, stackframe: usize);
     fn ret(&mut self, r: &Register, type_: Type);
     fn jmp(&mut self, label: &str);
+    fn call_fn(&mut self, name: &str) -> Register;
+    fn move_function_argument(&mut self, r: Register, i: usize);
     fn finish(&self) -> Vec<u8>;
 }

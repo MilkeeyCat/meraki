@@ -505,9 +505,14 @@ impl Parser {
 
         while !self.cur_token_is(&Token::RParen) {
             exprs.push(self.expr(Precedence::default())?);
+            self.next_token()?;
+
+            if !self.cur_token_is(&Token::RParen) {
+                self.expect(&Token::Comma)?;
+            }
         }
 
-        //self.expect(&Token::RParen)?;
+        //self.expect_peek(&Token::RParen)?;
 
         Ok(exprs)
     }

@@ -103,4 +103,12 @@ impl RegisterAllocator {
 
         Ok(())
     }
+
+    pub fn len(&self) -> usize {
+        self.registers.len()
+    }
+
+    pub fn get(&self, n: usize) -> Option<Register> {
+        self.registers.get(n).cloned()
+    }
 }
