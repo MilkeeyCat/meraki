@@ -30,6 +30,7 @@ pub enum ParserError {
     Int(IntLitReprError),
     SymbolTable(SymbolTableError),
     UndeclaredFunction(String),
+    FunctionArguments(String, Vec<Type>, Vec<Type>),
 }
 
 impl std::error::Error for ParserError {}
@@ -49,6 +50,21 @@ impl std::fmt::Display for ParserError {
             Self::Int(e) => write!(f, "{}", e),
             Self::SymbolTable(e) => write!(f, "{}", e),
             Self::UndeclaredFunction(name) => write!(f, "Call to undeclared function {name}"),
+            Self::FunctionArguments(name, expected, actual) => write!(
+                f,
+                "Function {} has signature ({}), got called with ({})",
+                name,
+                expected
+                    .iter()
+                    .map(|type_| type_.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", "),
+                actual
+                    .iter()
+                    .map(|type_| type_.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            ),
         }
     }
 }
@@ -462,8 +478,22 @@ impl Parser {
 
         if token == Token::LParen {
             if let Expr::Ident(ident) = left {
-                if let Some(Symbol::Function(_)) = self.symtable.find(&ident) {
+                if let Some(Symbol::Function(function)) = self.symtable.find(&ident) {
+                    let function_name = function.name.to_owned();
+                    let function_params = function.parameters.to_owned();
                     let args = self.expr_list()?;
+                    let args_types = args
+                        .iter()
+                        .map(|expr| expr.type_(&self.symtable).unwrap())
+                        .collect::<Vec<Type>>();
+
+                    if function_params != args_types {
+                        return Err(ParserError::FunctionArguments(
+                            function_name,
+                            function_params,
+                            args_types,
+                        ));
+                    }
 
                     Ok(Expr::FunctionCall(ExprFunctionCall::new(ident, args)))
                 } else {
