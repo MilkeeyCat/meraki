@@ -11,24 +11,14 @@ use crate::{
 use indoc::formatdoc;
 
 pub struct Amd64 {
-    bss_section: String,
-    data_section: String,
-    text_section: String,
+    buf: String,
     registers: RegisterAllocator,
 }
 
 impl Architecture for Amd64 {
     fn new() -> Self {
         Self {
-            bss_section: "section .bss\n".to_string(),
-            data_section: "section .data\n".to_string(),
-            text_section: formatdoc!(
-                "
-                section .text
-                    global main
-
-                "
-            ),
+            buf: String::from(".section .text\n"),
             registers: RegisterAllocator::new(vec![
                 Register::new("r15b", "r15w", "r15d", "r15"),
                 Register::new("r14b", "r14w", "r14d", "r14"),
@@ -117,7 +107,7 @@ impl Architecture for Amd64 {
                     (
                         formatdoc!(
                             "
-                        \t{} {}, {} [{}]
+                        \t{} {}, {} ptr [{}]
                         ",
                             ins,
                             r.qword(),
@@ -138,7 +128,7 @@ impl Architecture for Amd64 {
                     (
                         formatdoc!(
                             "
-                        \t{} {}, {} [rbp - {}]
+                        \t{} {}, {} ptr [rbp - {}]
                         ",
                             ins,
                             r.qword(),
@@ -152,15 +142,16 @@ impl Architecture for Amd64 {
                 Symbol::Function(_) => todo!(),
             },
         };
-        self.text_section.push_str(&ins);
+        self.buf.push_str(&ins);
 
         Ok(r)
     }
 
     fn declare(&mut self, var: StmtVarDecl) {
-        self.bss_section.push_str(&formatdoc!(
+        //\t{} resb {}
+        self.buf.push_str(&formatdoc!(
             "
-            \t{} resb {}
+            \t.comm {} {}
             ",
             var.name,
             var.type_.size::<Self>(),
@@ -189,11 +180,11 @@ impl Architecture for Amd64 {
             }
         };
 
-        self.text_section.push_str(&ins);
+        self.buf.push_str(&ins);
     }
 
     fn negate(&mut self, r: &Register) {
-        self.text_section.push_str(&formatdoc!(
+        self.buf.push_str(&formatdoc!(
             "
             \tneg {}
             ",
@@ -204,7 +195,7 @@ impl Architecture for Amd64 {
     fn not(&mut self, r1: Register) -> Result<Register, AllocatorError> {
         let r2 = self.registers.alloc()?;
 
-        self.text_section.push_str(&formatdoc!(
+        self.buf.push_str(&formatdoc!(
             "
             \tcmp {}, 0
             \tsete {}
@@ -218,7 +209,7 @@ impl Architecture for Amd64 {
     }
 
     fn add(&mut self, r1: &Register, r2: Register) -> Result<(), AllocatorError> {
-        self.text_section.push_str(&formatdoc!(
+        self.buf.push_str(&formatdoc!(
             "
             \tadd {}, {}
             ",
@@ -231,7 +222,7 @@ impl Architecture for Amd64 {
     }
 
     fn sub(&mut self, r1: &Register, r2: Register) -> Result<(), AllocatorError> {
-        self.text_section.push_str(&formatdoc!(
+        self.buf.push_str(&formatdoc!(
             "
             \tsub {}, {}
             ",
@@ -244,7 +235,7 @@ impl Architecture for Amd64 {
     }
 
     fn mul(&mut self, r1: &Register, r2: Register) -> Result<(), AllocatorError> {
-        self.text_section.push_str(&formatdoc!(
+        self.buf.push_str(&formatdoc!(
             "
             \timul {}, {}
             ",
@@ -258,7 +249,7 @@ impl Architecture for Amd64 {
 
     //NOTE: if mafs doesn't works, prolly because of this
     fn div(&mut self, r1: &Register, r2: Register) -> Result<(), AllocatorError> {
-        self.text_section.push_str(&formatdoc!(
+        self.buf.push_str(&formatdoc!(
             "
             \tmov rax, {}
             \tcqo
@@ -284,7 +275,7 @@ impl Architecture for Amd64 {
             CmpOp::NotEqual => formatdoc!("setne {}", r1.byte()),
         };
 
-        self.text_section.push_str(&formatdoc!(
+        self.buf.push_str(&formatdoc!(
             "
            \tcmp {}, {}
            \t{}
@@ -298,20 +289,19 @@ impl Architecture for Amd64 {
     }
 
     fn fn_preamble(&mut self, name: &str, stackframe: usize) {
-        self.text_section.push_str(&formatdoc!(
+        self.buf.push_str(&formatdoc!(
             "
-            {}:
+            .global {name}
+            {name}:
                 push rbp
                 mov rbp, rsp
-                sub rsp, {}
+                sub rsp, {stackframe}
             ",
-            name,
-            stackframe,
         ));
     }
 
     fn fn_postamble(&mut self, name: &str, stackframe: usize) {
-        self.text_section.push_str(&formatdoc!(
+        self.buf.push_str(&formatdoc!(
             "
             {}_ret:
                 add rsp, {}
@@ -326,7 +316,7 @@ impl Architecture for Amd64 {
     fn ret(&mut self, r: &Register, type_: Type) {
         let ins = if type_.signed() { "movsx" } else { "movzx" };
 
-        self.text_section.push_str(&formatdoc!(
+        self.buf.push_str(&formatdoc!(
             "
             \t{} rax, {}
             ",
@@ -336,7 +326,7 @@ impl Architecture for Amd64 {
     }
 
     fn jmp(&mut self, label: &str) {
-        self.text_section.push_str(&formatdoc!(
+        self.buf.push_str(&formatdoc!(
             "
             \tjmp {}
             ",
@@ -347,7 +337,7 @@ impl Architecture for Amd64 {
     fn call_fn(&mut self, name: &str) -> Register {
         let r = self.registers.alloc().unwrap();
 
-        self.text_section.push_str(&formatdoc!(
+        self.buf.push_str(&formatdoc!(
             "
             \tcall {name}
             \tmov {}, rax
@@ -359,7 +349,7 @@ impl Architecture for Amd64 {
     }
 
     fn move_function_argument(&mut self, r: Register, i: usize) {
-        self.text_section.push_str(&formatdoc!(
+        self.buf.push_str(&formatdoc!(
             "
             \tmov {}, {}
             ",
@@ -372,15 +362,7 @@ impl Architecture for Amd64 {
     }
 
     fn finish(&self) -> Vec<u8> {
-        let mut buf: Vec<u8> = Vec::new();
-
-        buf.extend_from_slice(self.bss_section.as_bytes());
-        buf.push(10); // \n
-        buf.extend_from_slice(self.data_section.as_bytes());
-        buf.push(10); // \n
-        buf.extend_from_slice(self.text_section.as_bytes());
-
-        buf
+        self.buf.as_bytes().to_vec()
     }
 }
 
