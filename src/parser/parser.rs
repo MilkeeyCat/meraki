@@ -534,7 +534,7 @@ impl Parser {
     fn grouped_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect(&Token::LParen)?;
 
-        let expr = match &self.cur_token {
+        match &self.cur_token {
             Token::U8 | Token::I8 | Token::U16 | Token::I16 | Token::Bool | Token::Void => {
                 let type_ = self.parse_type()?;
                 self.expect(&Token::RParen)?;
@@ -544,15 +544,11 @@ impl Parser {
             }
             _ => {
                 let expr = self.expr(Precedence::default());
-                self.expect_peek(&Token::RParen)?;
+                self.expect(&Token::RParen)?;
 
                 expr
             }
-        };
-
-        self.expect(&Token::RParen)?;
-
-        expr
+        }
     }
 }
 
