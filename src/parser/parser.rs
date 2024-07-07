@@ -180,11 +180,9 @@ impl Parser {
             token => Err(ParserError::Prefix(token.to_owned())),
         };
 
-        while !self.peek_token_is(&Token::Semicolon)
-            && precedence < Precedence::from(&self.peek_token)
+        while !self.cur_token_is(&Token::Semicolon)
+            && precedence < Precedence::from(&self.cur_token)
         {
-            self.next_token()?;
-
             left = match &self.cur_token {
                 Token::Plus
                 | Token::Minus
@@ -210,13 +208,11 @@ impl Parser {
     fn parse_struct(&mut self) -> Result<(), ParserError> {
         self.expect(&Token::Struct)?;
 
-        let name;
-        if let Token::Ident(ref ident) = self.cur_token {
-            name = ident.to_owned();
-        } else {
-            todo!("Don't know what error to return yet");
-        }
-        self.next_token()?;
+        let name = match self.next_token()? {
+            Token::Ident(ident) => ident,
+            _ => todo!("Don't know what error to return yet"),
+        };
+
         self.expect(&Token::LBrace)?;
 
         let fields = self.params(Token::Semicolon, Token::RBrace)?;
@@ -246,7 +242,6 @@ impl Parser {
                 expr.type_(&self.symtable)?;
                 let expr = Stmt::Expr(expr);
 
-                self.next_token()?;
                 self.expect(&Token::Semicolon)?;
 
                 Ok(expr)
@@ -255,8 +250,7 @@ impl Parser {
     }
 
     fn parse_type(&mut self) -> Result<Type, ParserError> {
-        let token = self.cur_token.clone();
-        self.next_token()?;
+        let token = self.next_token()?;
 
         match token {
             Token::U8 => Ok(Type::U8),
@@ -276,7 +270,6 @@ impl Parser {
         let type_;
         if !self.cur_token_is(&Token::Semicolon) {
             expr = Some(self.expr(Precedence::default())?);
-            self.next_token()?;
             type_ = expr.as_ref().unwrap().type_(&self.symtable)?;
         } else {
             type_ = Type::Void;
@@ -284,19 +277,20 @@ impl Parser {
 
         self.expect(&Token::Semicolon)?;
 
-        if let Scope::Local(name, return_type) = &self.scope {
-            return_type.to_owned().assign(type_).map_err(|e| match e {
-                TypeError::Assignment(left, right) => TypeError::Return(left, right),
-                e => e,
-            })?;
+        match &self.scope {
+            Scope::Local(name, return_type) => {
+                return_type.to_owned().assign(type_).map_err(|e| match e {
+                    TypeError::Assignment(left, right) => TypeError::Return(left, right),
+                    e => e,
+                })?;
 
-            Ok(Stmt::Return(StmtReturn {
-                expr,
-                //TODO: it's not a good idea
-                label: name.to_owned() + "_ret",
-            }))
-        } else {
-            todo!("Don't know what error to return yet");
+                Ok(Stmt::Return(StmtReturn {
+                    expr,
+                    //TODO: it's not a good idea
+                    label: name.to_owned() + "_ret",
+                }))
+            }
+            _ => todo!("Don't know what error to return yet"),
         }
     }
 
@@ -305,41 +299,41 @@ impl Parser {
             return Err(ParserError::Type(TypeError::VoidVariable));
         }
 
-        let name = match &self.cur_token {
-            Token::Ident(ident) => ident.to_owned(),
+        let name = match self.next_token()? {
+            Token::Ident(ident) => ident,
             _ => {
                 return Err(ParserError::ParseType(self.cur_token.to_owned()));
             }
         };
 
-        if let Scope::Local(_, _) = self.scope {
-            self.symtable.push(Symbol::Local(SymbolLocal {
-                name: name.clone(),
-                type_: type_.clone(),
-                offset: 0,
-            }))?;
-        } else {
-            self.symtable.push(Symbol::Global(SymbolGlobal {
-                name: name.clone(),
-                type_: type_.clone(),
-            }))?;
+        match self.scope {
+            Scope::Local(_, _) => {
+                self.symtable.push(Symbol::Local(SymbolLocal {
+                    name: name.clone(),
+                    type_: type_.clone(),
+                    offset: 0,
+                }))?;
+            }
+            Scope::Global => {
+                self.symtable.push(Symbol::Global(SymbolGlobal {
+                    name: name.clone(),
+                    type_: type_.clone(),
+                }))?;
+            }
         }
 
-        self.next_token()?;
         self.expect(&Token::Semicolon)?;
 
         Ok(Stmt::VarDecl(StmtVarDecl::new(type_, name, None)))
     }
 
     fn function(&mut self, type_: Type) -> Result<Stmt, ParserError> {
-        let name = match &self.cur_token {
-            Token::Ident(ident) => ident.to_owned(),
+        let name = match self.next_token()? {
+            Token::Ident(ident) => ident,
             _ => {
                 return Err(ParserError::ParseType(self.cur_token.to_owned()));
             }
         };
-
-        self.next_token()?;
         self.expect(&Token::LParen)?;
         self.symtable.enter(Box::new(SymbolTable::new()));
 
@@ -375,18 +369,15 @@ impl Parser {
 
         while !self.cur_token_is(&end) {
             let type_ = self.parse_type()?;
-            let name = match &self.cur_token {
-                Token::Ident(ident) => ident.to_owned(),
+            let name = match self.next_token()? {
+                Token::Ident(ident) => ident,
                 _ => todo!("Don't know what error to return yet"),
             };
 
-            self.next_token()?;
-
-            if params.contains_key(&name) {
-                todo!("Don't know yet what error to return");
-            } else {
-                params.insert(name, type_);
-            }
+            match params.contains_key(&name) {
+                true => todo!("Don't know yet what error to return"),
+                false => params.insert(name, type_),
+            };
 
             if !self.cur_token_is(&end) {
                 self.expect(&delim)?;
@@ -413,9 +404,9 @@ impl Parser {
     }
 
     fn ident(&mut self) -> Result<Expr, ParserError> {
-        match &self.cur_token {
-            Token::Ident(ident) => Ok(Expr::Ident(ident.to_owned())),
-            _ => Err(ParserError::ParseType(self.cur_token.to_owned())),
+        match self.next_token()? {
+            Token::Ident(ident) => Ok(Expr::Ident(ident)),
+            token => Err(ParserError::ParseType(token)),
         }
     }
 
@@ -429,93 +420,88 @@ impl Parser {
         let mut fields = HashMap::new();
 
         while !self.cur_token_is(&Token::RBrace) {
-            if let Token::Ident(field) = self.next_token()? {
-                if !match self.type_table.find(&name).expect("Type doesn't exist") {
-                    type_table::Type::Struct(type_struct) => {
-                        type_struct.fields.contains_key(&field)
+            match self.next_token()? {
+                Token::Ident(field) => {
+                    if !match self.type_table.find(&name).expect("Type doesn't exist") {
+                        type_table::Type::Struct(type_struct) => {
+                            type_struct.fields.contains_key(&field)
+                        }
+                    } {
+                        todo!("Field {field} doesn't exist in struct {name}");
                     }
-                } {
-                    todo!("Field {field} doesn't exist in struct {name}");
+
+                    self.expect(&Token::Colon)?;
+                    let expr = self.expr(Precedence::Lowest)?;
+
+                    self.expect(&Token::Comma)?;
+                    fields.insert(field, expr);
                 }
-
-                self.expect(&Token::Colon)?;
-                let expr = self.expr(Precedence::Lowest)?;
-                self.next_token()?;
-                self.expect(&Token::Comma)?;
-
-                fields.insert(field, expr);
-            } else {
-                todo!("Don't know what error to return yet");
+                _ => todo!("Don't know what error to return yet"),
             }
         }
 
-        //TODO: if I uncomment it, everything breaks xd
-        //self.expect(&Token::RBrace)?;
+        self.expect(&Token::RBrace)?;
 
         Ok(Expr::Struct(ExprStruct::new(name, fields)))
     }
 
-    fn int_lit(&self) -> Result<Expr, ParserError> {
-        match &self.cur_token {
+    fn int_lit(&mut self) -> Result<Expr, ParserError> {
+        match self.next_token()? {
             Token::Integer(num_str) => Ok(Expr::Lit(ExprLit::UInt(
                 UIntLitRepr::try_from(&num_str[..]).map_err(|e| ParserError::Int(e))?,
             ))),
-            _ => Err(ParserError::ParseType(self.cur_token.to_owned())),
+            token => Err(ParserError::ParseType(token)),
         }
     }
 
-    fn bool(&self) -> Result<Expr, ParserError> {
-        match &self.cur_token {
+    fn bool(&mut self) -> Result<Expr, ParserError> {
+        match self.next_token()? {
             Token::True => Ok(Expr::Lit(ExprLit::Bool(true))),
             Token::False => Ok(Expr::Lit(ExprLit::Bool(false))),
-            token => Err(ParserError::UnexpectedToken(token.clone(), token.clone())),
+            token => Err(ParserError::UnexpectedToken(token.clone(), token)),
         }
     }
 
     fn bin_expr(&mut self, left: Expr) -> Result<Expr, ParserError> {
-        let token = self.cur_token.clone();
-        self.next_token()?;
+        match self.next_token()? {
+            Token::LParen => match left {
+                Expr::Ident(ident) => {
+                    if let Some(Symbol::Function(function)) = self.symtable.find(&ident) {
+                        let function_name = function.name.to_owned();
+                        let function_params = function.parameters.to_owned();
+                        let args = self.expr_list()?;
+                        let args_types = args
+                            .iter()
+                            .map(|expr| expr.type_(&self.symtable).unwrap())
+                            .collect::<Vec<Type>>();
 
-        if token == Token::LParen {
-            if let Expr::Ident(ident) = left {
-                if let Some(Symbol::Function(function)) = self.symtable.find(&ident) {
-                    let function_name = function.name.to_owned();
-                    let function_params = function.parameters.to_owned();
-                    let args = self.expr_list()?;
-                    let args_types = args
-                        .iter()
-                        .map(|expr| expr.type_(&self.symtable).unwrap())
-                        .collect::<Vec<Type>>();
+                        if function_params != args_types {
+                            return Err(ParserError::FunctionArguments(
+                                function_name,
+                                function_params,
+                                args_types,
+                            ));
+                        }
 
-                    if function_params != args_types {
-                        return Err(ParserError::FunctionArguments(
-                            function_name,
-                            function_params,
-                            args_types,
-                        ));
+                        Ok(Expr::FunctionCall(ExprFunctionCall::new(ident, args)))
+                    } else {
+                        return Err(ParserError::UndeclaredFunction(ident));
                     }
-
-                    Ok(Expr::FunctionCall(ExprFunctionCall::new(ident, args)))
-                } else {
-                    return Err(ParserError::UndeclaredFunction(ident));
                 }
-            } else {
-                todo!("Don't know what error to return yet");
-            }
-        } else {
-            let left = Box::new(left);
-            let right = Box::new(self.expr(Precedence::from(&token))?);
-            let op = BinOp::try_from(&token).map_err(|e| ParserError::Operator(e))?;
+                _ => todo!("Don't know what error to return yet"),
+            },
+            token => {
+                let left = Box::new(left);
+                let right = Box::new(self.expr(Precedence::from(&token))?);
+                let op = BinOp::try_from(&token).map_err(|e| ParserError::Operator(e))?;
 
-            Ok(Expr::Binary(ExprBinary::new(op, left, right)))
+                Ok(Expr::Binary(ExprBinary::new(op, left, right)))
+            }
         }
     }
 
     fn unary_expr(&mut self) -> Result<Expr, ParserError> {
-        let op_token = self.cur_token.clone();
-        self.next_token()?;
-
-        let op = UnOp::try_from(&op_token).map_err(|e| ParserError::Operator(e))?;
+        let op = UnOp::try_from(&self.next_token()?).map_err(|e| ParserError::Operator(e))?;
         let mut expr = self.expr(Precedence::Prefix)?;
 
         if let UnOp::Negative = op {
@@ -535,14 +521,12 @@ impl Parser {
 
         while !self.cur_token_is(&Token::RParen) {
             exprs.push(self.expr(Precedence::default())?);
-            self.next_token()?;
-
             if !self.cur_token_is(&Token::RParen) {
                 self.expect(&Token::Comma)?;
             }
         }
 
-        //self.expect_peek(&Token::RParen)?;
+        self.expect(&Token::RParen)?;
 
         Ok(exprs)
     }
@@ -550,7 +534,7 @@ impl Parser {
     fn grouped_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect(&Token::LParen)?;
 
-        match &self.cur_token {
+        let expr = match &self.cur_token {
             Token::U8 | Token::I8 | Token::U16 | Token::I16 | Token::Bool | Token::Void => {
                 let type_ = self.parse_type()?;
                 self.expect(&Token::RParen)?;
@@ -564,7 +548,11 @@ impl Parser {
 
                 expr
             }
-        }
+        };
+
+        self.expect(&Token::RParen)?;
+
+        expr
     }
 }
 

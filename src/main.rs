@@ -39,7 +39,7 @@ fn main() {
     dbg!(&symtable);
 
     CodeGen::<Amd64>::new(symtable)
-        .compile(stmts, "./nasm/main.nasm")
+        .compile(stmts, "./asm/main.s")
         .unwrap_or_else(|e| giveup(Box::new(e)));
 }
 
