@@ -30,15 +30,15 @@ fn main() {
         .to_string(),
     );
 
-    let (stmts, symtable) = Parser::new(lexer)
+    let (stmts, scope) = Parser::new(lexer)
         .unwrap_or_else(|e| giveup(Box::new(e)))
         .into_parts()
         .unwrap_or_else(|e| giveup(Box::new(e)));
 
     dbg!(&stmts);
-    dbg!(&symtable);
+    dbg!(&scope);
 
-    CodeGen::<Amd64>::new(symtable)
+    CodeGen::<Amd64>::new(scope)
         .compile(stmts, "./asm/main.s")
         .unwrap_or_else(|e| giveup(Box::new(e)));
 }

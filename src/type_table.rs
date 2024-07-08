@@ -1,17 +1,17 @@
 use std::collections::HashMap;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Type {
     Struct(TypeStruct),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TypeStruct {
     pub name: String,
     pub fields: HashMap<String, crate::type_::Type>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TypeTable(Vec<Type>);
 
 impl TypeTable {

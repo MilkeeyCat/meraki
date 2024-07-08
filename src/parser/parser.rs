@@ -10,11 +10,10 @@ use crate::{
     parser::ExprFunctionCall,
     scope::Scope,
     symbol_table::{
-        Symbol, SymbolFunction, SymbolGlobal, SymbolLocal, SymbolParam, SymbolTable,
-        SymbolTableError,
+        Symbol, SymbolFunction, SymbolGlobal, SymbolLocal, SymbolParam, SymbolTableError,
     },
     type_::{Type, TypeError},
-    type_table::{self, TypeStruct, TypeTable},
+    type_table::{self, TypeStruct},
 };
 use std::collections::HashMap;
 
@@ -89,8 +88,6 @@ impl From<LexerError> for ParserError {
 
 pub struct Parser {
     lexer: Lexer,
-    symtable: SymbolTable,
-    type_table: TypeTable,
     cur_token: Token,
     peek_token: Token,
     scope: Scope,
@@ -101,10 +98,8 @@ impl Parser {
         Ok(Self {
             cur_token: lexer.next_token()?,
             peek_token: lexer.next_token()?,
-            symtable: SymbolTable::new(),
-            type_table: TypeTable::new(),
             lexer,
-            scope: Scope::default(),
+            scope: Scope::new(),
         })
     }
 
@@ -150,8 +145,8 @@ impl Parser {
         }
     }
 
-    pub fn into_parts(mut self) -> Result<(Vec<Stmt>, SymbolTable), ParserError> {
-        Ok((self.parse()?, self.symtable))
+    pub fn into_parts(mut self) -> Result<(Vec<Stmt>, Scope), ParserError> {
+        Ok((self.parse()?, self.scope))
     }
 
     pub fn parse(&mut self) -> Result<Vec<Stmt>, ParserError> {
@@ -217,10 +212,11 @@ impl Parser {
 
         let fields = self.params(Token::Semicolon, Token::RBrace)?;
 
-        self.type_table
+        self.scope
+            .type_table_mut()
             .define(crate::type_table::Type::Struct(TypeStruct { name, fields }));
 
-        dbg!(&self.type_table);
+        dbg!(self.scope.type_table());
 
         Ok(())
     }
@@ -239,7 +235,7 @@ impl Parser {
             Token::Return => self.parse_return(),
             _ => {
                 let expr = self.expr(Precedence::default())?;
-                expr.type_(&self.symtable)?;
+                expr.type_(&self.scope)?;
                 let expr = Stmt::Expr(expr);
 
                 self.expect(&Token::Semicolon)?;
@@ -270,27 +266,27 @@ impl Parser {
         let type_;
         if !self.cur_token_is(&Token::Semicolon) {
             expr = Some(self.expr(Precedence::default())?);
-            type_ = expr.as_ref().unwrap().type_(&self.symtable)?;
+            type_ = expr.as_ref().unwrap().type_(&self.scope)?;
         } else {
             type_ = Type::Void;
         }
 
         self.expect(&Token::Semicolon)?;
 
-        match &self.scope {
-            Scope::Local(name, return_type) => {
-                return_type.to_owned().assign(type_).map_err(|e| match e {
-                    TypeError::Assignment(left, right) => TypeError::Return(left, right),
-                    e => e,
-                })?;
+        if self.scope.local() {
+            let (name, return_type) = self.scope.context().unwrap();
+            return_type.to_owned().assign(type_).map_err(|e| match e {
+                TypeError::Assignment(left, right) => TypeError::Return(left, right),
+                e => e,
+            })?;
 
-                Ok(Stmt::Return(StmtReturn {
-                    expr,
-                    //TODO: it's not a good idea
-                    label: name.to_owned() + "_ret",
-                }))
-            }
-            _ => todo!("Don't know what error to return yet"),
+            Ok(Stmt::Return(StmtReturn {
+                expr,
+                //TODO: it's not a good idea
+                label: name.to_owned() + "_ret",
+            }))
+        } else {
+            todo!("Don't know what error to return yet");
         }
     }
 
@@ -306,20 +302,21 @@ impl Parser {
             }
         };
 
-        match self.scope {
-            Scope::Local(_, _) => {
-                self.symtable.push(Symbol::Local(SymbolLocal {
+        if self.scope.local() {
+            self.scope
+                .symbol_table_mut()
+                .push(Symbol::Local(SymbolLocal {
                     name: name.clone(),
                     type_: type_.clone(),
                     offset: 0,
                 }))?;
-            }
-            Scope::Global => {
-                self.symtable.push(Symbol::Global(SymbolGlobal {
+        } else {
+            self.scope
+                .symbol_table_mut()
+                .push(Symbol::Global(SymbolGlobal {
                     name: name.clone(),
                     type_: type_.clone(),
                 }))?;
-            }
         }
 
         self.expect(&Token::Semicolon)?;
@@ -335,32 +332,34 @@ impl Parser {
             }
         };
         self.expect(&Token::LParen)?;
-        self.symtable.enter(Box::new(SymbolTable::new()));
+        self.scope.enter_new((name.clone(), type_.clone()));
 
         let params = self.params(Token::Comma, Token::RParen)?;
-        self.scope = Scope::Local(name.clone(), type_.clone());
         for (i, (name, type_)) in params.iter().enumerate() {
-            self.symtable.push(Symbol::Param(SymbolParam {
-                name: name.to_owned(),
-                n: i,
-                type_: type_.to_owned(),
-            }))?;
+            self.scope
+                .symbol_table_mut()
+                .push(Symbol::Param(SymbolParam {
+                    name: name.to_owned(),
+                    n: i,
+                    type_: type_.to_owned(),
+                }))?;
         }
         let body = self.function_body()?;
-        self.scope = Scope::Global;
-        let symtable = self.symtable.inner();
-        self.symtable.push(Symbol::Function(SymbolFunction {
-            name: name.clone(),
-            return_type: type_.clone(),
-            parameters: params.clone().into_values().collect(),
-        }))?;
+        let scope_impl = self.scope.leave();
+        self.scope
+            .symbol_table_mut()
+            .push(Symbol::Function(SymbolFunction {
+                name: name.clone(),
+                return_type: type_.clone(),
+                parameters: params.clone().into_values().collect(),
+            }))?;
 
         Ok(Stmt::Function(StmtFunction {
             return_type: type_,
             name,
             params,
             body,
-            symtable,
+            scope: Box::new(scope_impl),
         }))
     }
 
@@ -422,7 +421,12 @@ impl Parser {
         while !self.cur_token_is(&Token::RBrace) {
             match self.next_token()? {
                 Token::Ident(field) => {
-                    if !match self.type_table.find(&name).expect("Type doesn't exist") {
+                    if !match self
+                        .scope
+                        .type_table()
+                        .find(&name)
+                        .expect("Type doesn't exist")
+                    {
                         type_table::Type::Struct(type_struct) => {
                             type_struct.fields.contains_key(&field)
                         }
@@ -466,13 +470,13 @@ impl Parser {
         match self.next_token()? {
             Token::LParen => match left {
                 Expr::Ident(ident) => {
-                    if let Some(Symbol::Function(function)) = self.symtable.find(&ident) {
+                    if let Some(Symbol::Function(function)) = self.scope.find_symbol(&ident) {
                         let function_name = function.name.to_owned();
                         let function_params = function.parameters.to_owned();
                         let args = self.expr_list()?;
                         let args_types = args
                             .iter()
-                            .map(|expr| expr.type_(&self.symtable).unwrap())
+                            .map(|expr| expr.type_(&self.scope).unwrap())
                             .collect::<Vec<Type>>();
 
                         if function_params != args_types {

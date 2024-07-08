@@ -62,55 +62,26 @@ impl std::fmt::Display for SymbolTableError {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct SymbolTable {
-    symbols: Vec<Symbol>,
-    inner: Option<Box<SymbolTable>>,
-}
+pub struct SymbolTable(Vec<Symbol>);
 
 impl SymbolTable {
     pub fn new() -> Self {
-        Self {
-            symbols: Vec::with_capacity(MAX_SYMBOLS),
-            inner: None,
-        }
-    }
-
-    fn symtable(&self) -> &Self {
-        if self.inner.is_none() {
-            return self;
-        } else {
-            self.inner.as_ref().unwrap().symtable()
-        }
-    }
-
-    fn symtable_mut(&mut self) -> &mut Self {
-        if self.inner.is_none() {
-            return self;
-        } else {
-            self.inner.as_mut().unwrap().symtable_mut()
-        }
+        Self(Vec::with_capacity(MAX_SYMBOLS))
     }
 
     pub fn find(&self, name: &str) -> Option<&Symbol> {
-        self.inner
-            .as_deref()
-            .and_then(|inner| inner.find(name))
-            .or_else(|| self.symbols.iter().find(|symbol| symbol.name() == name))
+        self.0.iter().find(|symbol| symbol.name() == name)
     }
 
     pub fn find_mut(&mut self, name: &str) -> Option<&mut Symbol> {
-        self.inner
-            .as_deref_mut()
-            .and_then(|inner| inner.find_mut(name))
-            .or_else(|| self.symbols.iter_mut().find(|symbol| symbol.name() == name))
+        self.0.iter_mut().find(|symbol| symbol.name() == name)
     }
 
     pub fn push(&mut self, symbol: Symbol) -> Result<(), SymbolTableError> {
-        assert!(self.symtable().symbols.len() < MAX_SYMBOLS);
+        assert!(self.0.len() < MAX_SYMBOLS);
 
         if self
-            .symtable()
-            .symbols
+            .0
             .iter()
             .map(|symbol| symbol.name())
             .collect::<Vec<&str>>()
@@ -118,94 +89,9 @@ impl SymbolTable {
         {
             Err(SymbolTableError::Redeclaration(symbol.name().to_owned()))
         } else {
-            self.symtable_mut().symbols.push(symbol);
+            self.0.push(symbol);
 
             Ok(())
         }
-    }
-
-    pub fn enter(&mut self, symtable: Box<SymbolTable>) {
-        match self.inner.as_mut() {
-            None => {
-                self.inner = Some(symtable);
-            }
-            Some(inner) => {
-                inner.enter(symtable);
-            }
-        }
-    }
-
-    pub fn leave(&mut self) {
-        if self.inner.as_ref().is_some_and(|sb| sb.inner.is_none()) {
-            self.inner = None;
-        } else {
-            self.inner.as_mut().unwrap().leave();
-        }
-    }
-
-    pub fn inner(&mut self) -> Self {
-        *std::mem::take(&mut self.inner).unwrap()
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::{Symbol, SymbolGlobal, SymbolTable, SymbolTableError};
-    use crate::{symbol_table::SymbolLocal, type_::Type};
-
-    #[test]
-    fn scopes() -> Result<(), SymbolTableError> {
-        let mut symtable = SymbolTable::new();
-        let symbol = Symbol::Global(SymbolGlobal {
-            name: "foo".to_owned(),
-            type_: Type::U8,
-        });
-
-        symtable.push(symbol.clone())?;
-
-        let symbol2 = Symbol::Global(SymbolGlobal {
-            name: "foo".to_owned(),
-            type_: Type::U8,
-        });
-
-        assert_eq!(
-            symtable.push(symbol2),
-            Err(SymbolTableError::Redeclaration("foo".to_owned()))
-        );
-
-        symtable.enter(Box::new(SymbolTable::new()));
-
-        assert_eq!(
-            symtable.find("foo"),
-            Some(&Symbol::Global(SymbolGlobal {
-                name: "foo".to_owned(),
-                type_: Type::U8,
-            }))
-        );
-
-        let symbol3 = Symbol::Local(SymbolLocal {
-            name: "foo".to_owned(),
-            type_: Type::U16,
-            offset: 0,
-        });
-
-        symtable.push(symbol3.clone())?;
-
-        assert_eq!(symtable.find("foo"), Some(&symbol3));
-
-        symtable.push(Symbol::Local(SymbolLocal {
-            name: "bar".to_owned(),
-            type_: Type::I16,
-            offset: 0,
-        }))?;
-
-        assert!(symtable.find("bar").is_some());
-
-        symtable.leave();
-
-        assert_eq!(symtable.find("bar"), None);
-        assert_eq!(symtable.find("foo"), Some(&symbol));
-
-        Ok(())
     }
 }

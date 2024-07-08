@@ -1,13 +1,14 @@
 use super::{int_repr::UIntLitRepr, IntLitRepr};
 use crate::{
     parser::op::{BinOp, UnOp},
-    symbol_table::{Symbol, SymbolTable},
+    scope::Scope,
+    symbol_table::Symbol,
     type_::{Type, TypeError},
 };
 use std::collections::HashMap;
 
 pub trait Expression {
-    fn type_(&self, symtable: &SymbolTable) -> Result<Type, TypeError>;
+    fn type_(&self, scope: &Scope) -> Result<Type, TypeError>;
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -22,13 +23,13 @@ pub enum Expr {
 }
 
 impl Expression for Expr {
-    fn type_(&self, symtable: &SymbolTable) -> Result<Type, TypeError> {
+    fn type_(&self, symtable: &Scope) -> Result<Type, TypeError> {
         match self {
             Self::Binary(expr) => expr.type_(symtable),
             Self::Unary(expr) => expr.type_(symtable),
             Self::Lit(literal) => literal.type_(symtable),
             Self::Ident(ident) => match symtable
-                .find(ident)
+                .find_symbol(ident)
                 .ok_or(TypeError::IdentNotFound(ident.to_owned()))?
             {
                 Symbol::Global(global_var) => Ok(global_var.type_.clone()),
@@ -39,7 +40,7 @@ impl Expression for Expr {
             Self::Cast(cast) => cast.type_(symtable),
             Self::Struct(expr_struct) => expr_struct.type_(symtable),
             Self::FunctionCall(function_call) => {
-                match symtable.find(&function_call.name).unwrap() {
+                match symtable.find_symbol(&function_call.name).unwrap() {
                     Symbol::Function(function) => Ok(function.return_type.to_owned()),
                     _ => unreachable!(),
                 }
@@ -62,7 +63,7 @@ impl ExprBinary {
 }
 
 impl Expression for ExprBinary {
-    fn type_(&self, symtable: &SymbolTable) -> Result<Type, TypeError> {
+    fn type_(&self, symtable: &Scope) -> Result<Type, TypeError> {
         match &self.op {
             BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div => {
                 let left_type = self.left.as_ref().type_(symtable)?;
@@ -92,7 +93,7 @@ pub enum ExprLit {
 }
 
 impl Expression for ExprLit {
-    fn type_(&self, _: &SymbolTable) -> Result<Type, TypeError> {
+    fn type_(&self, _: &Scope) -> Result<Type, TypeError> {
         match self {
             ExprLit::Int(int) => Ok(int.type_()),
             ExprLit::UInt(uint) => Ok(uint.type_()),
@@ -126,7 +127,7 @@ impl ExprStruct {
 }
 
 impl Expression for ExprStruct {
-    fn type_(&self, _: &SymbolTable) -> Result<Type, TypeError> {
+    fn type_(&self, _: &Scope) -> Result<Type, TypeError> {
         Ok(Type::Struct(self.name.clone()))
     }
 }
@@ -144,7 +145,7 @@ impl ExprUnary {
 }
 
 impl Expression for ExprUnary {
-    fn type_(&self, symtable: &SymbolTable) -> Result<Type, TypeError> {
+    fn type_(&self, symtable: &Scope) -> Result<Type, TypeError> {
         match &self.op {
             UnOp::Negative => {
                 let mut expr_type = self.expr.type_(symtable)?;
@@ -170,7 +171,7 @@ impl ExprCast {
 }
 
 impl Expression for ExprCast {
-    fn type_(&self, symbtable: &SymbolTable) -> Result<Type, TypeError> {
+    fn type_(&self, symbtable: &Scope) -> Result<Type, TypeError> {
         let expr_type = self.expr.type_(symbtable)?;
 
         expr_type.cast(self.type_.clone())

@@ -6,7 +6,7 @@ use crate::{
     },
     register_allocator::{AllocatorError, Register},
     scope::Scope,
-    symbol_table::{Symbol, SymbolTable},
+    symbol_table::Symbol,
     type_::TypeError,
 };
 use std::fs::File;
@@ -52,35 +52,30 @@ impl From<OpParseError> for CodeGenError {
 }
 
 pub struct CodeGen<Arch: Architecture> {
-    symtable: SymbolTable,
     arch: Arch,
     scope: Scope,
 }
 
 impl<Arch: Architecture> CodeGen<Arch> {
-    pub fn new(symtable: SymbolTable) -> Self {
+    pub fn new(scope: Scope) -> Self {
         let arch = Arch::new();
 
-        Self {
-            symtable,
-            arch,
-            scope: Scope::default(),
-        }
+        Self { arch, scope }
     }
 
     fn declare(&mut self, variable: StmtVarDecl) {
-        if let Scope::Global = self.scope {
+        if !self.scope.local() {
             self.arch.declare(variable)
         }
     }
 
     fn function(&mut self, mut func: StmtFunction) {
-        self.symtable.enter(Box::new(func.symtable));
+        self.scope.enter(*func.scope);
         let mut offset: usize = 0;
 
         for stmt in &mut func.body {
             if let Stmt::VarDecl(var_decl) = stmt {
-                if let Symbol::Local(local) = self.symtable.find_mut(&var_decl.name).unwrap() {
+                if let Symbol::Local(local) = self.scope.find_symbol_mut(&var_decl.name).unwrap() {
                     local.offset = offset;
                     offset += local.type_.size::<Arch>();
                 }
@@ -88,21 +83,19 @@ impl<Arch: Architecture> CodeGen<Arch> {
         }
 
         self.arch.fn_preamble(&func.name, offset);
-        self.scope = Scope::Local(func.name.clone(), func.return_type);
 
         for stmt in func.body {
             self.stmt(stmt).unwrap();
         }
 
-        self.scope = Scope::Global;
         self.arch.fn_postamble(&func.name, offset);
-        self.symtable.leave();
+        self.scope.leave();
     }
 
     fn ret(&mut self, ret: StmtReturn) -> Result<(), CodeGenError> {
         let label = &ret.label;
         if let Some(expr) = ret.expr {
-            let type_ = expr.type_(&self.symtable)?;
+            let type_ = expr.type_(&self.scope)?;
             let r = self.expr(expr)?;
 
             self.arch.ret(&r, type_);
@@ -123,11 +116,11 @@ impl<Arch: Architecture> CodeGen<Arch> {
             Expr::Lit(lit) => Ok(self.arch.load(LoadItem::Lit(lit.clone()))?),
             Expr::Unary(unary_expr) => self.unary_expr(unary_expr),
             Expr::Ident(ident) => Ok(self.arch.load(LoadItem::Symbol(
-                self.symtable.find(&ident).unwrap().to_owned(),
+                self.scope.find_symbol(&ident).unwrap().to_owned(),
             ))?),
             Expr::Cast(cast_expr) => {
                 //TODO: move this elsewhere
-                let type_size = cast_expr.type_(&self.symtable)?.size::<Arch>();
+                let type_size = cast_expr.type_(&self.scope)?.size::<Arch>();
                 let expr = match *cast_expr.expr {
                     Expr::Lit(ExprLit::Int(mut int)) => {
                         int.zero_except_n_bytes(type_size);
@@ -157,16 +150,16 @@ impl<Arch: Architecture> CodeGen<Arch> {
                 if let Expr::Ident(name) = left {
                     let right = self.expr(*expr.right)?;
 
-                    if let Scope::Global = self.scope {
+                    if !self.scope.local() {
                         self.arch
-                            .save(SaveItem::Global(name), &right, left.type_(&self.symtable)?);
+                            .save(SaveItem::Global(name), &right, left.type_(&self.scope)?);
                     } else {
-                        let symbol = self.symtable.find(name).unwrap();
+                        let symbol = self.scope.find_symbol(name).unwrap();
                         if let Symbol::Local(symbol) = symbol {
                             self.arch.save(
                                 SaveItem::Local(symbol.offset),
                                 &right,
-                                left.type_(&self.symtable)?,
+                                left.type_(&self.scope)?,
                             );
                         } else {
                             panic!("FUCK");

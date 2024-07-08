@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use super::Expr;
-use crate::{symbol_table::SymbolTable, type_::Type};
+use crate::{scope::ScopeImpl, type_::Type};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
@@ -36,5 +36,5 @@ pub struct StmtFunction {
     pub name: String,
     pub params: HashMap<String, Type>,
     pub body: Vec<Stmt>,
-    pub symtable: SymbolTable,
+    pub scope: Box<ScopeImpl>,
 }
