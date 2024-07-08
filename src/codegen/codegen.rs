@@ -101,13 +101,9 @@ impl<Arch: Architecture> CodeGen<Arch> {
             self.arch.ret(&r, type_);
         }
 
-        self.jmp(label);
+        self.arch.jmp(label);
 
         Ok(())
-    }
-
-    fn jmp(&mut self, label: &str) {
-        self.arch.jmp(label);
     }
 
     fn expr(&mut self, expr: Expr) -> Result<Register, CodeGenError> {
