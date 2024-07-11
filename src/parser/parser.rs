@@ -171,7 +171,7 @@ impl Parser {
     fn parse_symbol(&mut self, type_: Type) -> Result<Option<Stmt>, ParserError> {
         match self.peek_token {
             Token::Semicolon => Ok(Some(self.var_decl(type_)?)),
-            _ => self.function(type_),
+            _ => self.function(type_, true),
         }
     }
 
@@ -247,7 +247,7 @@ impl Parser {
                     if self.peek_token_is(&Token::Semicolon) {
                         stmts.push(self.var_decl(type_)?);
                     } else {
-                        self.function(type_)?;
+                        self.function(type_, false)?;
                     }
                 }
                 Token::Return => stmts.push(self.parse_return()?),
@@ -343,7 +343,11 @@ impl Parser {
         Ok(Stmt::VarDecl(StmtVarDecl::new(type_, name, None)))
     }
 
-    fn function(&mut self, type_: Type) -> Result<Option<Stmt>, ParserError> {
+    fn function(
+        &mut self,
+        type_: Type,
+        func_definition: bool,
+    ) -> Result<Option<Stmt>, ParserError> {
         let name = match self.next_token()? {
             Token::Ident(ident) => ident,
             _ => {
@@ -363,7 +367,13 @@ impl Parser {
                     type_: type_.to_owned(),
                 }))?;
         }
-        let body = self.compound_statement()?;
+        let mut has_body = false;
+        let body = if self.cur_token_is(&Token::LBrace) {
+            has_body = true;
+            self.compound_statement()?
+        } else {
+            vec![]
+        };
         let scope_impl = self.scope.leave();
         self.scope
             .symbol_table_mut()
@@ -373,13 +383,22 @@ impl Parser {
                 parameters: params.clone().into_values().collect(),
             }))?;
 
-        Ok(Some(Stmt::Function(StmtFunction {
-            return_type: type_,
-            name,
-            params,
-            body,
-            scope: Box::new(scope_impl),
-        })))
+        if has_body & !func_definition {
+            panic!("Function definition is not supported here");
+        }
+
+        if !has_body {
+            self.expect(&Token::Semicolon)?;
+            Ok(None)
+        } else {
+            Ok(Some(Stmt::Function(StmtFunction {
+                return_type: type_,
+                name,
+                params,
+                body,
+                scope: Box::new(scope_impl),
+            })))
+        }
     }
 
     fn params(&mut self, delim: Token, end: Token) -> Result<HashMap<String, Type>, ParserError> {
