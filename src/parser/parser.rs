@@ -596,7 +596,11 @@ mod test {
     fn parse_arithmetic_expression() -> Result<(), IntLitReprError> {
         let tests = [
             (
-                "1 * 2 + 3 / (4 + (u8)1);",
+                "
+                {
+                    1 * 2 + 3 / (4 + (u8)1);
+                }
+                ",
                 vec![Stmt::Expr(Expr::Binary(ExprBinary::new(
                     BinOp::Add,
                     Box::new(Expr::Binary(ExprBinary::new(
@@ -620,8 +624,10 @@ mod test {
             ),
             (
                 "
-                u8 foo;
-                foo = (u8)-1 + 5;
+                {
+                    u8 foo;
+                    foo = (u8)-1 + 5;
+                }
                 ",
                 vec![
                     Stmt::VarDecl(StmtVarDecl::new(Type::U8, "foo".to_owned(), None)),
@@ -644,9 +650,11 @@ mod test {
             ),
             (
                 "
-                u8 foo;
-                i8 bar;
-                bar = (i8)foo + 5 / 10;
+                {
+                    u8 foo;
+                    i8 bar;
+                    bar = (i8)foo + 5 / 10;
+                }
                 ",
                 vec![
                     Stmt::VarDecl(StmtVarDecl::new(Type::U8, "foo".to_owned(), None)),
@@ -671,7 +679,9 @@ mod test {
             ),
             (
                 "
-                (i8)1 + 2 / 3;
+                {
+                    (i8)1 + 2 / 3;
+                }
                 ",
                 vec![Stmt::Expr(Expr::Binary(ExprBinary::new(
                     BinOp::Add,
@@ -690,7 +700,7 @@ mod test {
 
         for (input, expected) in tests {
             let mut parser = Parser::new(Lexer::new(input.to_string())).unwrap();
-            assert_eq!(parser.parse().unwrap(), expected);
+            assert_eq!(parser.compound_statement().unwrap(), expected);
         }
 
         Ok(())
