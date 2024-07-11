@@ -155,11 +155,24 @@ impl Parser {
         while !&self.cur_token_is(&Token::Eof) {
             match self.cur_token {
                 Token::Struct => self.parse_struct()?,
-                _ => stmts.push(self.stmt()?),
+                _ => {
+                    let type_ = self.parse_type()?;
+
+                    if let Some(stmt) = self.parse_symbol(type_)? {
+                        stmts.push(stmt);
+                    }
+                }
             }
         }
 
         Ok(stmts)
+    }
+
+    fn parse_symbol(&mut self, type_: Type) -> Result<Option<Stmt>, ParserError> {
+        match self.peek_token {
+            Token::Semicolon => Ok(Some(self.var_decl(type_)?)),
+            _ => self.function(type_),
+        }
     }
 
     fn expr(&mut self, precedence: Precedence) -> Result<Expr, ParserError> {
@@ -221,28 +234,38 @@ impl Parser {
         Ok(())
     }
 
-    fn stmt(&mut self) -> Result<Stmt, ParserError> {
-        match &self.cur_token {
-            Token::U8 | Token::U16 | Token::I8 | Token::I16 | Token::Bool | Token::Void => {
-                let type_ = self.parse_type()?;
+    fn compound_statement(&mut self) -> Result<Vec<Stmt>, ParserError> {
+        let mut stmts = Vec::new();
 
-                if self.peek_token_is(&Token::Semicolon) {
-                    self.var_decl(type_)
-                } else {
-                    self.function(type_)
+        self.expect(&Token::LBrace)?;
+
+        while !self.cur_token_is(&Token::RBrace) {
+            match &self.cur_token {
+                Token::U8 | Token::U16 | Token::I8 | Token::I16 | Token::Bool | Token::Void => {
+                    let type_ = self.parse_type()?;
+
+                    if self.peek_token_is(&Token::Semicolon) {
+                        stmts.push(self.var_decl(type_)?);
+                    } else {
+                        self.function(type_)?;
+                    }
+                }
+                Token::Return => stmts.push(self.parse_return()?),
+                _ => {
+                    let expr = self.expr(Precedence::default())?;
+                    expr.type_(&self.scope)?;
+                    let expr = Stmt::Expr(expr);
+
+                    self.expect(&Token::Semicolon)?;
+
+                    stmts.push(expr);
                 }
             }
-            Token::Return => self.parse_return(),
-            _ => {
-                let expr = self.expr(Precedence::default())?;
-                expr.type_(&self.scope)?;
-                let expr = Stmt::Expr(expr);
-
-                self.expect(&Token::Semicolon)?;
-
-                Ok(expr)
-            }
         }
+
+        self.expect(&Token::RBrace)?;
+
+        Ok(stmts)
     }
 
     fn parse_type(&mut self) -> Result<Type, ParserError> {
@@ -273,21 +296,17 @@ impl Parser {
 
         self.expect(&Token::Semicolon)?;
 
-        if self.scope.local() {
-            let (name, return_type) = self.scope.context().unwrap();
-            return_type.to_owned().assign(type_).map_err(|e| match e {
-                TypeError::Assignment(left, right) => TypeError::Return(left, right),
-                e => e,
-            })?;
+        let (name, return_type) = self.scope.context().unwrap();
+        return_type.to_owned().assign(type_).map_err(|e| match e {
+            TypeError::Assignment(left, right) => TypeError::Return(left, right),
+            e => e,
+        })?;
 
-            Ok(Stmt::Return(StmtReturn {
-                expr,
-                //TODO: it's not a good idea
-                label: name.to_owned() + "_ret",
-            }))
-        } else {
-            todo!("Don't know what error to return yet");
-        }
+        Ok(Stmt::Return(StmtReturn {
+            expr,
+            //TODO: it's not a good idea
+            label: name.to_owned() + "_ret",
+        }))
     }
 
     fn var_decl(&mut self, type_: Type) -> Result<Stmt, ParserError> {
@@ -324,7 +343,7 @@ impl Parser {
         Ok(Stmt::VarDecl(StmtVarDecl::new(type_, name, None)))
     }
 
-    fn function(&mut self, type_: Type) -> Result<Stmt, ParserError> {
+    fn function(&mut self, type_: Type) -> Result<Option<Stmt>, ParserError> {
         let name = match self.next_token()? {
             Token::Ident(ident) => ident,
             _ => {
@@ -344,7 +363,7 @@ impl Parser {
                     type_: type_.to_owned(),
                 }))?;
         }
-        let body = self.function_body()?;
+        let body = self.compound_statement()?;
         let scope_impl = self.scope.leave();
         self.scope
             .symbol_table_mut()
@@ -354,13 +373,13 @@ impl Parser {
                 parameters: params.clone().into_values().collect(),
             }))?;
 
-        Ok(Stmt::Function(StmtFunction {
+        Ok(Some(Stmt::Function(StmtFunction {
             return_type: type_,
             name,
             params,
             body,
             scope: Box::new(scope_impl),
-        }))
+        })))
     }
 
     fn params(&mut self, delim: Token, end: Token) -> Result<HashMap<String, Type>, ParserError> {
@@ -386,20 +405,6 @@ impl Parser {
         self.expect(&end)?;
 
         Ok(params)
-    }
-
-    fn function_body(&mut self) -> Result<Vec<Stmt>, ParserError> {
-        let mut stmts = Vec::new();
-
-        self.expect(&Token::LBrace)?;
-
-        while !self.cur_token_is(&Token::RBrace) {
-            stmts.push(self.stmt()?);
-        }
-
-        self.expect(&Token::RBrace)?;
-
-        Ok(stmts)
     }
 
     fn ident(&mut self) -> Result<Expr, ParserError> {
