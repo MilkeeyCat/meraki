@@ -98,18 +98,13 @@ impl Architecture for Amd64 {
             LoadItem::Symbol(symbol) => match symbol {
                 Symbol::Global(global) => {
                     let r = self.registers.alloc()?;
-                    let ins = if global.type_.signed() {
-                        "movsx"
-                    } else {
-                        "movzx"
-                    };
 
                     (
                         formatdoc!(
                             "
                         \t{} {}, {} ptr [{}]
                         ",
-                            ins,
+                            Self::movx(global.type_.signed()),
                             r.qword(),
                             Self::size_name(Type::size::<Self>(&global.type_)),
                             global.name,
@@ -119,18 +114,13 @@ impl Architecture for Amd64 {
                 }
                 Symbol::Local(local) => {
                     let r = self.registers.alloc()?;
-                    let ins = if local.type_.signed() {
-                        "movsx"
-                    } else {
-                        "movzx"
-                    };
 
                     (
                         formatdoc!(
                             "
                         \t{} {}, {} ptr [rbp - {}]
                         ",
-                            ins,
+                            Self::movx(local.type_.signed()),
                             r.qword(),
                             Self::size_name(Type::size::<Self>(&local.type_)),
                             local.offset,
@@ -314,13 +304,11 @@ impl Architecture for Amd64 {
     }
 
     fn ret(&mut self, r: &Register, type_: Type) {
-        let ins = if type_.signed() { "movsx" } else { "movzx" };
-
         self.buf.push_str(&formatdoc!(
             "
             \t{} rax, {}
             ",
-            ins,
+            Self::movx(type_.signed()),
             r.from_size(Type::size::<Self>(&type_)),
         ));
     }
@@ -386,6 +374,14 @@ impl Amd64 {
             )
         } else {
             todo!();
+        }
+    }
+
+    fn movx(signed: bool) -> &'static str {
+        if signed {
+            "movsx"
+        } else {
+            "movzx"
         }
     }
 }
