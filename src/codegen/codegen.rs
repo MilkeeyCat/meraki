@@ -151,14 +151,24 @@ impl<Arch: Architecture> CodeGen<Arch> {
                             .save(SaveItem::Global(name), &right, left.type_(&self.scope)?);
                     } else {
                         let symbol = self.scope.find_symbol(name).unwrap();
-                        if let Symbol::Local(symbol) = symbol {
-                            self.arch.save(
-                                SaveItem::Local(symbol.offset),
-                                &right,
-                                left.type_(&self.scope)?,
-                            );
-                        } else {
-                            panic!("FUCK");
+
+                        match symbol {
+                            Symbol::Local(symbol) => {
+                                self.arch.save(
+                                    SaveItem::Local(symbol.offset),
+                                    &right,
+                                    left.type_(&self.scope)?,
+                                );
+                            }
+                            Symbol::Global(symbol) => {
+                                self.arch.save(
+                                    SaveItem::Global(&symbol.name),
+                                    &right,
+                                    left.type_(&self.scope)?,
+                                );
+                            }
+                            Symbol::Param(_) => todo!("Can't assign value to param yet"),
+                            Symbol::Function(_) => todo!("Can't assign function to a variable yet"),
                         }
                     }
 
