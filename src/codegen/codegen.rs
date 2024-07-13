@@ -109,7 +109,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
     fn expr(&mut self, expr: Expr) -> Result<Register, CodeGenError> {
         match expr {
             Expr::Binary(bin_expr) => self.bin_expr(bin_expr),
-            Expr::Lit(lit) => Ok(self.arch.load(LoadItem::Lit(lit.clone()))?),
+            Expr::Lit(lit) => Ok(self.arch.load(LoadItem::Lit(lit))?),
             Expr::Unary(unary_expr) => self.unary_expr(unary_expr),
             Expr::Ident(ident) => Ok(self.arch.load(LoadItem::Symbol(
                 self.scope.find_symbol(&ident).unwrap().to_owned(),
@@ -141,9 +141,9 @@ impl<Arch: Architecture> CodeGen<Arch> {
     fn bin_expr(&mut self, expr: ExprBinary) -> Result<Register, CodeGenError> {
         match &expr.op {
             BinOp::Assign => {
-                let left = expr.left.as_ref();
+                let left = *expr.left;
 
-                if let Expr::Ident(name) = left {
+                if let Expr::Ident(name) = &left {
                     let right = self.expr(*expr.right)?;
 
                     if !self.scope.local() {
@@ -174,7 +174,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
 
                     Ok(right)
                 } else {
-                    Err(CodeGenError::Assign(left.to_owned()))
+                    Err(CodeGenError::Assign(left))
                 }
             }
             BinOp::Add => {
