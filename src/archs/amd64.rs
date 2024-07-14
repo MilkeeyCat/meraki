@@ -1,11 +1,9 @@
-use super::{
-    arch::{Architecture, SaveItem},
-    LoadItem,
-};
+use super::arch::{Architecture, MoveDestination, MoveSource};
 use crate::{
-    parser::{CmpOp, ExprLit, StmtVarDecl},
+    parser::{CmpOp, ExprLit, Expression, StmtVarDecl},
     register_allocator::{AllocatorError, Register, RegisterAllocator},
-    symbol_table::{Symbol, SymbolParam},
+    scope::Scope,
+    symbol_table::SymbolParam,
     type_::Type,
 };
 use indoc::formatdoc;
@@ -42,6 +40,14 @@ impl Architecture for Amd64 {
         }
     }
 
+    fn alloc(&mut self) -> Result<Register, AllocatorError> {
+        self.registers.alloc()
+    }
+
+    fn free(&mut self, register: Register) -> Result<(), AllocatorError> {
+        self.registers.free(register)
+    }
+
     fn size_name(size: usize) -> &'static str {
         match size {
             1 => "byte",
@@ -52,93 +58,17 @@ impl Architecture for Amd64 {
         }
     }
 
-    fn load(&mut self, item: LoadItem) -> Result<Register, AllocatorError> {
-        let (ins, r) = match item {
-            LoadItem::Lit(literal) => match literal {
-                ExprLit::Int(integer) => {
-                    let r = self.registers.alloc()?;
-                    (
-                        formatdoc!(
-                            "
-                        \tmov {}, {}
-                        ",
-                            r.qword(),
-                            integer.to_string(),
-                        ),
-                        r,
-                    )
-                }
-                ExprLit::UInt(integer) => {
-                    let r = self.registers.alloc()?;
-                    (
-                        formatdoc!(
-                            "
-                        \tmov {}, {}
-                        ",
-                            r.qword(),
-                            integer.to_string(),
-                        ),
-                        r,
-                    )
-                }
-                ExprLit::Bool(value) => {
-                    let r = self.registers.alloc()?;
-                    (
-                        formatdoc!(
-                            "
-                        \tmov {}, {}
-                        ",
-                            r.qword(),
-                            value as u8
-                        ),
-                        r,
-                    )
-                }
-            },
-            LoadItem::Symbol(symbol) => match symbol {
-                Symbol::Global(global) => {
-                    let r = self.registers.alloc()?;
-
-                    (
-                        formatdoc!(
-                            "
-                        \t{} {}, {} ptr [{}]
-                        ",
-                            Self::movx(global.type_.signed()),
-                            r.qword(),
-                            Self::size_name(Type::size::<Self>(&global.type_)),
-                            global.name,
-                        ),
-                        r,
-                    )
-                }
-                Symbol::Local(local) => {
-                    let r = self.registers.alloc()?;
-
-                    (
-                        formatdoc!(
-                            "
-                        \t{} {}, {} ptr [rbp - {}]
-                        ",
-                            Self::movx(local.type_.signed()),
-                            r.qword(),
-                            Self::size_name(Type::size::<Self>(&local.type_)),
-                            local.offset,
-                        ),
-                        r,
-                    )
-                }
-                Symbol::Param(param) => self.get_param(param),
-                Symbol::Function(_) => todo!(),
-            },
-        };
-        self.buf.push_str(&ins);
-
-        Ok(r)
+    fn mov(&mut self, src: MoveSource, dest: MoveDestination, scope: &Scope) {
+        match src {
+            MoveSource::Global(label, type_) => self.mov_global(dest, label, type_, scope),
+            MoveSource::Local(offset, type_) => self.mov_local(dest, offset, type_, scope),
+            MoveSource::Register(register, type_) => self.mov_register(dest, register, type_),
+            MoveSource::Lit(literal) => self.mov_literal(dest, literal, scope),
+            MoveSource::Void => {}
+        }
     }
 
     fn declare(&mut self, var: StmtVarDecl) {
-        //\t{} resb {}
         self.buf.push_str(&formatdoc!(
             "
             \t.comm {} {}
@@ -146,31 +76,6 @@ impl Architecture for Amd64 {
             var.name,
             var.type_.size::<Self>(),
         ));
-    }
-
-    fn save(&mut self, item: SaveItem, r: &Register, type_: Type) {
-        let ins = match item {
-            SaveItem::Local(local) => {
-                formatdoc!(
-                    "
-                    \tmov [rbp - {}], {}
-                    ",
-                    local,
-                    r.from_size(type_.size::<Self>()),
-                )
-            }
-            SaveItem::Global(global) => {
-                formatdoc!(
-                    "
-                    \tmov [{}], {}
-                    ",
-                    global,
-                    r.from_size(type_.size::<Self>()),
-                )
-            }
-        };
-
-        self.buf.push_str(&ins);
     }
 
     fn negate(&mut self, r: &Register) {
@@ -182,9 +87,7 @@ impl Architecture for Amd64 {
         ));
     }
 
-    fn not(&mut self, r1: Register) -> Result<Register, AllocatorError> {
-        let r2 = self.registers.alloc()?;
-
+    fn not(&mut self, r1: &Register, r2: &Register) {
         self.buf.push_str(&formatdoc!(
             "
             \tcmp {}, 0
@@ -193,12 +96,9 @@ impl Architecture for Amd64 {
             r1.qword(),
             r2.byte(),
         ));
-        self.registers.free(r1)?;
-
-        Ok(r2)
     }
 
-    fn add(&mut self, r1: &Register, r2: Register) -> Result<(), AllocatorError> {
+    fn add(&mut self, r1: &Register, r2: &Register) {
         self.buf.push_str(&formatdoc!(
             "
             \tadd {}, {}
@@ -206,12 +106,9 @@ impl Architecture for Amd64 {
             r1.qword(),
             r2.qword(),
         ));
-        self.registers.free(r2)?;
-
-        Ok(())
     }
 
-    fn sub(&mut self, r1: &Register, r2: Register) -> Result<(), AllocatorError> {
+    fn sub(&mut self, r1: &Register, r2: &Register) {
         self.buf.push_str(&formatdoc!(
             "
             \tsub {}, {}
@@ -219,12 +116,9 @@ impl Architecture for Amd64 {
             r1.qword(),
             r2.qword(),
         ));
-        self.registers.free(r2)?;
-
-        Ok(())
     }
 
-    fn mul(&mut self, r1: &Register, r2: Register) -> Result<(), AllocatorError> {
+    fn mul(&mut self, r1: &Register, r2: &Register) {
         self.buf.push_str(&formatdoc!(
             "
             \timul {}, {}
@@ -232,13 +126,10 @@ impl Architecture for Amd64 {
             r1.qword(),
             r2.qword(),
         ));
-        self.registers.free(r2)?;
-
-        Ok(())
     }
 
     //NOTE: if mafs doesn't works, prolly because of this
-    fn div(&mut self, r1: &Register, r2: Register) -> Result<(), AllocatorError> {
+    fn div(&mut self, r1: &Register, r2: &Register) {
         self.buf.push_str(&formatdoc!(
             "
             \tmov rax, {}
@@ -250,12 +141,9 @@ impl Architecture for Amd64 {
             r2.qword(),
             r1.qword(),
         ));
-        self.registers.free(r2)?;
-
-        Ok(())
     }
 
-    fn cmp(&mut self, r1: &Register, r2: Register, cmp: CmpOp) -> Result<(), AllocatorError> {
+    fn cmp(&mut self, r1: &Register, r2: &Register, cmp: CmpOp) {
         let ins = match cmp {
             CmpOp::LessThan => formatdoc!("setl {}", r1.byte()),
             CmpOp::LessEqual => formatdoc!("setle {}", r1.byte()),
@@ -274,8 +162,6 @@ impl Architecture for Amd64 {
             r2.qword(),
             ins,
         ));
-
-        self.registers.free(r2)
     }
 
     fn fn_preamble(&mut self, name: &str, stackframe: usize) {
@@ -303,7 +189,8 @@ impl Architecture for Amd64 {
         ));
     }
 
-    fn ret(&mut self, r: &Register, type_: Type) {
+    fn ret(&mut self, r: Register, type_: Type) {
+        //NOTE: free the register?
         self.buf.push_str(&formatdoc!(
             "
             \t{} rax, {}
@@ -322,9 +209,7 @@ impl Architecture for Amd64 {
         ));
     }
 
-    fn call_fn(&mut self, name: &str) -> Register {
-        let r = self.registers.alloc().unwrap();
-
+    fn call_fn(&mut self, name: &str, r: &Register) {
         self.buf.push_str(&formatdoc!(
             "
             \tcall {name}
@@ -332,8 +217,6 @@ impl Architecture for Amd64 {
             ",
             r.qword()
         ));
-
-        r
     }
 
     fn move_function_argument(&mut self, r: Register, i: usize) {
@@ -382,6 +265,89 @@ impl Amd64 {
             "movsx"
         } else {
             "movzx"
+        }
+    }
+
+    fn mov_literal(&mut self, dest: MoveDestination, literal: ExprLit, scope: &Scope) {
+        match dest {
+            MoveDestination::Local(offset) => {
+                self.buf.push_str(&formatdoc!(
+                    "
+                    \tmov [rbp - {offset}], {}
+                    ",
+                    literal.to_string(),
+                ));
+            }
+            MoveDestination::Global(label) => {
+                self.buf.push_str(&formatdoc!(
+                    "
+                    \tmov {} ptr [{label}], {}
+                    ",
+                    Self::size_name(literal.type_(scope).unwrap().size::<Self>()),
+                    literal.to_string(),
+                ));
+            }
+            MoveDestination::Register(register) => {
+                self.buf.push_str(&formatdoc!(
+                    "
+                    \tmov {}, {}
+                    ",
+                    register.qword(),
+                    literal.to_string(),
+                ));
+            }
+            MoveDestination::Void => {}
+        }
+    }
+
+    fn mov_local(&mut self, dest: MoveDestination, offset: usize, type_: Type, scope: &Scope) {
+        match dest {
+            MoveDestination::Local(offset) => {
+                // a lil bit of fuckery
+                todo!();
+            }
+            MoveDestination::Global(label) => {
+                // a lil bit of fuckery as well
+                todo!();
+            }
+            MoveDestination::Register(register) => {
+                self.buf.push_str(&formatdoc!(
+                    "
+                    \t{} {}, {} ptr [rbp - {}]
+                    ",
+                    Self::movx(type_.signed()),
+                    register.qword(),
+                    Self::size_name(type_.size::<Self>()),
+                    offset,
+                ));
+            }
+            MoveDestination::Void => {}
+        }
+    }
+
+    fn mov_global(&self, dest: MoveDestination, label: &str, type_: Type, scope: &Scope) {
+        todo!();
+    }
+
+    fn mov_register(&mut self, dest: MoveDestination, register: &Register, type_: Type) {
+        match dest {
+            MoveDestination::Local(offset) => {
+                self.buf.push_str(&formatdoc!(
+                    "
+                    \tmov {} ptr [rbp - {}], {}
+                    ",
+                    Self::size_name(type_.size::<Self>()),
+                    offset,
+                    register.from_size(type_.size::<Self>()),
+                ));
+            }
+            MoveDestination::Global(label) => {
+                todo!();
+            }
+            MoveDestination::Register(register) => {
+                todo!();
+            }
+            MoveDestination::Void => {}
         }
     }
 }

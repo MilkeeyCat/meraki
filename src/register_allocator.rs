@@ -1,4 +1,4 @@
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Register {
     byte: &'static str,
     word: &'static str,

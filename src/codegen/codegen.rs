@@ -1,5 +1,5 @@
 use crate::{
-    archs::{Architecture, LoadItem, SaveItem},
+    archs::{Architecture, MoveDestination, MoveSource},
     parser::{
         BinOp, CmpOp, Expr, ExprBinary, ExprFunctionCall, ExprLit, ExprUnary, Expression,
         OpParseError, Stmt, StmtFunction, StmtReturn, StmtVarDecl, UnOp,
@@ -51,6 +51,38 @@ impl From<OpParseError> for CodeGenError {
     }
 }
 
+impl<'a> From<&'a Register> for MoveDestination<'a> {
+    fn from(value: &'a Register) -> Self {
+        Self::Register(value)
+    }
+}
+
+impl<'a> From<&'a Symbol> for MoveSource<'a> {
+    fn from(value: &'a Symbol) -> Self {
+        match value {
+            Symbol::Local(symbol) => Self::Local(symbol.offset, symbol.type_.clone()),
+            Symbol::Global(symbol) => Self::Global(&symbol.name, symbol.type_.clone()),
+            Symbol::Param(symbol) => {
+                todo!();
+            }
+            Symbol::Function(_) => unreachable!(),
+        }
+    }
+}
+
+impl<'a> From<&'a Symbol> for MoveDestination<'a> {
+    fn from(value: &'a Symbol) -> Self {
+        match value {
+            Symbol::Local(symbol) => Self::Local(symbol.offset),
+            Symbol::Global(symbol) => Self::Global(&symbol.name),
+            Symbol::Param(symbol) => {
+                todo!();
+            }
+            Symbol::Function(_) => unreachable!(),
+        }
+    }
+}
+
 pub struct CodeGen<Arch: Architecture> {
     arch: Arch,
     scope: Scope,
@@ -96,9 +128,9 @@ impl<Arch: Architecture> CodeGen<Arch> {
         let label = &ret.label;
         if let Some(expr) = ret.expr {
             let type_ = expr.type_(&self.scope)?;
-            let r = self.expr(expr)?;
-
-            self.arch.ret(&r, type_);
+            let r = self.arch.alloc()?;
+            self.expr(expr, (&r).into())?;
+            self.arch.ret(r, type_);
         }
 
         self.arch.jmp(label);
@@ -106,14 +138,20 @@ impl<Arch: Architecture> CodeGen<Arch> {
         Ok(())
     }
 
-    fn expr(&mut self, expr: Expr) -> Result<Register, CodeGenError> {
+    fn expr(&mut self, expr: Expr, dest: MoveDestination) -> Result<(), CodeGenError> {
         match expr {
-            Expr::Binary(bin_expr) => self.bin_expr(bin_expr),
-            Expr::Lit(lit) => Ok(self.arch.load(LoadItem::Lit(lit))?),
+            Expr::Binary(bin_expr) => self.bin_expr(bin_expr, dest),
+            Expr::Lit(lit) => Ok(self.arch.mov(MoveSource::Lit(lit), dest, &self.scope)),
             Expr::Unary(unary_expr) => self.unary_expr(unary_expr),
-            Expr::Ident(ident) => Ok(self.arch.load(LoadItem::Symbol(
-                self.scope.find_symbol(&ident).unwrap().to_owned(),
-            ))?),
+            Expr::Ident(ident) => {
+                let r = self.arch.alloc()?;
+                let symbol = self.scope.find_symbol(&ident).unwrap();
+
+                self.arch.mov(symbol.into(), (&r).into(), &self.scope);
+
+                //NOTE: data in r
+                Ok(())
+            }
             Expr::Cast(cast_expr) => {
                 //TODO: move this elsewhere
                 let type_size = cast_expr.type_(&self.scope)?.size::<Arch>();
@@ -131,83 +169,79 @@ impl<Arch: Architecture> CodeGen<Arch> {
                     expr => expr,
                 };
 
-                self.expr(expr)
+                let r = self.arch.alloc()?;
+
+                self.expr(expr, (&r).into())?;
+
+                //NOTE: data in `r`
+
+                Ok(())
             }
             Expr::FunctionCall(func_call) => self.call_function(func_call),
             _ => todo!(),
         }
     }
 
-    fn bin_expr(&mut self, expr: ExprBinary) -> Result<Register, CodeGenError> {
+    fn bin_expr(&mut self, expr: ExprBinary, dest: MoveDestination) -> Result<(), CodeGenError> {
         match &expr.op {
             BinOp::Assign => {
                 let left = *expr.left;
-
                 if let Expr::Ident(name) = &left {
-                    let right = self.expr(*expr.right)?;
+                    //NOTE: overwrite dest for assigning because it's expression statement and this
+                    //son of the bitch is of type `Void`
+                    let type_ = expr.right.type_(&self.scope)?;
+                    let r = self.arch.alloc()?;
+                    let dest: MoveDestination = (&r).into();
+                    let src = MoveSource::from_dest(dest.clone(), type_);
+                    self.expr(*expr.right, dest)?;
 
                     if !self.scope.local() {
                         self.arch
-                            .save(SaveItem::Global(name), &right, left.type_(&self.scope)?);
+                            .mov(src, MoveDestination::Global(name), &self.scope);
                     } else {
                         let symbol = self.scope.find_symbol(name).unwrap();
 
-                        match symbol {
-                            Symbol::Local(symbol) => {
-                                self.arch.save(
-                                    SaveItem::Local(symbol.offset),
-                                    &right,
-                                    left.type_(&self.scope)?,
-                                );
-                            }
-                            Symbol::Global(symbol) => {
-                                self.arch.save(
-                                    SaveItem::Global(&symbol.name),
-                                    &right,
-                                    left.type_(&self.scope)?,
-                                );
-                            }
-                            Symbol::Param(_) => todo!("Can't assign value to param yet"),
-                            Symbol::Function(_) => todo!("Can't assign function to a variable yet"),
-                        }
+                        self.arch.mov(src, symbol.into(), &self.scope);
                     }
-
-                    Ok(right)
                 } else {
-                    Err(CodeGenError::Assign(left))
+                    return Err(CodeGenError::Assign(left));
                 }
             }
             BinOp::Add => {
-                let left = self.expr(*expr.left)?;
-                let right = self.expr(*expr.right)?;
+                self.expr(*expr.left, dest.clone())?;
 
-                self.arch.add(&left, right)?;
+                let r = self.arch.alloc()?;
+                self.expr(*expr.right, (&r).into())?;
 
-                Ok(left)
+                self.arch.add(&r, dest.register().unwrap());
+                self.arch.free(r)?;
             }
             BinOp::Sub => {
-                let left = self.expr(*expr.left)?;
-                let right = self.expr(*expr.right)?;
+                self.expr(*expr.left, dest.clone())?;
 
-                self.arch.sub(&left, right)?;
+                let r = self.arch.alloc()?;
+                self.expr(*expr.right, (&r).into())?;
 
-                Ok(left)
+                self.arch.sub(&r, dest.register().unwrap());
+                self.arch.free(r)?;
             }
             BinOp::Mul => {
-                let left = self.expr(*expr.left)?;
-                let right = self.expr(*expr.right)?;
+                self.expr(*expr.left, dest.clone())?;
 
-                self.arch.mul(&left, right)?;
+                let r = self.arch.alloc()?;
+                self.expr(*expr.right, (&r).into())?;
 
-                Ok(left)
+                self.arch.mul(&r, dest.register().unwrap());
+                self.arch.free(r)?;
             }
             BinOp::Div => {
-                let left = self.expr(*expr.left)?;
-                let right = self.expr(*expr.right)?;
+                self.expr(*expr.left, dest.clone())?;
 
-                self.arch.div(&left, right)?;
+                let r = self.arch.alloc()?;
+                self.expr(*expr.right, (&r).into())?;
 
-                Ok(left)
+                self.arch.div(&r, dest.register().unwrap());
+                self.arch.free(r)?;
             }
             BinOp::LessThan
             | BinOp::LessEqual
@@ -215,53 +249,73 @@ impl<Arch: Architecture> CodeGen<Arch> {
             | BinOp::GreaterEqual
             | BinOp::Equal
             | BinOp::NotEqual => {
-                let left = self.expr(*expr.left)?;
-                let right = self.expr(*expr.right)?;
+                self.expr(*expr.left, dest.clone())?;
 
-                self.arch.cmp(&left, right, CmpOp::try_from(&expr.op)?)?;
+                let r = self.arch.alloc()?;
+                self.expr(*expr.right, (&r).into())?;
 
-                Ok(left)
+                self.arch
+                    .cmp(&r, dest.register().unwrap(), CmpOp::try_from(&expr.op)?);
+                self.arch.free(r)?;
             }
-        }
+        };
+
+        Ok(())
     }
 
     fn stmt(&mut self, stmt: Stmt) -> Result<(), CodeGenError> {
         match stmt {
-            Stmt::Expr(expr) => self.expr(expr).map(|_| ()),
+            Stmt::Expr(expr) => self.expr(expr, MoveDestination::Void).map(|_| ()),
             Stmt::VarDecl(var_decl) => Ok(self.declare(var_decl)),
             Stmt::Function(func) => Ok(self.function(func)),
             Stmt::Return(ret) => self.ret(ret),
         }
     }
 
-    fn unary_expr(&mut self, unary_expr: ExprUnary) -> Result<Register, CodeGenError> {
+    fn unary_expr(&mut self, unary_expr: ExprUnary) -> Result<(), CodeGenError> {
         match unary_expr.op {
             UnOp::Negative => {
-                let r = self.expr(*unary_expr.expr)?;
+                let r = self.arch.alloc()?;
+                self.expr(*unary_expr.expr, (&r).into())?;
                 self.arch.negate(&r);
 
-                Ok(r)
+                Ok(())
+                //Ok(r)
             }
             UnOp::Not => {
-                let r = self.expr(*unary_expr.expr)?;
+                let r1 = self.arch.alloc()?;
+                let r2 = self.arch.alloc()?;
+                self.expr(*unary_expr.expr, (&r1).into())?;
 
-                Ok(self.arch.not(r)?)
+                self.arch.not(&r1, &r2);
+                self.arch.free(r1)?;
+
+                //NOTE: value in r2
+                Ok(())
             }
         }
     }
 
-    fn call_function(&mut self, call: ExprFunctionCall) -> Result<Register, CodeGenError> {
+    fn call_function(&mut self, call: ExprFunctionCall) -> Result<(), CodeGenError> {
         if call.arguments.len() > 6 {
             panic!("Can't call function with more than 6 arguments");
         }
 
         for (i, argument) in call.arguments.into_iter().enumerate() {
-            let r = self.expr(argument)?;
+            let r = self.arch.alloc()?;
+            self.expr(argument, (&r).into())?;
 
+            //NOTE: should the register be freed?
             self.arch.move_function_argument(r, i);
         }
 
-        Ok(self.arch.call_fn(&call.name))
+        let r = self.arch.alloc()?;
+
+        self.arch.call_fn(&call.name, &r);
+
+        //NOTE: data in r
+
+        Ok(())
     }
 
     pub fn compile(&mut self, program: Vec<Stmt>, path: &str) -> Result<(), CodeGenError> {

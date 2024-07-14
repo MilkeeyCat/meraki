@@ -102,6 +102,22 @@ impl Expression for ExprLit {
     }
 }
 
+impl ToString for ExprLit {
+    fn to_string(&self) -> String {
+        match self {
+            Self::Int(int) => int.to_string(),
+            Self::UInt(uint) => uint.to_string(),
+            Self::Bool(boolean) => {
+                if boolean == &true {
+                    String::from("1")
+                } else {
+                    String::from("0")
+                }
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprStruct {
     name: String,
