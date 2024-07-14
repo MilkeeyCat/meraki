@@ -631,7 +631,7 @@ mod test {
                                 Type::U8,
                                 Box::new(Expr::Unary(ExprUnary::new(
                                     UnOp::Negative,
-                                    Box::new(Expr::Lit(ExprLit::Int(IntLitRepr::new(-1)))),
+                                    Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(1)))),
                                 ))),
                             ))),
                             Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(5)))),
