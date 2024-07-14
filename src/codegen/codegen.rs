@@ -142,14 +142,12 @@ impl<Arch: Architecture> CodeGen<Arch> {
         match expr {
             Expr::Binary(bin_expr) => self.bin_expr(bin_expr, dest),
             Expr::Lit(lit) => Ok(self.arch.mov(MoveSource::Lit(lit), dest, &self.scope)),
-            Expr::Unary(unary_expr) => self.unary_expr(unary_expr),
+            Expr::Unary(unary_expr) => self.unary_expr(unary_expr, dest),
             Expr::Ident(ident) => {
-                let r = self.arch.alloc()?;
                 let symbol = self.scope.find_symbol(&ident).unwrap();
 
-                self.arch.mov(symbol.into(), (&r).into(), &self.scope);
+                self.arch.mov(symbol.into(), dest, &self.scope);
 
-                //NOTE: data in r
                 Ok(())
             }
             Expr::Cast(cast_expr) => {
@@ -168,12 +166,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
                     }
                     expr => expr,
                 };
-
-                let r = self.arch.alloc()?;
-
-                self.expr(expr, (&r).into())?;
-
-                //NOTE: data in `r`
+                self.expr(expr, dest)?;
 
                 Ok(())
             }
@@ -272,28 +265,26 @@ impl<Arch: Architecture> CodeGen<Arch> {
         }
     }
 
-    fn unary_expr(&mut self, unary_expr: ExprUnary) -> Result<(), CodeGenError> {
+    fn unary_expr(
+        &mut self,
+        unary_expr: ExprUnary,
+        dest: MoveDestination,
+    ) -> Result<(), CodeGenError> {
         match unary_expr.op {
             UnOp::Negative => {
-                let r = self.arch.alloc()?;
-                self.expr(*unary_expr.expr, (&r).into())?;
-                self.arch.negate(&r);
-
-                Ok(())
-                //Ok(r)
+                self.expr(*unary_expr.expr, dest.clone())?;
+                self.arch.negate(dest.register().unwrap());
             }
             UnOp::Not => {
-                let r1 = self.arch.alloc()?;
-                let r2 = self.arch.alloc()?;
-                self.expr(*unary_expr.expr, (&r1).into())?;
+                let r = self.arch.alloc()?;
 
-                self.arch.not(&r1, &r2);
-                self.arch.free(r1)?;
-
-                //NOTE: value in r2
-                Ok(())
+                self.expr(*unary_expr.expr, (&r).into())?;
+                self.arch.not(&r, dest.register().unwrap());
+                self.arch.free(r)?;
             }
-        }
+        };
+
+        Ok(())
     }
 
     fn call_function(&mut self, call: ExprFunctionCall) -> Result<(), CodeGenError> {

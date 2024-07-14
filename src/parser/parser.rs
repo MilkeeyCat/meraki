@@ -530,16 +530,7 @@ impl Parser {
 
     fn unary_expr(&mut self) -> Result<Expr, ParserError> {
         let op = UnOp::try_from(&self.next_token()?).map_err(|e| ParserError::Operator(e))?;
-        let mut expr = self.expr(Precedence::Prefix)?;
-
-        if let UnOp::Negative = op {
-            if let Expr::Lit(ExprLit::UInt(uint_repr)) = expr {
-                let mut int_repr = IntLitRepr::try_from(uint_repr).unwrap();
-                int_repr.negate();
-
-                expr = Expr::Lit(ExprLit::Int(int_repr))
-            }
-        }
+        let expr = self.expr(Precedence::Prefix)?;
 
         Ok(Expr::Unary(ExprUnary::new(op, Box::new(expr))))
     }
