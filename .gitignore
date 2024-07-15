@@ -1,3 +1,4 @@
 target
-asm/*
-!asm/Makefile
+playground/*
+!playground/Makefile
+!playground/main.mk
