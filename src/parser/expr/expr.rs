@@ -5,7 +5,7 @@ use crate::{
     symbol_table::Symbol,
     type_::{Type, TypeError},
 };
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 pub trait Expression {
     fn type_(&self, scope: &Scope) -> Result<Type, TypeError>;
@@ -121,7 +121,7 @@ impl ToString for ExprLit {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprStruct {
     name: String,
-    fields: HashMap<String, Expr>,
+    fields: BTreeMap<String, Expr>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -137,7 +137,7 @@ impl ExprFunctionCall {
 }
 
 impl ExprStruct {
-    pub fn new(name: String, fields: HashMap<String, Expr>) -> Self {
+    pub fn new(name: String, fields: BTreeMap<String, Expr>) -> Self {
         Self { name, fields }
     }
 }

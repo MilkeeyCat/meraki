@@ -1,5 +1,5 @@
 use super::{
-    expr::{ExprBinary, ExprLit, ExprUnary, IntLitRepr},
+    expr::{ExprBinary, ExprLit, ExprUnary},
     precedence::Precedence,
     stmt::StmtReturn,
     BinOp, Expr, ExprCast, ExprStruct, Expression, IntLitReprError, OpParseError, Stmt,
@@ -15,7 +15,7 @@ use crate::{
     type_::{Type, TypeError},
     type_table::{self, TypeStruct},
 };
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 #[derive(Debug)]
 pub enum ParserError {
@@ -229,8 +229,6 @@ impl Parser {
             .type_table_mut()
             .define(crate::type_table::Type::Struct(TypeStruct { name, fields }));
 
-        dbg!(self.scope.type_table());
-
         Ok(())
     }
 
@@ -401,8 +399,8 @@ impl Parser {
         }
     }
 
-    fn params(&mut self, delim: Token, end: Token) -> Result<HashMap<String, Type>, ParserError> {
-        let mut params = HashMap::new();
+    fn params(&mut self, delim: Token, end: Token) -> Result<BTreeMap<String, Type>, ParserError> {
+        let mut params = BTreeMap::new();
 
         while !self.cur_token_is(&end) {
             let type_ = self.parse_type()?;
@@ -440,7 +438,7 @@ impl Parser {
         };
 
         self.expect(&Token::LBrace)?;
-        let mut fields = HashMap::new();
+        let mut fields = BTreeMap::new();
 
         while !self.cur_token_is(&Token::RBrace) {
             match self.next_token()? {

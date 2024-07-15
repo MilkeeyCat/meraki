@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
@@ -8,7 +8,7 @@ pub enum Type {
 #[derive(Debug, Clone, PartialEq)]
 pub struct TypeStruct {
     pub name: String,
-    pub fields: HashMap<String, crate::type_::Type>,
+    pub fields: BTreeMap<String, crate::type_::Type>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

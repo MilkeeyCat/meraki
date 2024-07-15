@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use super::Expr;
 use crate::{scope::ScopeImpl, type_::Type};
@@ -34,7 +34,7 @@ pub struct StmtReturn {
 pub struct StmtFunction {
     pub return_type: Type,
     pub name: String,
-    pub params: HashMap<String, Type>,
+    pub params: BTreeMap<String, Type>,
     pub body: Vec<Stmt>,
     pub scope: Box<ScopeImpl>,
 }
