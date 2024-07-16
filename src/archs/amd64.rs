@@ -62,6 +62,7 @@ impl Architecture for Amd64 {
         match src {
             MoveSource::Global(label, type_) => self.mov_global(dest, label, type_, scope),
             MoveSource::Local(offset, type_) => self.mov_local(dest, offset, type_, scope),
+            MoveSource::Param(n, type_) => self.mov_param(dest, n, type_, scope),
             MoveSource::Register(register, type_) => self.mov_register(dest, register, type_),
             MoveSource::Lit(literal) => self.mov_literal(dest, literal, scope),
             MoveSource::Void => {}
@@ -325,6 +326,17 @@ impl Amd64 {
         }
     }
 
+    fn mov_param(&mut self, dest: MoveDestination, n: usize, type_: Type, scope: &Scope) {
+        self.mov(
+            MoveSource::Register(
+                &self.registers.get(self.registers.len() - 1 - n).unwrap(),
+                type_,
+            ),
+            dest,
+            scope,
+        );
+    }
+
     fn mov_global(&self, dest: MoveDestination, label: &str, type_: Type, scope: &Scope) {
         todo!();
     }
@@ -344,8 +356,14 @@ impl Amd64 {
             MoveDestination::Global(label) => {
                 todo!();
             }
-            MoveDestination::Register(register) => {
-                todo!();
+            MoveDestination::Register(dest_register) => {
+                self.buf.push_str(&formatdoc!(
+                    "
+                    \tmov {}, {}
+                    ",
+                    dest_register.qword(),
+                    register.qword(),
+                ));
             }
             MoveDestination::Void => {}
         }

@@ -8,6 +8,7 @@ use crate::{
 pub enum MoveSource<'a> {
     Global(&'a str, Type),
     Local(usize, Type),
+    Param(usize, Type),
     Register(&'a Register, Type),
     Lit(ExprLit),
     Void,

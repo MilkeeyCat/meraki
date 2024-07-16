@@ -35,7 +35,7 @@ impl Expression for Expr {
                 Symbol::Global(global_var) => Ok(global_var.type_.clone()),
                 Symbol::Local(local) => Ok(local.type_.clone()),
                 Symbol::Param(param) => Ok(param.type_.clone()),
-                _ => unreachable!(),
+                Symbol::Function(func) => Ok(func.return_type.clone()),
             },
             Self::Cast(cast) => cast.type_(symtable),
             Self::Struct(expr_struct) => expr_struct.type_(symtable),

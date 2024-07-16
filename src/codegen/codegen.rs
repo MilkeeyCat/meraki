@@ -62,9 +62,7 @@ impl<'a> From<&'a Symbol> for MoveSource<'a> {
         match value {
             Symbol::Local(symbol) => Self::Local(symbol.offset, symbol.type_.clone()),
             Symbol::Global(symbol) => Self::Global(&symbol.name, symbol.type_.clone()),
-            Symbol::Param(symbol) => {
-                todo!();
-            }
+            Symbol::Param(symbol) => Self::Param(symbol.n, symbol.type_.clone()),
             Symbol::Function(_) => unreachable!(),
         }
     }
