@@ -50,12 +50,12 @@ pub trait Architecture {
     fn declare(&mut self, var: StmtVarDecl);
     fn mov(&mut self, src: MoveSource, dest: MoveDestination, scope: &Scope);
     fn negate(&mut self, r: &Register);
-    fn not(&mut self, r1: &Register, r2: &Register);
-    fn add(&mut self, r1: &Register, r2: &Register);
-    fn sub(&mut self, r1: &Register, r2: &Register);
-    fn mul(&mut self, r1: &Register, r2: &Register);
-    fn div(&mut self, r1: &Register, r2: &Register);
-    fn cmp(&mut self, r1: &Register, r2: &Register, cmp: CmpOp);
+    fn not(&mut self, dest: &Register, src: &Register);
+    fn add(&mut self, dest: &Register, src: &Register);
+    fn sub(&mut self, dest: &Register, src: &Register);
+    fn mul(&mut self, dest: &Register, src: &Register);
+    fn div(&mut self, dest: &Register, src: &Register);
+    fn cmp(&mut self, dest: &Register, src: &Register, cmp: CmpOp);
     fn fn_preamble(&mut self, name: &str, stackframe: usize);
     fn fn_postamble(&mut self, name: &str, stackframe: usize);
     fn ret(&mut self, r: Register, type_: Type);

@@ -206,7 +206,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
                 let r = self.arch.alloc()?;
                 self.expr(*expr.right, (&r).into())?;
 
-                self.arch.add(&r, dest.register().unwrap());
+                self.arch.add(dest.register().unwrap(), &r);
                 self.arch.free(r)?;
             }
             BinOp::Sub => {
@@ -215,7 +215,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
                 let r = self.arch.alloc()?;
                 self.expr(*expr.right, (&r).into())?;
 
-                self.arch.sub(&r, dest.register().unwrap());
+                self.arch.sub(dest.register().unwrap(), &r);
                 self.arch.free(r)?;
             }
             BinOp::Mul => {
@@ -224,7 +224,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
                 let r = self.arch.alloc()?;
                 self.expr(*expr.right, (&r).into())?;
 
-                self.arch.mul(&r, dest.register().unwrap());
+                self.arch.mul(dest.register().unwrap(), &r);
                 self.arch.free(r)?;
             }
             BinOp::Div => {
@@ -233,7 +233,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
                 let r = self.arch.alloc()?;
                 self.expr(*expr.right, (&r).into())?;
 
-                self.arch.div(&r, dest.register().unwrap());
+                self.arch.div(dest.register().unwrap(), &r);
                 self.arch.free(r)?;
             }
             BinOp::LessThan
@@ -248,7 +248,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
                 self.expr(*expr.right, (&r).into())?;
 
                 self.arch
-                    .cmp(&r, dest.register().unwrap(), CmpOp::try_from(&expr.op)?);
+                    .cmp(dest.register().unwrap(), &r, CmpOp::try_from(&expr.op)?);
                 self.arch.free(r)?;
             }
         };
