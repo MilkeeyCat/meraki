@@ -23,12 +23,12 @@ pub enum Expr {
 }
 
 impl Expression for Expr {
-    fn type_(&self, symtable: &Scope) -> Result<Type, TypeError> {
+    fn type_(&self, scope: &Scope) -> Result<Type, TypeError> {
         match self {
-            Self::Binary(expr) => expr.type_(symtable),
-            Self::Unary(expr) => expr.type_(symtable),
-            Self::Lit(literal) => literal.type_(symtable),
-            Self::Ident(ident) => match symtable
+            Self::Binary(expr) => expr.type_(scope),
+            Self::Unary(expr) => expr.type_(scope),
+            Self::Lit(literal) => literal.type_(scope),
+            Self::Ident(ident) => match scope
                 .find_symbol(ident)
                 .ok_or(TypeError::IdentNotFound(ident.to_owned()))?
             {
@@ -37,10 +37,10 @@ impl Expression for Expr {
                 Symbol::Param(param) => Ok(param.type_.clone()),
                 Symbol::Function(func) => Ok(func.return_type.clone()),
             },
-            Self::Cast(cast) => cast.type_(symtable),
-            Self::Struct(expr_struct) => expr_struct.type_(symtable),
+            Self::Cast(cast) => cast.type_(scope),
+            Self::Struct(expr_struct) => expr_struct.type_(scope),
             Self::FunctionCall(function_call) => {
-                match symtable.find_symbol(&function_call.name).unwrap() {
+                match scope.find_symbol(&function_call.name).unwrap() {
                     Symbol::Function(function) => Ok(function.return_type.to_owned()),
                     _ => unreachable!(),
                 }

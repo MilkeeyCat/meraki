@@ -1,4 +1,4 @@
-use crate::archs::Architecture;
+use crate::{archs::Architecture, scope::Scope};
 use std::fmt::Display;
 
 #[derive(Debug)]
@@ -145,11 +145,14 @@ impl Type {
         return Err(TypeError::Cast(self, type_));
     }
 
-    pub fn size<Arch: Architecture>(&self) -> usize {
+    pub fn size<Arch: Architecture>(&self, scope: &Scope) -> usize {
         match self {
             Type::Void => 0,
             Type::I8 | Type::U8 | Type::Bool => 1,
             Type::I16 | Type::U16 => 2,
+            Type::Struct(structure) => match scope.find_type(structure).unwrap() {
+                crate::type_table::Type::Struct(structure) => structure.size::<Arch>(scope),
+            },
             _ => Arch::size(self),
         }
     }

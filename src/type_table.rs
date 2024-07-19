@@ -1,5 +1,7 @@
 use std::collections::BTreeMap;
 
+use crate::{archs::Architecture, scope::Scope};
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
     Struct(TypeStruct),
@@ -9,6 +11,15 @@ pub enum Type {
 pub struct TypeStruct {
     pub name: String,
     pub fields: BTreeMap<String, crate::type_::Type>,
+}
+
+impl TypeStruct {
+    pub fn size<Arch: Architecture>(&self, scope: &Scope) -> usize {
+        self.fields
+            .values()
+            .map(|type_| type_.size::<Arch>(scope))
+            .sum()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

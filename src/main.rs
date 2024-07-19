@@ -14,7 +14,6 @@ use crate::archs::Amd64;
 use clap::Parser;
 use codegen::CodeGen;
 use lexer::Lexer;
-//use parser::Parser;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]

@@ -239,7 +239,13 @@ impl Parser {
 
         while !self.cur_token_is(&Token::RBrace) {
             match &self.cur_token {
-                Token::U8 | Token::U16 | Token::I8 | Token::I16 | Token::Bool | Token::Void => {
+                Token::U8
+                | Token::U16
+                | Token::I8
+                | Token::I16
+                | Token::Bool
+                | Token::Void
+                | Token::Ident(_) => {
                     let type_ = self.parse_type()?;
 
                     if self.peek_token_is(&Token::Semicolon) {
@@ -276,6 +282,9 @@ impl Parser {
             Token::I16 => Ok(Type::I16),
             Token::Bool => Ok(Type::Bool),
             Token::Void => Ok(Type::Void),
+            Token::Ident(ident) => Ok(match self.scope.find_type(&ident).unwrap() {
+                type_table::Type::Struct(_) => Type::Struct(ident),
+            }),
             token => Err(ParserError::ParseType(token)),
         }
     }

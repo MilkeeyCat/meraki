@@ -77,6 +77,18 @@ impl Scope {
         return None;
     }
 
+    pub fn find_type(&self, name: &str) -> Option<&crate::type_table::Type> {
+        for scope in &self.0 {
+            let type_ = scope.type_table.find(name);
+
+            if type_.is_some() {
+                return type_;
+            }
+        }
+
+        return None;
+    }
+
     pub fn symbol_table_mut(&mut self) -> &mut SymbolTable {
         &mut self.0.last_mut().unwrap().symbol_table
     }

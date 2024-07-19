@@ -95,7 +95,8 @@ impl<Arch: Architecture> CodeGen<Arch> {
 
     fn declare(&mut self, variable: StmtVarDecl) {
         if !self.scope.local() {
-            self.arch.declare(variable)
+            self.arch
+                .declare(&variable.name, variable.type_.size::<Arch>(&self.scope))
         }
     }
 
@@ -105,9 +106,12 @@ impl<Arch: Architecture> CodeGen<Arch> {
 
         for stmt in &mut func.body {
             if let Stmt::VarDecl(var_decl) = stmt {
-                if let Symbol::Local(local) = self.scope.find_symbol_mut(&var_decl.name).unwrap() {
+                //TODO: clone bad
+                if let Symbol::Local(local) =
+                    self.scope.clone().find_symbol_mut(&var_decl.name).unwrap()
+                {
                     local.offset = offset;
-                    offset += local.type_.size::<Arch>();
+                    offset += local.type_.size::<Arch>(&self.scope);
                 }
             }
         }
@@ -128,7 +132,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
             let type_ = expr.type_(&self.scope)?;
             let r = self.arch.alloc()?;
             self.expr(expr, (&r).into())?;
-            self.arch.ret(r, type_);
+            self.arch.ret(r, type_, &self.scope);
         }
 
         self.arch.jmp(label);
@@ -150,7 +154,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
             }
             Expr::Cast(cast_expr) => {
                 //TODO: move this elsewhere
-                let type_size = cast_expr.type_(&self.scope)?.size::<Arch>();
+                let type_size = cast_expr.type_(&self.scope)?.size::<Arch>(&self.scope);
                 let expr = match *cast_expr.expr {
                     Expr::Lit(ExprLit::Int(mut int)) => {
                         int.zero_except_n_bytes(type_size);

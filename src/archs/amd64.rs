@@ -63,19 +63,21 @@ impl Architecture for Amd64 {
             MoveSource::Global(label, type_) => self.mov_global(dest, label, type_, scope),
             MoveSource::Local(offset, type_) => self.mov_local(dest, offset, type_, scope),
             MoveSource::Param(n, type_) => self.mov_param(dest, n, type_, scope),
-            MoveSource::Register(register, type_) => self.mov_register(dest, register, type_),
+            MoveSource::Register(register, type_) => {
+                self.mov_register(dest, register, type_, scope)
+            }
             MoveSource::Lit(literal) => self.mov_literal(dest, literal, scope),
             MoveSource::Void => {}
         }
     }
 
-    fn declare(&mut self, var: StmtVarDecl) {
+    fn declare(&mut self, name: &str, size: usize) {
         self.buf.push_str(&formatdoc!(
             "
             \t.comm {} {}
             ",
-            var.name,
-            var.type_.size::<Self>(),
+            name,
+            size,
         ));
     }
 
@@ -190,14 +192,14 @@ impl Architecture for Amd64 {
         ));
     }
 
-    fn ret(&mut self, r: Register, type_: Type) {
+    fn ret(&mut self, r: Register, type_: Type, scope: &Scope) {
         //NOTE: free the register?
         self.buf.push_str(&formatdoc!(
             "
             \t{} rax, {}
             ",
             Self::movx(type_.signed()),
-            r.from_size(Type::size::<Self>(&type_)),
+            r.from_size(type_.size::<Self>(scope)),
         ));
     }
 
@@ -284,7 +286,7 @@ impl Amd64 {
                     "
                     \tmov {} ptr [{label}], {}
                     ",
-                    Self::size_name(literal.type_(scope).unwrap().size::<Self>()),
+                    Self::size_name(literal.type_(scope).unwrap().size::<Self>(scope)),
                     literal.to_string(),
                 ));
             }
@@ -318,7 +320,7 @@ impl Amd64 {
                     ",
                     Self::movx(type_.signed()),
                     register.qword(),
-                    Self::size_name(type_.size::<Self>()),
+                    Self::size_name(type_.size::<Self>(scope)),
                     offset,
                 ));
             }
@@ -341,16 +343,22 @@ impl Amd64 {
         todo!();
     }
 
-    fn mov_register(&mut self, dest: MoveDestination, register: &Register, type_: Type) {
+    fn mov_register(
+        &mut self,
+        dest: MoveDestination,
+        register: &Register,
+        type_: Type,
+        scope: &Scope,
+    ) {
         match dest {
             MoveDestination::Local(offset) => {
                 self.buf.push_str(&formatdoc!(
                     "
                     \tmov {} ptr [rbp - {}], {}
                     ",
-                    Self::size_name(type_.size::<Self>()),
+                    Self::size_name(type_.size::<Self>(scope)),
                     offset,
-                    register.from_size(type_.size::<Self>()),
+                    register.from_size(type_.size::<Self>(scope)),
                 ));
             }
             MoveDestination::Global(label) => {

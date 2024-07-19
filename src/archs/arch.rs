@@ -48,7 +48,7 @@ pub trait Architecture {
     fn alloc(&mut self) -> Result<Register, AllocatorError>;
     fn free(&mut self, register: Register) -> Result<(), AllocatorError>;
     fn size_name(size: usize) -> &'static str;
-    fn declare(&mut self, var: StmtVarDecl);
+    fn declare(&mut self, name: &str, size: usize);
     fn mov(&mut self, src: MoveSource, dest: MoveDestination, scope: &Scope);
     fn negate(&mut self, r: &Register);
     fn not(&mut self, dest: &Register, src: &Register);
@@ -59,7 +59,7 @@ pub trait Architecture {
     fn cmp(&mut self, dest: &Register, src: &Register, cmp: CmpOp);
     fn fn_preamble(&mut self, name: &str, stackframe: usize);
     fn fn_postamble(&mut self, name: &str, stackframe: usize);
-    fn ret(&mut self, r: Register, type_: Type);
+    fn ret(&mut self, r: Register, type_: Type, scope: &Scope);
     fn jmp(&mut self, label: &str);
     fn call_fn(&mut self, name: &str, r: &Register);
     fn move_function_argument(&mut self, r: Register, i: usize);
