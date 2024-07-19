@@ -1,3 +1,4 @@
+use crate::scope::Scope;
 use std::fmt::Display;
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
@@ -48,6 +49,16 @@ pub enum Token {
     U16,
     Bool,
     Void,
+}
+
+impl Token {
+    pub fn is_type(&self, scope: &Scope) -> bool {
+        match &self {
+            Token::U8 | Token::U16 | Token::I8 | Token::I16 | Token::Bool | Token::Void => true,
+            Token::Ident(ident) => scope.find_type(ident).is_some(),
+            _ => false,
+        }
+    }
 }
 
 impl Display for Token {

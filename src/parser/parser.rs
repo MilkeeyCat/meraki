@@ -238,31 +238,26 @@ impl Parser {
         self.expect(&Token::LBrace)?;
 
         while !self.cur_token_is(&Token::RBrace) {
-            match &self.cur_token {
-                Token::U8
-                | Token::U16
-                | Token::I8
-                | Token::I16
-                | Token::Bool
-                | Token::Void
-                | Token::Ident(_) => {
-                    let type_ = self.parse_type()?;
+            if self.cur_token.is_type(&self.scope) {
+                let type_ = self.parse_type()?;
 
-                    if self.peek_token_is(&Token::Semicolon) {
-                        stmts.push(self.var_decl(type_)?);
-                    } else {
-                        self.function(type_, false)?;
-                    }
+                if self.peek_token_is(&Token::Semicolon) {
+                    stmts.push(self.var_decl(type_)?);
+                } else {
+                    self.function(type_, false)?;
                 }
-                Token::Return => stmts.push(self.parse_return()?),
-                _ => {
-                    let expr = self.expr(Precedence::default())?;
-                    expr.type_(&self.scope)?;
-                    let expr = Stmt::Expr(expr);
+            } else {
+                match &self.cur_token {
+                    Token::Return => stmts.push(self.parse_return()?),
+                    _ => {
+                        let expr = self.expr(Precedence::default())?;
+                        expr.type_(&self.scope)?;
+                        let expr = Stmt::Expr(expr);
 
-                    self.expect(&Token::Semicolon)?;
+                        self.expect(&Token::Semicolon)?;
 
-                    stmts.push(expr);
+                        stmts.push(expr);
+                    }
                 }
             }
         }
