@@ -238,7 +238,7 @@ impl Parser {
         self.expect(&Token::LBrace)?;
 
         while !self.cur_token_is(&Token::RBrace) {
-            if self.cur_token.is_type(&self.scope) {
+            if self.cur_token.is_type(&self.scope) && !self.peek_token_is(&Token::LBrace) {
                 let type_ = self.parse_type()?;
 
                 if self.peek_token_is(&Token::Semicolon) {
@@ -447,12 +447,7 @@ impl Parser {
         while !self.cur_token_is(&Token::RBrace) {
             match self.next_token()? {
                 Token::Ident(field) => {
-                    if !match self
-                        .scope
-                        .type_table()
-                        .find(&name)
-                        .expect("Type doesn't exist")
-                    {
+                    if !match self.scope.find_type(&name).expect("Type doesn't exist") {
                         type_table::Type::Struct(type_struct) => {
                             type_struct.fields.contains_key(&field)
                         }

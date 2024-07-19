@@ -4,5 +4,8 @@ struct Foo {
 }
 
 u8 main() {
-	Foo foo;
+	Foo {
+		a: 69,
+		b: 420,
+	};
 }
