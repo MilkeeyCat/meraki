@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-
 use crate::{archs::Architecture, scope::Scope};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -10,15 +8,29 @@ pub enum Type {
 #[derive(Debug, Clone, PartialEq)]
 pub struct TypeStruct {
     pub name: String,
-    pub fields: BTreeMap<String, crate::type_::Type>,
+    pub fields: Vec<(String, crate::type_::Type)>,
 }
 
 impl TypeStruct {
     pub fn size<Arch: Architecture>(&self, scope: &Scope) -> usize {
         self.fields
-            .values()
-            .map(|type_| type_.size::<Arch>(scope))
+            .iter()
+            .map(|(_, type_)| type_.size::<Arch>(scope))
             .sum()
+    }
+
+    pub fn offset<Arch: Architecture>(&self, name: &str, scope: &Scope) -> usize {
+        let mut offset = 0;
+
+        for (field_name, type_) in &self.fields {
+            if name == field_name {
+                break;
+            }
+
+            offset += type_.size::<Arch>(scope);
+        }
+
+        offset
     }
 }
 

@@ -1,13 +1,14 @@
 use crate::{
     archs::{Architecture, MoveDestination, MoveSource},
     parser::{
-        BinOp, CmpOp, Expr, ExprBinary, ExprFunctionCall, ExprLit, ExprUnary, Expression,
-        OpParseError, Stmt, StmtFunction, StmtReturn, StmtVarDecl, UnOp,
+        BinOp, CmpOp, Expr, ExprBinary, ExprFunctionCall, ExprLit, ExprStruct, ExprUnary,
+        Expression, OpParseError, Stmt, StmtFunction, StmtReturn, StmtVarDecl, UnOp,
     },
     register_allocator::{AllocatorError, Register},
     scope::Scope,
     symbol_table::Symbol,
     type_::TypeError,
+    type_table,
 };
 use std::fs::File;
 use std::io::Write;
@@ -173,7 +174,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
                 Ok(())
             }
             Expr::FunctionCall(func_call) => self.call_function(func_call),
-            _ => todo!(),
+            Expr::Struct(expr) => self.struct_expr(expr, dest),
         }
     }
 
@@ -307,6 +308,19 @@ impl<Arch: Architecture> CodeGen<Arch> {
         self.arch.call_fn(&call.name, &r);
 
         //NOTE: data in r
+
+        Ok(())
+    }
+
+    fn struct_expr(&mut self, expr: ExprStruct, dest: MoveDestination) -> Result<(), CodeGenError> {
+        let type_struct = match self.scope.find_type(&expr.name).unwrap() {
+            type_table::Type::Struct(type_) => type_,
+            _ => panic!("Expected type to be struct"),
+        };
+
+        for (name, expr) in expr.fields.into_iter() {
+            dbg!(&name, type_struct.offset::<Arch>(&name, &self.scope));
+        }
 
         Ok(())
     }

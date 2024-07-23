@@ -15,7 +15,6 @@ use crate::{
     type_::{Type, TypeError},
     type_table::{self, TypeStruct},
 };
-use std::collections::BTreeMap;
 
 #[derive(Debug)]
 pub enum ParserError {
@@ -225,6 +224,8 @@ impl Parser {
 
         let fields = self.params(Token::Semicolon, Token::RBrace)?;
 
+        dbg!(&fields);
+
         self.scope
             .type_table_mut()
             .define(crate::type_table::Type::Struct(TypeStruct { name, fields }));
@@ -382,7 +383,7 @@ impl Parser {
             .push(Symbol::Function(SymbolFunction {
                 name: name.clone(),
                 return_type: type_.clone(),
-                parameters: params.clone().into_values().collect(),
+                parameters: params.clone().into_iter().map(|(_, type_)| type_).collect(),
             }))?;
 
         if has_body & !func_definition {
@@ -403,8 +404,8 @@ impl Parser {
         }
     }
 
-    fn params(&mut self, delim: Token, end: Token) -> Result<BTreeMap<String, Type>, ParserError> {
-        let mut params = BTreeMap::new();
+    fn params(&mut self, delim: Token, end: Token) -> Result<Vec<(String, Type)>, ParserError> {
+        let mut params = Vec::new();
 
         while !self.cur_token_is(&end) {
             let type_ = self.parse_type()?;
@@ -413,9 +414,9 @@ impl Parser {
                 _ => todo!("Don't know what error to return yet"),
             };
 
-            match params.contains_key(&name) {
-                true => todo!("Don't know yet what error to return"),
-                false => params.insert(name, type_),
+            match params.iter().find(|(field_name, _)| field_name == &name) {
+                Some(_) => todo!("Don't know yet what error to return"),
+                None => params.push((name, type_)),
             };
 
             if !self.cur_token_is(&end) {
@@ -442,15 +443,17 @@ impl Parser {
         };
 
         self.expect(&Token::LBrace)?;
-        let mut fields = BTreeMap::new();
+        let mut fields = Vec::new();
 
         while !self.cur_token_is(&Token::RBrace) {
             match self.next_token()? {
                 Token::Ident(field) => {
                     if !match self.scope.find_type(&name).expect("Type doesn't exist") {
-                        type_table::Type::Struct(type_struct) => {
-                            type_struct.fields.contains_key(&field)
-                        }
+                        type_table::Type::Struct(type_struct) => type_struct
+                            .fields
+                            .iter()
+                            .find(|(name, _)| name == &field)
+                            .is_some(),
                     } {
                         todo!("Field {field} doesn't exist in struct {name}");
                     }
@@ -459,11 +462,13 @@ impl Parser {
                     let expr = self.expr(Precedence::Lowest)?;
 
                     self.expect(&Token::Comma)?;
-                    fields.insert(field, expr);
+                    fields.push((field, expr));
                 }
                 _ => todo!("Don't know what error to return yet"),
             }
         }
+
+        dbg!(&fields, "WOT");
 
         self.expect(&Token::RBrace)?;
 

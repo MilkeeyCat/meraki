@@ -5,7 +5,6 @@ use crate::{
     symbol_table::Symbol,
     type_::{Type, TypeError},
 };
-use std::collections::BTreeMap;
 
 pub trait Expression {
     fn type_(&self, scope: &Scope) -> Result<Type, TypeError>;
@@ -120,8 +119,14 @@ impl ToString for ExprLit {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprStruct {
-    name: String,
-    fields: BTreeMap<String, Expr>,
+    pub name: String,
+    pub fields: Vec<(String, Expr)>,
+}
+
+impl ExprStruct {
+    pub fn new(name: String, fields: Vec<(String, Expr)>) -> Self {
+        Self { name, fields }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -133,12 +138,6 @@ pub struct ExprFunctionCall {
 impl ExprFunctionCall {
     pub fn new(name: String, arguments: Vec<Expr>) -> Self {
         Self { name, arguments }
-    }
-}
-
-impl ExprStruct {
-    pub fn new(name: String, fields: BTreeMap<String, Expr>) -> Self {
-        Self { name, fields }
     }
 }
 
