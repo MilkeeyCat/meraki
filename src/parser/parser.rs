@@ -224,8 +224,6 @@ impl Parser {
 
         let fields = self.params(Token::Semicolon, Token::RBrace)?;
 
-        dbg!(&fields);
-
         self.scope
             .type_table_mut()
             .define(crate::type_table::Type::Struct(TypeStruct { name, fields }));
@@ -467,8 +465,6 @@ impl Parser {
                 _ => todo!("Don't know what error to return yet"),
             }
         }
-
-        dbg!(&fields, "WOT");
 
         self.expect(&Token::RBrace)?;
 

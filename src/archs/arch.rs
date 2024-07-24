@@ -1,10 +1,11 @@
 use crate::{
-    parser::{CmpOp, ExprLit, StmtVarDecl},
+    parser::{CmpOp, ExprLit},
     register_allocator::{AllocatorError, Register},
     scope::Scope,
     type_::Type,
 };
 
+#[derive(Debug)]
 pub enum MoveSource<'a> {
     Global(&'a str, Type),
     Local(usize, Type),

@@ -185,20 +185,10 @@ impl<Arch: Architecture> CodeGen<Arch> {
                 if let Expr::Ident(name) = &left {
                     //NOTE: overwrite dest for assigning because it's expression statement and this
                     //son of the bitch is of type `Void`
-                    let type_ = expr.right.type_(&self.scope)?;
-                    let r = self.arch.alloc()?;
-                    let dest: MoveDestination = (&r).into();
-                    let src = MoveSource::from_dest(dest.clone(), type_);
+                    let symbol = self.scope.find_symbol(&name).unwrap().clone();
+                    let dest: MoveDestination = (&symbol).into();
+
                     self.expr(*expr.right, dest)?;
-
-                    if !self.scope.local() {
-                        self.arch
-                            .mov(src, MoveDestination::Global(name), &self.scope);
-                    } else {
-                        let symbol = self.scope.find_symbol(name).unwrap();
-
-                        self.arch.mov(src, symbol.into(), &self.scope);
-                    }
                 } else {
                     return Err(CodeGenError::Assign(left));
                 }
@@ -316,10 +306,13 @@ impl<Arch: Architecture> CodeGen<Arch> {
         let type_struct = match self.scope.find_type(&expr.name).unwrap() {
             type_table::Type::Struct(type_) => type_,
             _ => panic!("Expected type to be struct"),
-        };
+        }
+        .clone();
+        //NOTE: clone bad ^
 
         for (name, expr) in expr.fields.into_iter() {
-            dbg!(&name, type_struct.offset::<Arch>(&name, &self.scope));
+            let offset = type_struct.offset::<Arch>(&name, &self.scope);
+            self.expr(expr, MoveDestination::Local(offset))?;
         }
 
         Ok(())
