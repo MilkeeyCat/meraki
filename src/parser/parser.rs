@@ -518,7 +518,13 @@ impl Parser {
             },
             token => {
                 let left = Box::new(left);
-                let right = Box::new(self.expr(Precedence::from(&token))?);
+                // NOTE: assignment expression is right-associative
+                let precedence = if let &Token::Assign = &token {
+                    Precedence::from(&token).lower()
+                } else {
+                    Precedence::from(&token)
+                };
+                let right = Box::new(self.expr(precedence)?);
                 let op = BinOp::try_from(&token).map_err(|e| ParserError::Operator(e))?;
 
                 Ok(Expr::Binary(ExprBinary::new(op, left, right)))
@@ -685,11 +691,35 @@ mod test {
                     ))),
                 )))],
             ),
+            (
+                "
+                {
+                    u8 a;
+                    u8 b;
+
+                    a = b = 69;
+                }
+                ",
+                vec![
+                    Stmt::VarDecl(StmtVarDecl::new(Type::U8, "a".to_owned(), None)),
+                    Stmt::VarDecl(StmtVarDecl::new(Type::U8, "b".to_owned(), None)),
+                    Stmt::Expr(Expr::Binary(ExprBinary::new(
+                        BinOp::Assign,
+                        Box::new(Expr::Ident("a".to_owned())),
+                        Box::new(Expr::Binary(ExprBinary::new(
+                            BinOp::Assign,
+                            Box::new(Expr::Ident("b".to_owned())),
+                            Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(69)))),
+                        ))),
+                    ))),
+                ],
+            ),
         ];
 
         for (input, expected) in tests {
             let mut parser = Parser::new(Lexer::new(input.to_string())).unwrap();
-            assert_eq!(parser.compound_statement().unwrap(), expected);
+            let ast = parser.compound_statement().unwrap();
+            assert_eq!(&ast, &expected, "expected: {:?}, got: {:?}", expected, ast);
         }
 
         Ok(())
