@@ -12,18 +12,6 @@ pub enum MoveSource<'a> {
     Param(usize, Type),
     Register(&'a Register, Type),
     Lit(ExprLit),
-    Void,
-}
-
-impl<'a> MoveSource<'a> {
-    pub fn from_dest(dest: MoveDestination<'a>, type_: Type) -> Self {
-        match dest {
-            MoveDestination::Global(label) => MoveSource::Global(label, type_),
-            MoveDestination::Local(offset) => MoveSource::Local(offset, type_),
-            MoveDestination::Register(register) => MoveSource::Register(register, type_),
-            MoveDestination::Void => MoveSource::Void,
-        }
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -31,7 +19,6 @@ pub enum MoveDestination<'a> {
     Global(&'a str),
     Local(usize),
     Register(&'a Register),
-    Void,
 }
 
 impl<'a> MoveDestination<'a> {

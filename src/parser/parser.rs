@@ -575,8 +575,8 @@ mod test {
     use crate::{
         lexer::Lexer,
         parser::{
-            BinOp, Expr, ExprBinary, ExprCast, ExprLit, ExprUnary, IntLitRepr, IntLitReprError,
-            Stmt, StmtVarDecl, UIntLitRepr, UnOp,
+            BinOp, Expr, ExprBinary, ExprCast, ExprLit, ExprUnary, IntLitReprError, Stmt,
+            StmtVarDecl, UIntLitRepr, UnOp,
         },
         type_::Type,
     };

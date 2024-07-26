@@ -101,17 +101,19 @@ impl<Arch: Architecture> CodeGen<Arch> {
         }
     }
 
-    fn function(&mut self, func: StmtFunction) {
+    fn function(&mut self, func: StmtFunction) -> Result<(), CodeGenError> {
         self.scope.enter(*func.scope);
         let offset = self.populate_offsets(&func.body);
         self.arch.fn_preamble(&func.name, offset);
 
         for stmt in func.body {
-            self.stmt(stmt).unwrap();
+            self.stmt(stmt)?;
         }
 
         self.arch.fn_postamble(&func.name, offset);
         self.scope.leave();
+
+        Ok(())
     }
 
     fn ret(&mut self, ret: StmtReturn) -> Result<(), CodeGenError> {
@@ -119,7 +121,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
         if let Some(expr) = ret.expr {
             let type_ = expr.type_(&self.scope)?;
             let r = self.arch.alloc()?;
-            self.expr(expr, (&r).into())?;
+            self.expr(expr, Some((&r).into()))?;
             self.arch.ret(r, type_, &self.scope);
         }
 
@@ -128,15 +130,25 @@ impl<Arch: Architecture> CodeGen<Arch> {
         Ok(())
     }
 
-    fn expr(&mut self, expr: Expr, dest: MoveDestination) -> Result<(), CodeGenError> {
+    fn expr(&mut self, expr: Expr, dest: Option<MoveDestination>) -> Result<(), CodeGenError> {
         match expr {
             Expr::Binary(bin_expr) => self.bin_expr(bin_expr, dest),
-            Expr::Lit(lit) => Ok(self.arch.mov(MoveSource::Lit(lit), dest, &self.scope)),
-            Expr::Unary(unary_expr) => self.unary_expr(unary_expr, dest),
+            Expr::Lit(lit) => Ok(self.arch.mov(
+                MoveSource::Lit(lit),
+                dest.expect("Destination was not provided"),
+                &self.scope,
+            )),
+            Expr::Unary(unary_expr) => {
+                self.unary_expr(unary_expr, dest.expect("Destination was not provided"))
+            }
             Expr::Ident(ident) => {
                 let symbol = self.scope.find_symbol(&ident).unwrap();
 
-                self.arch.mov(symbol.into(), dest, &self.scope);
+                self.arch.mov(
+                    symbol.into(),
+                    dest.expect("Destination was not provided"),
+                    &self.scope,
+                );
 
                 Ok(())
             }
@@ -161,11 +173,17 @@ impl<Arch: Architecture> CodeGen<Arch> {
                 Ok(())
             }
             Expr::FunctionCall(func_call) => self.call_function(func_call),
-            Expr::Struct(expr) => self.struct_expr(expr, dest),
+            Expr::Struct(expr) => {
+                self.struct_expr(expr, dest.expect("Destination was not provided"))
+            }
         }
     }
 
-    fn bin_expr(&mut self, expr: ExprBinary, dest: MoveDestination) -> Result<(), CodeGenError> {
+    fn bin_expr(
+        &mut self,
+        expr: ExprBinary,
+        dest: Option<MoveDestination>,
+    ) -> Result<(), CodeGenError> {
         match &expr.op {
             BinOp::Assign => {
                 let left = *expr.left;
@@ -175,7 +193,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
                     let symbol = self.scope.find_symbol(&name).unwrap().clone();
                     let dest: MoveDestination = (&symbol).into();
 
-                    self.expr(*expr.right, dest)?;
+                    self.expr(*expr.right, Some(dest))?;
                 } else {
                     return Err(CodeGenError::Assign(left));
                 }
@@ -184,36 +202,36 @@ impl<Arch: Architecture> CodeGen<Arch> {
                 self.expr(*expr.left, dest.clone())?;
 
                 let r = self.arch.alloc()?;
-                self.expr(*expr.right, (&r).into())?;
+                self.expr(*expr.right, Some((&r).into()))?;
 
-                self.arch.add(dest.register().unwrap(), &r);
+                self.arch.add(dest.unwrap().register().unwrap(), &r);
                 self.arch.free(r)?;
             }
             BinOp::Sub => {
                 self.expr(*expr.left, dest.clone())?;
 
                 let r = self.arch.alloc()?;
-                self.expr(*expr.right, (&r).into())?;
+                self.expr(*expr.right, Some((&r).into()))?;
 
-                self.arch.sub(dest.register().unwrap(), &r);
+                self.arch.sub(dest.unwrap().register().unwrap(), &r);
                 self.arch.free(r)?;
             }
             BinOp::Mul => {
                 self.expr(*expr.left, dest.clone())?;
 
                 let r = self.arch.alloc()?;
-                self.expr(*expr.right, (&r).into())?;
+                self.expr(*expr.right, Some((&r).into()))?;
 
-                self.arch.mul(dest.register().unwrap(), &r);
+                self.arch.mul(dest.unwrap().register().unwrap(), &r);
                 self.arch.free(r)?;
             }
             BinOp::Div => {
                 self.expr(*expr.left, dest.clone())?;
 
                 let r = self.arch.alloc()?;
-                self.expr(*expr.right, (&r).into())?;
+                self.expr(*expr.right, Some((&r).into()))?;
 
-                self.arch.div(dest.register().unwrap(), &r);
+                self.arch.div(dest.unwrap().register().unwrap(), &r);
                 self.arch.free(r)?;
             }
             BinOp::LessThan
@@ -225,10 +243,13 @@ impl<Arch: Architecture> CodeGen<Arch> {
                 self.expr(*expr.left, dest.clone())?;
 
                 let r = self.arch.alloc()?;
-                self.expr(*expr.right, (&r).into())?;
+                self.expr(*expr.right, Some((&r).into()))?;
 
-                self.arch
-                    .cmp(dest.register().unwrap(), &r, CmpOp::try_from(&expr.op)?);
+                self.arch.cmp(
+                    dest.unwrap().register().unwrap(),
+                    &r,
+                    CmpOp::try_from(&expr.op)?,
+                );
                 self.arch.free(r)?;
             }
         };
@@ -238,9 +259,9 @@ impl<Arch: Architecture> CodeGen<Arch> {
 
     fn stmt(&mut self, stmt: Stmt) -> Result<(), CodeGenError> {
         match stmt {
-            Stmt::Expr(expr) => self.expr(expr, MoveDestination::Void).map(|_| ()),
+            Stmt::Expr(expr) => self.expr(expr, None).map(|_| ()),
             Stmt::VarDecl(var_decl) => Ok(self.declare(var_decl)),
-            Stmt::Function(func) => Ok(self.function(func)),
+            Stmt::Function(func) => self.function(func),
             Stmt::Return(ret) => self.ret(ret),
         }
     }
@@ -252,13 +273,13 @@ impl<Arch: Architecture> CodeGen<Arch> {
     ) -> Result<(), CodeGenError> {
         match unary_expr.op {
             UnOp::Negative => {
-                self.expr(*unary_expr.expr, dest.clone())?;
+                self.expr(*unary_expr.expr, Some(dest.clone()))?;
                 self.arch.negate(dest.register().unwrap());
             }
             UnOp::Not => {
                 let r = self.arch.alloc()?;
 
-                self.expr(*unary_expr.expr, (&r).into())?;
+                self.expr(*unary_expr.expr, Some((&r).into()))?;
                 self.arch.not(&r, dest.register().unwrap());
                 self.arch.free(r)?;
             }
@@ -274,7 +295,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
 
         for (i, argument) in call.arguments.into_iter().enumerate() {
             let r = self.arch.alloc()?;
-            self.expr(argument, (&r).into())?;
+            self.expr(argument, Some((&r).into()))?;
 
             //NOTE: should the register be freed?
             self.arch.move_function_argument(r, i);
@@ -299,7 +320,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
 
         for (name, expr) in expr.fields.into_iter() {
             let offset = type_struct.offset::<Arch>(&name, &self.scope);
-            self.expr(expr, MoveDestination::Local(offset))?;
+            self.expr(expr, Some(MoveDestination::Local(offset)))?;
         }
 
         Ok(())

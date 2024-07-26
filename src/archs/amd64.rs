@@ -1,6 +1,6 @@
 use super::arch::{Architecture, MoveDestination, MoveSource};
 use crate::{
-    parser::{CmpOp, ExprLit, Expression, StmtVarDecl},
+    parser::{CmpOp, ExprLit, Expression},
     register_allocator::{AllocatorError, Register, RegisterAllocator},
     scope::Scope,
     symbol_table::SymbolParam,
@@ -67,7 +67,6 @@ impl Architecture for Amd64 {
                 self.mov_register(dest, register, type_, scope)
             }
             MoveSource::Lit(literal) => self.mov_literal(dest, literal, scope),
-            MoveSource::Void => {}
         }
     }
 
@@ -299,7 +298,6 @@ impl Amd64 {
                     literal.to_string(),
                 ));
             }
-            MoveDestination::Void => {}
         }
     }
 
@@ -324,7 +322,6 @@ impl Amd64 {
                     offset,
                 ));
             }
-            MoveDestination::Void => {}
         }
     }
 
@@ -373,7 +370,6 @@ impl Amd64 {
                     register.qword(),
                 ));
             }
-            MoveDestination::Void => {}
         }
     }
 }
