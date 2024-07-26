@@ -101,22 +101,9 @@ impl<Arch: Architecture> CodeGen<Arch> {
         }
     }
 
-    fn function(&mut self, mut func: StmtFunction) {
+    fn function(&mut self, func: StmtFunction) {
         self.scope.enter(*func.scope);
-        let mut offset: usize = 0;
-
-        for stmt in &mut func.body {
-            if let Stmt::VarDecl(var_decl) = stmt {
-                //TODO: clone bad
-                if let Symbol::Local(local) =
-                    self.scope.clone().find_symbol_mut(&var_decl.name).unwrap()
-                {
-                    local.offset = offset;
-                    offset += local.type_.size::<Arch>(&self.scope);
-                }
-            }
-        }
-
+        let offset = self.populate_offsets(&func.body);
         self.arch.fn_preamble(&func.name, offset);
 
         for stmt in func.body {
@@ -329,5 +316,20 @@ impl<Arch: Architecture> CodeGen<Arch> {
             .expect("Failed to write generated code to output file");
 
         Ok(())
+    }
+
+    fn populate_offsets(&mut self, stmts: &Vec<Stmt>) -> usize {
+        let mut offset: usize = 0;
+
+        for stmt in stmts {
+            if let Stmt::VarDecl(var_decl) = stmt {
+                if let Symbol::Local(local) = self.scope.find_symbol_mut(&var_decl.name).unwrap() {
+                    local.offset = offset;
+                    offset += var_decl.type_.size::<Arch>(&self.scope);
+                }
+            }
+        }
+
+        offset
     }
 }
