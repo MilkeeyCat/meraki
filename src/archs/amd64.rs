@@ -1,5 +1,6 @@
-use super::arch::{Architecture, MoveDestination, MoveSource};
+use super::arch::Architecture;
 use crate::{
+    codegen::locations::{MoveDestination, MoveSource},
     parser::{CmpOp, ExprLit, Expression},
     register_allocator::{AllocatorError, Register, RegisterAllocator},
     scope::Scope,

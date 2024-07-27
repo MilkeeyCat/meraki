@@ -1,42 +1,10 @@
 use crate::{
-    parser::{CmpOp, ExprLit},
+    codegen::locations::{MoveDestination, MoveSource},
+    parser::CmpOp,
     register_allocator::{AllocatorError, Register},
     scope::Scope,
     type_::Type,
 };
-
-#[derive(Debug)]
-pub enum MoveSource<'a> {
-    Global(&'a str, Type),
-    Local(usize, Type),
-    Param(usize, Type),
-    Register(&'a Register, Type),
-    Lit(ExprLit),
-}
-
-#[derive(Clone, Debug)]
-pub enum MoveDestination<'a> {
-    Global(&'a str),
-    Local(usize),
-    Register(&'a Register),
-}
-
-impl<'a> MoveDestination<'a> {
-    pub fn to_source(self, type_: Type) -> MoveSource<'a> {
-        match self {
-            MoveDestination::Global(label) => MoveSource::Global(label, type_),
-            MoveDestination::Local(offset) => MoveSource::Local(offset, type_),
-            MoveDestination::Register(register) => MoveSource::Register(register, type_),
-        }
-    }
-
-    pub fn register(self) -> Option<&'a Register> {
-        match self {
-            Self::Register(register) => Some(register),
-            _ => None,
-        }
-    }
-}
 
 pub trait Architecture {
     fn new() -> Self;

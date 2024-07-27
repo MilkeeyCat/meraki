@@ -1,10 +1,11 @@
+use super::locations::{MoveDestination, MoveSource};
 use crate::{
-    archs::{Architecture, MoveDestination, MoveSource},
+    archs::Architecture,
     parser::{
         BinOp, CmpOp, Expr, ExprBinary, ExprFunctionCall, ExprLit, ExprStruct, ExprUnary,
         Expression, OpParseError, Stmt, StmtFunction, StmtReturn, StmtVarDecl, UnOp,
     },
-    register_allocator::{AllocatorError, Register},
+    register_allocator::AllocatorError,
     scope::Scope,
     symbol_table::Symbol,
     type_::TypeError,
@@ -49,36 +50,6 @@ impl From<AllocatorError> for CodeGenError {
 impl From<OpParseError> for CodeGenError {
     fn from(value: OpParseError) -> Self {
         Self::OpParse(value)
-    }
-}
-
-impl<'a> From<&'a Register> for MoveDestination<'a> {
-    fn from(value: &'a Register) -> Self {
-        Self::Register(value)
-    }
-}
-
-impl<'a> From<&'a Symbol> for MoveSource<'a> {
-    fn from(value: &'a Symbol) -> Self {
-        match value {
-            Symbol::Local(symbol) => Self::Local(symbol.offset, symbol.type_.clone()),
-            Symbol::Global(symbol) => Self::Global(&symbol.name, symbol.type_.clone()),
-            Symbol::Param(symbol) => Self::Param(symbol.n, symbol.type_.clone()),
-            Symbol::Function(_) => unreachable!(),
-        }
-    }
-}
-
-impl<'a> From<&'a Symbol> for MoveDestination<'a> {
-    fn from(value: &'a Symbol) -> Self {
-        match value {
-            Symbol::Local(symbol) => Self::Local(symbol.offset),
-            Symbol::Global(symbol) => Self::Global(&symbol.name),
-            Symbol::Param(symbol) => {
-                todo!();
-            }
-            Symbol::Function(_) => unreachable!(),
-        }
     }
 }
 
