@@ -42,6 +42,13 @@ impl<'a> MoveDestination<'a> {
             _ => None,
         }
     }
+
+    pub fn offset(&self) -> Option<usize> {
+        match self {
+            Self::Local(offset) => Some(offset.to_owned()),
+            _ => None,
+        }
+    }
 }
 
 impl<'a> From<&'a Register> for MoveDestination<'a> {

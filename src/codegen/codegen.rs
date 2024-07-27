@@ -314,7 +314,10 @@ impl<Arch: Architecture> CodeGen<Arch> {
 
         for (name, expr) in expr.fields.into_iter() {
             let offset = type_struct.offset::<Arch>(&name, &self.scope);
-            self.expr(expr, Some(MoveDestination::Local(offset)))?;
+            self.expr(
+                expr,
+                Some(MoveDestination::Local(dest.offset().unwrap() + offset)),
+            )?;
         }
 
         Ok(())
