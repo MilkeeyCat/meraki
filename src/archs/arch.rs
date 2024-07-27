@@ -22,6 +22,14 @@ pub enum MoveDestination<'a> {
 }
 
 impl<'a> MoveDestination<'a> {
+    pub fn to_source(self, type_: Type) -> MoveSource<'a> {
+        match self {
+            MoveDestination::Global(label) => MoveSource::Global(label, type_),
+            MoveDestination::Local(offset) => MoveSource::Local(offset, type_),
+            MoveDestination::Register(register) => MoveSource::Register(register, type_),
+        }
+    }
+
     pub fn register(self) -> Option<&'a Register> {
         match self {
             Self::Register(register) => Some(register),
@@ -49,7 +57,7 @@ pub trait Architecture {
     fn fn_postamble(&mut self, name: &str, stackframe: usize);
     fn ret(&mut self, r: Register, type_: Type, scope: &Scope);
     fn jmp(&mut self, label: &str);
-    fn call_fn(&mut self, name: &str, r: &Register);
+    fn call_fn(&mut self, name: &str, r: Option<&Register>);
     fn move_function_argument(&mut self, r: Register, i: usize);
     fn finish(&self) -> Vec<u8>;
 }

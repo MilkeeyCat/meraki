@@ -19,6 +19,17 @@ impl Symbol {
             Self::Function(function) => &function.name,
         }
     }
+
+    pub fn type_(&self) -> Type {
+        match self {
+            Self::Global(global) => global.type_.clone(),
+            Self::Local(local) => local.type_.clone(),
+            Self::Param(param) => param.type_.clone(),
+            Self::Function(_) => {
+                panic!("Type of function, you wanted to get return type of the function or wat?")
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -211,14 +211,25 @@ impl Architecture for Amd64 {
         ));
     }
 
-    fn call_fn(&mut self, name: &str, r: &Register) {
-        self.buf.push_str(&formatdoc!(
-            "
-            \tcall {name}
-            \tmov {}, rax
-            ",
-            r.qword()
-        ));
+    fn call_fn(&mut self, name: &str, r: Option<&Register>) {
+        match r {
+            Some(r) => {
+                self.buf.push_str(&formatdoc!(
+                    "
+                    \tcall {name}
+                    \tmov {}, rax
+                    ",
+                    r.qword()
+                ));
+            }
+            None => {
+                self.buf.push_str(&formatdoc!(
+                    "
+                    \tcall {name}
+                    ",
+                ));
+            }
+        }
     }
 
     fn move_function_argument(&mut self, r: Register, i: usize) {
@@ -275,8 +286,9 @@ impl Amd64 {
             MoveDestination::Local(offset) => {
                 self.buf.push_str(&formatdoc!(
                     "
-                    \tmov [rbp - {offset}], {}
+                    \tmov {} ptr [rbp - {offset}], {}
                     ",
+                    Self::size_name(literal.type_(scope).unwrap().size::<Self>(scope)),
                     literal.to_string(),
                 ));
             }
