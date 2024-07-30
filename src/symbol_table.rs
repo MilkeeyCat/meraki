@@ -1,4 +1,9 @@
-use crate::type_::Type;
+use crate::{
+    archs::Architecture,
+    codegen::locations::{MoveSource, SourceGlobal, SourceLocal, SourceParam},
+    scope::Scope,
+    type_::Type,
+};
 
 const MAX_SYMBOLS: usize = 512;
 
@@ -28,6 +33,28 @@ impl Symbol {
             Self::Function(_) => {
                 panic!("Type of function, you wanted to get return type of the function or wat?")
             }
+        }
+    }
+
+    pub fn to_source<Arch: Architecture>(&self, scope: &Scope) -> MoveSource {
+        match self {
+            Self::Local(symbol) => MoveSource::Local(SourceLocal {
+                size: symbol.type_.size::<Arch>(scope),
+                signed: symbol.type_.signed(),
+                offset: symbol.offset,
+            }),
+            Self::Global(symbol) => MoveSource::Global(SourceGlobal {
+                label: &symbol.name,
+                size: symbol.type_.size::<Arch>(scope),
+                signed: symbol.type_.signed(),
+                offset: None,
+            }),
+            Self::Param(symbol) => MoveSource::Param(SourceParam {
+                size: symbol.type_.size::<Arch>(scope),
+                signed: symbol.type_.signed(),
+                n: symbol.n,
+            }),
+            Self::Function(_) => unreachable!(),
         }
     }
 }

@@ -1,4 +1,4 @@
-use super::locations::{MoveDestination, MoveSource};
+use super::locations::{DestinationLocal, MoveDestination, MoveSource, SourceRegister};
 use crate::{
     archs::Architecture,
     parser::{
@@ -118,7 +118,8 @@ impl<Arch: Architecture> CodeGen<Arch> {
                 let symbol = self.scope.find_symbol(&ident).unwrap();
 
                 if let Some(dest) = dest {
-                    self.arch.mov(symbol.into(), dest, &self.scope);
+                    self.arch
+                        .mov(symbol.to_source::<Arch>(&self.scope), dest, &self.scope);
                 }
             }
             Expr::Cast(cast_expr) => {
@@ -169,12 +170,20 @@ impl<Arch: Architecture> CodeGen<Arch> {
                         let r = self.arch.alloc()?;
 
                         self.arch.mov(
-                            symbol_dest.to_source(symbol.type_()),
+                            symbol_dest.to_source(symbol.type_().size::<Arch>(&self.scope)),
                             (&r).into(),
                             &self.scope,
                         );
-                        self.arch
-                            .mov(MoveSource::Register(&r, symbol.type_()), dest, &self.scope);
+                        self.arch.mov(
+                            MoveSource::Register(SourceRegister {
+                                register: &r,
+                                size: symbol.type_().size::<Arch>(&self.scope),
+                                signed: symbol.type_().signed(),
+                                offset: None,
+                            }),
+                            dest,
+                            &self.scope,
+                        );
                         self.arch.free(r)?;
                     }
                 } else {
@@ -188,7 +197,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
                     let r = self.arch.alloc()?;
                     self.expr(*expr.right, Some((&r).into()))?;
 
-                    self.arch.add(dest.register().unwrap(), &r);
+                    self.arch.add(dest.register(), &r);
                     self.arch.free(r)?;
                 }
             }
@@ -199,7 +208,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
                     let r = self.arch.alloc()?;
                     self.expr(*expr.right, Some((&r).into()))?;
 
-                    self.arch.sub(dest.register().unwrap(), &r);
+                    self.arch.sub(dest.register(), &r);
                     self.arch.free(r)?;
                 }
             }
@@ -210,7 +219,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
                     let r = self.arch.alloc()?;
                     self.expr(*expr.right, Some((&r).into()))?;
 
-                    self.arch.mul(dest.register().unwrap(), &r);
+                    self.arch.mul(dest.register(), &r);
                     self.arch.free(r)?;
                 }
             }
@@ -221,7 +230,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
                     let r = self.arch.alloc()?;
                     self.expr(*expr.right, Some((&r).into()))?;
 
-                    self.arch.div(dest.register().unwrap(), &r);
+                    self.arch.div(dest.register(), &r);
                     self.arch.free(r)?;
                 }
             }
@@ -238,7 +247,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
                     self.expr(*expr.right, Some((&r).into()))?;
 
                     self.arch
-                        .cmp(dest.register().unwrap(), &r, CmpOp::try_from(&expr.op)?);
+                        .cmp(dest.register(), &r, CmpOp::try_from(&expr.op)?);
                     self.arch.free(r)?;
                 }
             }
@@ -264,13 +273,13 @@ impl<Arch: Architecture> CodeGen<Arch> {
         match unary_expr.op {
             UnOp::Negative => {
                 self.expr(*unary_expr.expr, Some(dest.clone()))?;
-                self.arch.negate(dest.register().unwrap());
+                self.arch.negate(dest.register());
             }
             UnOp::Not => {
                 let r = self.arch.alloc()?;
 
                 self.expr(*unary_expr.expr, Some((&r).into()))?;
-                self.arch.not(&r, dest.register().unwrap());
+                self.arch.not(&r, dest.register());
                 self.arch.free(r)?;
             }
         };
@@ -296,7 +305,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
         }
 
         if let Some(dest) = dest {
-            self.arch.call_fn(&call.name, dest.register());
+            self.arch.call_fn(&call.name, Some(dest.register()));
         } else {
             self.arch.call_fn(&call.name, None);
         }
@@ -316,7 +325,9 @@ impl<Arch: Architecture> CodeGen<Arch> {
             let offset = type_struct.offset::<Arch>(&name, &self.scope);
             self.expr(
                 expr,
-                Some(MoveDestination::Local(dest.offset().unwrap() + offset)),
+                Some(MoveDestination::Local(DestinationLocal {
+                    offset: dest.local_offset() + offset,
+                })),
             )?;
         }
 
