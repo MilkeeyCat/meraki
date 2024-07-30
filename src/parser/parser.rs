@@ -15,6 +15,7 @@ use crate::{
     type_::{Type, TypeError},
     type_table::{self, TypeStruct},
 };
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub enum ParserError {
@@ -85,11 +86,16 @@ impl From<LexerError> for ParserError {
     }
 }
 
+type PrefixFn = fn(&mut Parser) -> Result<Expr, ParserError>;
+type InfixFn = fn(&mut Parser, left: Expr) -> Result<Expr, ParserError>;
+
 pub struct Parser {
     lexer: Lexer,
     cur_token: Token,
     peek_token: Token,
     scope: Scope,
+    prefix_fns: HashMap<Token, PrefixFn>,
+    infix_fns: HashMap<Token, InfixFn>,
 }
 
 impl Parser {
@@ -99,6 +105,29 @@ impl Parser {
             peek_token: lexer.next_token()?,
             lexer,
             scope: Scope::new(),
+            prefix_fns: HashMap::from([
+                (Token::Ident(Default::default()), Self::ident as PrefixFn),
+                (Token::Integer(Default::default()), Self::int_lit),
+                (Token::True, Self::bool),
+                (Token::False, Self::bool),
+                (Token::Minus, Self::unary_expr),
+                (Token::Bang, Self::unary_expr),
+                (Token::LParen, Self::grouped_expr),
+            ]),
+            infix_fns: HashMap::from([
+                (Token::Plus, Self::bin_expr as InfixFn),
+                (Token::Minus, Self::bin_expr),
+                (Token::Asterisk, Self::bin_expr),
+                (Token::Slash, Self::bin_expr),
+                (Token::Assign, Self::bin_expr),
+                (Token::LessThan, Self::bin_expr),
+                (Token::LessEqual, Self::bin_expr),
+                (Token::GreaterThan, Self::bin_expr),
+                (Token::GreaterEqual, Self::bin_expr),
+                (Token::Equal, Self::bin_expr),
+                (Token::NotEqual, Self::bin_expr),
+                (Token::LParen, Self::bin_expr),
+            ]),
         })
     }
 
@@ -175,38 +204,28 @@ impl Parser {
     }
 
     fn expr(&mut self, precedence: Precedence) -> Result<Expr, ParserError> {
-        let mut left = match &self.cur_token {
-            Token::Ident(_) => match self.peek_token {
-                Token::LBrace => self.struct_expr(),
-                _ => self.ident(),
-            },
-            Token::Integer(_) => self.int_lit(),
-            Token::True | Token::False => self.bool(),
-            Token::Minus | Token::Bang => self.unary_expr(),
-            Token::LParen => self.grouped_expr(),
-            token => Err(ParserError::Prefix(token.to_owned())),
+        let token = match &self.cur_token {
+            Token::Ident(_) => Token::Ident(Default::default()),
+            Token::Integer(_) => Token::Integer(Default::default()),
+            token => token.clone(),
+        };
+
+        let mut left = match self.prefix_fns.get(&token) {
+            Some(func) => func(self),
+            None => {
+                return Err(ParserError::Prefix(self.cur_token.clone()));
+            }
         };
 
         while !self.cur_token_is(&Token::Semicolon)
             && precedence < Precedence::from(&self.cur_token)
         {
-            left = match &self.cur_token {
-                Token::Plus
-                | Token::Minus
-                | Token::Asterisk
-                | Token::Slash
-                | Token::Assign
-                | Token::LessThan
-                | Token::LessEqual
-                | Token::GreaterThan
-                | Token::GreaterEqual
-                | Token::Equal
-                | Token::NotEqual
-                | Token::LParen => self.bin_expr(left?),
-                token => {
-                    return Err(ParserError::Infix(token.to_owned()));
+            left = match self.infix_fns.get(&self.cur_token) {
+                Some(func) => func(self, left?),
+                None => {
+                    return Err(ParserError::Infix(self.cur_token.clone()));
                 }
-            }
+            };
         }
 
         left
@@ -428,9 +447,12 @@ impl Parser {
     }
 
     fn ident(&mut self) -> Result<Expr, ParserError> {
-        match self.next_token()? {
-            Token::Ident(ident) => Ok(Expr::Ident(ident)),
-            token => Err(ParserError::ParseType(token)),
+        match self.peek_token {
+            Token::LBrace => self.struct_expr(),
+            _ => match self.next_token()? {
+                Token::Ident(ident) => Ok(Expr::Ident(ident)),
+                token => Err(ParserError::ParseType(token)),
+            },
         }
     }
 
