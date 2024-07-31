@@ -36,21 +36,21 @@ impl Symbol {
         }
     }
 
-    pub fn to_source<Arch: Architecture>(&self, scope: &Scope) -> MoveSource {
+    pub fn to_source(&self, arch: &dyn Architecture, scope: &Scope) -> MoveSource {
         match self {
             Self::Local(symbol) => MoveSource::Local(SourceLocal {
-                size: symbol.type_.size::<Arch>(scope),
+                size: symbol.type_.size(arch, scope),
                 signed: symbol.type_.signed(),
                 offset: symbol.offset,
             }),
             Self::Global(symbol) => MoveSource::Global(SourceGlobal {
                 label: &symbol.name,
-                size: symbol.type_.size::<Arch>(scope),
+                size: symbol.type_.size(arch, scope),
                 signed: symbol.type_.signed(),
                 offset: None,
             }),
             Self::Param(symbol) => MoveSource::Param(SourceParam {
-                size: symbol.type_.size::<Arch>(scope),
+                size: symbol.type_.size(arch, scope),
                 signed: symbol.type_.signed(),
                 n: symbol.n,
             }),

@@ -37,7 +37,7 @@ impl Architecture for Amd64 {
         }
     }
 
-    fn size(type_: &Type) -> usize {
+    fn size(&self, type_: &Type) -> usize {
         match type_ {
             _ => unreachable!(),
         }
@@ -199,7 +199,7 @@ impl Architecture for Amd64 {
             \t{} rax, {}
             ",
             Self::movx(type_.signed()),
-            r.from_size(type_.size::<Self>(scope)),
+            r.from_size(type_.size(self, scope)),
         ));
     }
 
@@ -289,7 +289,7 @@ impl Amd64 {
                     "
                     \tmov {} ptr [rbp - {}], {}
                     ",
-                    Self::size_name(literal.type_(scope).unwrap().size::<Self>(scope)),
+                    Self::size_name(literal.type_(scope).unwrap().size(self, scope)),
                     local.offset,
                     literal.to_string(),
                 ));
@@ -299,7 +299,7 @@ impl Amd64 {
                     "
                     \tmov {} ptr [{}], {}
                     ",
-                    Self::size_name(literal.type_(scope).unwrap().size::<Self>(scope)),
+                    Self::size_name(literal.type_(scope).unwrap().size(self, scope)),
                     global.label,
                     literal.to_string(),
                 ));

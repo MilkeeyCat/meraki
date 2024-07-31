@@ -53,22 +53,20 @@ impl From<OpParseError> for CodeGenError {
     }
 }
 
-pub struct CodeGen<Arch: Architecture> {
-    arch: Arch,
+pub struct CodeGen<'a> {
+    arch: &'a mut dyn Architecture,
     scope: Scope,
 }
 
-impl<Arch: Architecture> CodeGen<Arch> {
-    pub fn new(scope: Scope) -> Self {
-        let arch = Arch::new();
-
+impl<'a> CodeGen<'a> {
+    pub fn new(arch: &'a mut dyn Architecture, scope: Scope) -> Self {
         Self { arch, scope }
     }
 
     fn declare(&mut self, variable: StmtVarDecl) {
         if !self.scope.local() {
             self.arch
-                .declare(&variable.name, variable.type_.size::<Arch>(&self.scope))
+                .declare(&variable.name, variable.type_.size(self.arch, &self.scope))
         }
     }
 
@@ -119,12 +117,12 @@ impl<Arch: Architecture> CodeGen<Arch> {
 
                 if let Some(dest) = dest {
                     self.arch
-                        .mov(symbol.to_source::<Arch>(&self.scope), dest, &self.scope);
+                        .mov(symbol.to_source(self.arch, &self.scope), dest, &self.scope);
                 }
             }
             Expr::Cast(cast_expr) => {
                 //TODO: move this elsewhere
-                let type_size = cast_expr.type_(&self.scope)?.size::<Arch>(&self.scope);
+                let type_size = cast_expr.type_(&self.scope)?.size(self.arch, &self.scope);
                 let expr = match *cast_expr.expr {
                     Expr::Lit(ExprLit::Int(mut int)) => {
                         int.zero_except_n_bytes(type_size);
@@ -170,14 +168,14 @@ impl<Arch: Architecture> CodeGen<Arch> {
                         let r = self.arch.alloc()?;
 
                         self.arch.mov(
-                            symbol_dest.to_source(symbol.type_().size::<Arch>(&self.scope)),
+                            symbol_dest.to_source(symbol.type_().size(self.arch, &self.scope)),
                             (&r).into(),
                             &self.scope,
                         );
                         self.arch.mov(
                             MoveSource::Register(SourceRegister {
                                 register: &r,
-                                size: symbol.type_().size::<Arch>(&self.scope),
+                                size: symbol.type_().size(self.arch, &self.scope),
                                 signed: symbol.type_().signed(),
                                 offset: None,
                             }),
@@ -322,7 +320,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
         //NOTE: clone bad ^
 
         for (name, expr) in expr.fields.into_iter() {
-            let offset = type_struct.offset::<Arch>(&name, &self.scope);
+            let offset = type_struct.offset(self.arch, &name, &self.scope);
             self.expr(
                 expr,
                 Some(MoveDestination::Local(DestinationLocal {
@@ -354,7 +352,7 @@ impl<Arch: Architecture> CodeGen<Arch> {
             if let Stmt::VarDecl(var_decl) = stmt {
                 if let Symbol::Local(local) = self.scope.find_symbol_mut(&var_decl.name).unwrap() {
                     local.offset = offset;
-                    offset += var_decl.type_.size::<Arch>(&self.scope);
+                    offset += var_decl.type_.size(self.arch, &self.scope);
                 }
             }
         }

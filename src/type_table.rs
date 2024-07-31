@@ -12,14 +12,14 @@ pub struct TypeStruct {
 }
 
 impl TypeStruct {
-    pub fn size<Arch: Architecture>(&self, scope: &Scope) -> usize {
+    pub fn size(&self, arch: &dyn Architecture, scope: &Scope) -> usize {
         self.fields
             .iter()
-            .map(|(_, type_)| type_.size::<Arch>(scope))
+            .map(|(_, type_)| type_.size(arch, scope))
             .sum()
     }
 
-    pub fn offset<Arch: Architecture>(&self, name: &str, scope: &Scope) -> usize {
+    pub fn offset(&self, arch: &dyn Architecture, name: &str, scope: &Scope) -> usize {
         let mut offset = 0;
 
         for (field_name, type_) in &self.fields {
@@ -27,7 +27,7 @@ impl TypeStruct {
                 break;
             }
 
-            offset += type_.size::<Arch>(scope);
+            offset += type_.size(arch, scope);
         }
 
         offset

@@ -145,15 +145,15 @@ impl Type {
         return Err(TypeError::Cast(self, type_));
     }
 
-    pub fn size<Arch: Architecture>(&self, scope: &Scope) -> usize {
+    pub fn size(&self, arch: &dyn Architecture, scope: &Scope) -> usize {
         match self {
             Type::Void => 0,
             Type::I8 | Type::U8 | Type::Bool => 1,
             Type::I16 | Type::U16 => 2,
             Type::Struct(structure) => match scope.find_type(structure).unwrap() {
-                crate::type_table::Type::Struct(structure) => structure.size::<Arch>(scope),
+                crate::type_table::Type::Struct(structure) => structure.size(arch, scope),
             },
-            _ => Arch::size(self),
+            _ => arch.size(self),
         }
     }
 }

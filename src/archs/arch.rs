@@ -7,11 +7,15 @@ use crate::{
 };
 
 pub trait Architecture {
-    fn new() -> Self;
-    fn size(type_: &Type) -> usize;
+    fn new() -> Self
+    where
+        Self: Sized;
+    fn size(&self, type_: &Type) -> usize;
     fn alloc(&mut self) -> Result<Register, AllocatorError>;
     fn free(&mut self, register: Register) -> Result<(), AllocatorError>;
-    fn size_name(size: usize) -> &'static str;
+    fn size_name(size: usize) -> &'static str
+    where
+        Self: Sized;
     fn declare(&mut self, name: &str, size: usize);
     fn mov(&mut self, src: MoveSource, dest: MoveDestination, scope: &Scope);
     fn negate(&mut self, r: &Register);

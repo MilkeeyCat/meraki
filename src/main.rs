@@ -10,7 +10,7 @@ mod type_table;
 
 use std::{fs::File, io::Read};
 
-use crate::archs::Amd64;
+use crate::archs::{Amd64, Architecture};
 use clap::Parser;
 use codegen::CodeGen;
 use lexer::Lexer;
@@ -46,7 +46,7 @@ fn main() {
         dbg!(&stmts);
         dbg!(&scope);
 
-        CodeGen::<Amd64>::new(scope)
+        CodeGen::new(&mut Amd64::new(), scope)
             .compile(stmts, &args.output)
             .unwrap_or_else(|e| giveup(Box::new(e)));
     }
