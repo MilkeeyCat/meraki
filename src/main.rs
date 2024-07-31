@@ -27,7 +27,7 @@ struct Args {
     output: String,
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
     for filename in args.files {
@@ -38,21 +38,13 @@ fn main() {
             .expect(&format!("Failed to read contents of file: {}", filename));
 
         let lexer = Lexer::new(source_code);
-        let (stmts, scope) = parser::Parser::new(lexer)
-            .unwrap_or_else(|e| giveup(Box::new(e)))
-            .into_parts()
-            .unwrap_or_else(|e| giveup(Box::new(e)));
+        let (stmts, scope) = parser::Parser::new(lexer)?.into_parts()?;
 
         dbg!(&stmts);
         dbg!(&scope);
 
-        CodeGen::new(&mut Amd64::new(), scope)
-            .compile(stmts, &args.output)
-            .unwrap_or_else(|e| giveup(Box::new(e)));
+        CodeGen::new(&mut Amd64::new(), scope).compile(stmts, &args.output)?;
     }
-}
 
-fn giveup(error: Box<dyn std::error::Error>) -> ! {
-    println!("Achtung:  {}", error);
-    std::process::exit(1)
+    Ok(())
 }
