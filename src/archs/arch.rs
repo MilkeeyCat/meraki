@@ -1,5 +1,5 @@
 use crate::{
-    codegen::locations::{MoveDestination, MoveSource},
+    codegen::locations::{MoveDestination, MoveSource, SourceLocal},
     parser::CmpOp,
     register_allocator::{AllocatorError, Register},
     scope::Scope,
@@ -31,5 +31,6 @@ pub trait Architecture {
     fn jmp(&mut self, label: &str);
     fn call_fn(&mut self, name: &str, r: Option<&Register>);
     fn move_function_argument(&mut self, r: Register, i: usize);
+    fn lea(&mut self, dest: &Register, offset: usize);
     fn finish(&self) -> Vec<u8>;
 }

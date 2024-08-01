@@ -1,7 +1,8 @@
 use super::arch::Architecture;
 use crate::{
     codegen::locations::{
-        MoveDestination, MoveSource, SourceGlobal, SourceLocal, SourceParam, SourceRegister,
+        DestinationLocal, DestinationRegister, MoveDestination, MoveSource, Offset, SourceGlobal,
+        SourceLocal, SourceParam, SourceRegister,
     },
     parser::{CmpOp, ExprLit, Expression},
     register_allocator::{AllocatorError, Register, RegisterAllocator},
@@ -246,6 +247,16 @@ impl Architecture for Amd64 {
         ));
     }
 
+    fn lea(&mut self, dest: &Register, offset: usize) {
+        self.buf.push_str(&formatdoc!(
+            "
+            \tlea {}, [rbp - {}]
+            ",
+            dest.qword(),
+            offset,
+        ));
+    }
+
     fn finish(&self) -> Vec<u8> {
         self.buf.as_bytes().to_vec()
     }
@@ -318,9 +329,54 @@ impl Amd64 {
 
     fn mov_local(&mut self, src: SourceLocal, dest: MoveDestination, scope: &Scope) {
         match dest {
-            MoveDestination::Local(offset) => {
-                // a lil bit of fuckery
-                todo!();
+            // NOTE: x86-64 doesn't support indirect to indirect addressing mode so we use tools we already have
+            MoveDestination::Local(local) => {
+                let mut size = src.size;
+                let r = self.alloc().unwrap();
+
+                self.lea(&r, src.offset);
+
+                while size > 0 {
+                    let chunk_size = match size {
+                        8.. => 8,
+                        4..=7 => 4,
+                        2..=3 => 2,
+                        1 => 1,
+                        0 => unreachable!(),
+                    };
+
+                    let r_tmp = self.alloc().unwrap();
+
+                    self.mov_register(
+                        SourceRegister {
+                            size: chunk_size,
+                            offset: Some(Offset((size - chunk_size).try_into().unwrap())),
+                            signed: false,
+                            register: &r,
+                        },
+                        MoveDestination::Register(DestinationRegister {
+                            offset: None,
+                            register: &r_tmp,
+                        }),
+                        scope,
+                    );
+                    self.mov_register(
+                        SourceRegister {
+                            size: chunk_size,
+                            offset: None,
+                            signed: false,
+                            register: &r_tmp,
+                        },
+                        MoveDestination::Local(DestinationLocal {
+                            offset: local.offset,
+                        }),
+                        scope,
+                    );
+
+                    size -= chunk_size;
+                }
+
+                self.free(r).unwrap();
             }
             MoveDestination::Global(label) => {
                 // a lil bit of fuckery as well
@@ -376,6 +432,21 @@ impl Amd64 {
                 todo!();
             }
             MoveDestination::Register(dest_register) => {
+                if let Some(offset) = src.offset {
+                    self.buf.push_str(&formatdoc!(
+                        "
+                        \t{} {}, {} ptr [{}{}]
+                        ",
+                        Self::movx(src.signed),
+                        dest_register.register.qword(),
+                        Self::size_name(src.size),
+                        src.register.qword(),
+                        offset
+                    ));
+
+                    return;
+                }
+
                 self.buf.push_str(&formatdoc!(
                     "
                     \tmov {}, {}

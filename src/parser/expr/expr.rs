@@ -4,6 +4,7 @@ use crate::{
     scope::Scope,
     symbol_table::Symbol,
     type_::{Type, TypeError},
+    type_table,
 };
 
 pub trait Expression {
@@ -18,6 +19,7 @@ pub enum Expr {
     Lit(ExprLit),
     Ident(String),
     Struct(ExprStruct),
+    StructAccess(ExprStructAccess),
     FunctionCall(ExprFunctionCall),
 }
 
@@ -38,6 +40,7 @@ impl Expression for Expr {
             },
             Self::Cast(cast) => cast.type_(scope),
             Self::Struct(expr_struct) => expr_struct.type_(scope),
+            Self::StructAccess(expr_struct_access) => expr_struct_access.type_(scope),
             Self::FunctionCall(function_call) => {
                 match scope.find_symbol(&function_call.name).unwrap() {
                     Symbol::Function(function) => Ok(function.return_type.to_owned()),
@@ -126,6 +129,28 @@ pub struct ExprStruct {
 impl ExprStruct {
     pub fn new(name: String, fields: Vec<(String, Expr)>) -> Self {
         Self { name, fields }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExprStructAccess {
+    pub name: String,
+    pub field: String,
+}
+
+impl Expression for ExprStructAccess {
+    fn type_(&self, scope: &Scope) -> Result<Type, TypeError> {
+        match scope.find_symbol(&self.name).unwrap() {
+            Symbol::Local(local) => match &local.type_ {
+                Type::Struct(s) => match scope.find_type(&s).unwrap() {
+                    type_table::Type::Struct(sl) => {
+                        Ok(sl.get_field_type(&self.field).unwrap().to_owned())
+                    }
+                },
+                _ => todo!(),
+            },
+            _ => todo!(),
+        }
     }
 }
 

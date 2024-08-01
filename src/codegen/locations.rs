@@ -1,6 +1,21 @@
 use crate::{parser::ExprLit, register_allocator::Register, symbol_table::Symbol};
 
 #[derive(Debug)]
+pub struct Offset(pub isize);
+
+impl std::fmt::Display for Offset {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.0 > 0 {
+            write!(f, " + {}", self.0)
+        } else if self.0 < 0 {
+            write!(f, " - {}", self.0.abs())
+        } else {
+            write!(f, "")
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct SourceGlobal<'a> {
     pub label: &'a str,
     pub size: usize,
@@ -27,7 +42,7 @@ pub struct SourceRegister<'a> {
     pub register: &'a Register,
     pub size: usize,
     pub signed: bool,
-    pub offset: Option<usize>,
+    pub offset: Option<Offset>,
 }
 
 #[derive(Debug)]
@@ -79,7 +94,9 @@ impl<'a> MoveDestination<'a> {
             }),
             MoveDestination::Register(register) => MoveSource::Register(SourceRegister {
                 register: register.register,
-                offset: register.offset,
+                offset: register
+                    .offset
+                    .map(|offset| Offset(offset.try_into().unwrap())),
                 signed: false,
                 size,
             }),

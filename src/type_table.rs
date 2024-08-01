@@ -32,6 +32,17 @@ impl TypeStruct {
 
         offset
     }
+
+    pub fn get_field_type(&self, field: &str) -> Option<&crate::type_::Type> {
+        self.fields
+            .iter()
+            .find(|(name, _)| name == field)
+            .map(|(_, type_)| type_)
+    }
+
+    pub fn contains(&self, field: &str) -> bool {
+        self.fields.iter().any(|(name, _)| name == field)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

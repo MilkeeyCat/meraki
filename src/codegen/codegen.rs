@@ -2,13 +2,13 @@ use super::locations::{DestinationLocal, MoveDestination, MoveSource, SourceRegi
 use crate::{
     archs::Architecture,
     parser::{
-        BinOp, CmpOp, Expr, ExprBinary, ExprFunctionCall, ExprLit, ExprStruct, ExprUnary,
-        Expression, OpParseError, Stmt, StmtFunction, StmtReturn, StmtVarDecl, UnOp,
+        BinOp, CmpOp, Expr, ExprBinary, ExprFunctionCall, ExprLit, ExprStruct, ExprStructAccess,
+        ExprUnary, Expression, OpParseError, Stmt, StmtFunction, StmtReturn, StmtVarDecl, UnOp,
     },
     register_allocator::AllocatorError,
     scope::Scope,
     symbol_table::Symbol,
-    type_::TypeError,
+    type_::{Type, TypeError},
     type_table,
 };
 use std::fs::File;
@@ -142,6 +142,11 @@ impl<'a> CodeGen<'a> {
             Expr::Struct(expr) => {
                 if let Some(dest) = dest {
                     self.struct_expr(expr, dest)?
+                }
+            }
+            Expr::StructAccess(expr) => {
+                if let Some(dest) = dest {
+                    self.struct_access(expr, dest)?;
                 }
             }
         };
@@ -330,6 +335,38 @@ impl<'a> CodeGen<'a> {
                 })),
             )?;
         }
+
+        Ok(())
+    }
+
+    fn struct_access(
+        &mut self,
+        expr: ExprStructAccess,
+        dest: MoveDestination,
+    ) -> Result<(), CodeGenError> {
+        let symbol = self.scope.find_symbol(&expr.name).unwrap();
+        let field_offset = match symbol.type_() {
+            Type::Struct(s) => match self.scope.find_type(&s).unwrap() {
+                type_table::Type::Struct(type_struct) => {
+                    type_struct.offset(self.arch, &expr.field, &self.scope)
+                }
+            },
+            _ => panic!(),
+        };
+
+        let mut src = symbol.to_source(self.arch, &self.scope);
+        match &mut src {
+            MoveSource::Local(local) => {
+                local.offset += field_offset;
+            }
+            MoveSource::Global(global) => match &mut global.offset {
+                Some(offset) => *offset += field_offset,
+                None => global.offset = Some(field_offset),
+            },
+            _ => unreachable!(),
+        };
+
+        self.arch.mov(src, dest, &self.scope);
 
         Ok(())
     }

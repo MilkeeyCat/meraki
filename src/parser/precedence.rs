@@ -5,6 +5,7 @@ pub enum Precedence {
     #[default]
     Lowest,
     Assign,
+    Access,
     Comparison,
     Equality,
     Sum,
@@ -25,6 +26,7 @@ impl From<&Token> for Precedence {
             Equal | NotEqual => Self::Equality,
             Assign => Self::Assign,
             LParen => Self::Call,
+            Period => Self::Access,
             _ => Self::Lowest,
         }
     }
@@ -35,7 +37,8 @@ impl Precedence {
         match self {
             Self::Lowest => panic!(),
             Self::Assign => Self::Lowest,
-            Self::Comparison => Self::Assign,
+            Self::Access => Self::Assign,
+            Self::Comparison => Self::Access,
             Self::Equality => Self::Comparison,
             Self::Sum => Self::Equality,
             Self::Product => Self::Sum,

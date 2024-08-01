@@ -7,7 +7,7 @@ use super::{
 };
 use crate::{
     lexer::{Lexer, LexerError, Token},
-    parser::ExprFunctionCall,
+    parser::{ExprFunctionCall, ExprStructAccess},
     scope::Scope,
     symbol_table::{
         Symbol, SymbolFunction, SymbolGlobal, SymbolLocal, SymbolParam, SymbolTableError,
@@ -127,6 +127,7 @@ impl Parser {
                 (Token::Equal, Self::bin_expr),
                 (Token::NotEqual, Self::bin_expr),
                 (Token::LParen, Self::bin_expr),
+                (Token::Period, Self::struct_access),
             ]),
         })
     }
@@ -551,6 +552,31 @@ impl Parser {
 
                 Ok(Expr::Binary(ExprBinary::new(op, left, right)))
             }
+        }
+    }
+
+    fn struct_access(&mut self, expr: Expr) -> Result<Expr, ParserError> {
+        let token = self.next_token()?;
+
+        match expr {
+            Expr::Ident(name) => match self.expr(Precedence::from(&token))? {
+                Expr::Ident(field) => match self.scope.find_symbol(&name).unwrap().type_() {
+                    Type::Struct(struct_type) => {
+                        match self.scope.find_type(&struct_type).unwrap() {
+                            type_table::Type::Struct(s) => {
+                                if s.contains(&field) {
+                                    Ok(Expr::StructAccess(ExprStructAccess { name, field }))
+                                } else {
+                                    panic!("no such field bitch");
+                                }
+                            }
+                        }
+                    }
+                    _ => panic!(),
+                },
+                _ => panic!("sdasdasd"),
+            },
+            _ => panic!("sdasdasd"),
         }
     }
 
