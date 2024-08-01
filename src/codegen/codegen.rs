@@ -318,13 +318,15 @@ impl<'a> CodeGen<'a> {
         }
         .clone();
         //NOTE: clone bad ^
+        let struct_size = type_struct.size(self.arch, &self.scope);
 
         for (name, expr) in expr.fields.into_iter() {
             let offset = type_struct.offset(self.arch, &name, &self.scope);
             self.expr(
                 expr,
                 Some(MoveDestination::Local(DestinationLocal {
-                    offset: dest.local_offset() + offset,
+                    // NOTE: local variable use 1-based offset but struct offsets are 0-based, so to plumb it correctly gotta slap that -1
+                    offset: struct_size + dest.local_offset() - offset - 1,
                 })),
             )?;
         }
@@ -346,7 +348,7 @@ impl<'a> CodeGen<'a> {
     }
 
     fn populate_offsets(&mut self, stmts: &Vec<Stmt>) -> usize {
-        let mut offset: usize = 0;
+        let mut offset = 1;
 
         for stmt in stmts {
             if let Stmt::VarDecl(var_decl) = stmt {
