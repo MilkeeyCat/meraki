@@ -396,6 +396,14 @@ impl<'a> CodeGen<'a> {
             }
         }
 
-        offset
+        let alignment = self.arch.alignment();
+
+        if offset < alignment {
+            alignment
+        } else if offset % alignment == 0 {
+            offset
+        } else {
+            ((offset / alignment) + 1) * alignment
+        }
     }
 }

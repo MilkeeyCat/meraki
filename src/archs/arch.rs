@@ -1,5 +1,5 @@
 use crate::{
-    codegen::locations::{MoveDestination, MoveSource, SourceLocal},
+    codegen::locations::{MoveDestination, MoveSource},
     parser::CmpOp,
     register_allocator::{AllocatorError, Register},
     scope::Scope,
@@ -10,6 +10,7 @@ pub trait Architecture {
     fn new() -> Self
     where
         Self: Sized;
+    fn alignment(&self) -> usize;
     fn size(&self, type_: &Type) -> usize;
     fn alloc(&mut self) -> Result<Register, AllocatorError>;
     fn free(&mut self, register: Register) -> Result<(), AllocatorError>;

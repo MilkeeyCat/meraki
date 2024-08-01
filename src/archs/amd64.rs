@@ -38,6 +38,10 @@ impl Architecture for Amd64 {
         }
     }
 
+    fn alignment(&self) -> usize {
+        16
+    }
+
     fn size(&self, type_: &Type) -> usize {
         match type_ {
             _ => unreachable!(),
