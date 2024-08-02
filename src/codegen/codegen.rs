@@ -113,7 +113,7 @@ impl<'a> CodeGen<'a> {
                 }
             }
             Expr::Ident(ident) => {
-                let symbol = self.scope.find_symbol(&ident).unwrap();
+                let symbol = self.scope.find_symbol(&ident.0).unwrap();
 
                 if let Some(dest) = dest {
                     self.arch
@@ -163,7 +163,7 @@ impl<'a> CodeGen<'a> {
             BinOp::Assign => {
                 let left = *expr.left;
                 if let Expr::Ident(name) = &left {
-                    let symbol = self.scope.find_symbol(&name).unwrap().clone();
+                    let symbol = self.scope.find_symbol(&name.0).unwrap().clone();
                     let symbol_dest: MoveDestination = (&symbol).into();
 
                     // NOTE: clone bad

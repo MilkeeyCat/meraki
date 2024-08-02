@@ -17,7 +17,7 @@ pub enum Expr {
     Unary(ExprUnary),
     Cast(ExprCast),
     Lit(ExprLit),
-    Ident(String),
+    Ident(ExprIdent),
     Struct(ExprStruct),
     StructAccess(ExprStructAccess),
     FunctionCall(ExprFunctionCall),
@@ -30,8 +30,8 @@ impl Expression for Expr {
             Self::Unary(expr) => expr.type_(scope),
             Self::Lit(literal) => literal.type_(scope),
             Self::Ident(ident) => match scope
-                .find_symbol(ident)
-                .ok_or(TypeError::IdentNotFound(ident.to_owned()))?
+                .find_symbol(&ident.0)
+                .ok_or(TypeError::IdentNotFound(ident.0.to_owned()))?
             {
                 Symbol::Global(global_var) => Ok(global_var.type_.clone()),
                 Symbol::Local(local) => Ok(local.type_.clone()),
@@ -119,6 +119,9 @@ impl ToString for ExprLit {
         }
     }
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExprIdent(pub String);
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprStruct {

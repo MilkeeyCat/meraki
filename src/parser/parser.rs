@@ -2,7 +2,7 @@ use super::{
     expr::{ExprBinary, ExprLit, ExprUnary},
     precedence::Precedence,
     stmt::StmtReturn,
-    BinOp, Expr, ExprCast, ExprStruct, Expression, IntLitReprError, OpParseError, Stmt,
+    BinOp, Expr, ExprCast, ExprIdent, ExprStruct, Expression, IntLitReprError, OpParseError, Stmt,
     StmtFunction, StmtVarDecl, UIntLitRepr, UnOp,
 };
 use crate::{
@@ -451,7 +451,7 @@ impl Parser {
         match self.peek_token {
             Token::LBrace => self.struct_expr(),
             _ => match self.next_token()? {
-                Token::Ident(ident) => Ok(Expr::Ident(ident)),
+                Token::Ident(ident) => Ok(Expr::Ident(ExprIdent(ident))),
                 token => Err(ParserError::ParseType(token)),
             },
         }
@@ -515,7 +515,7 @@ impl Parser {
         match self.next_token()? {
             Token::LParen => match left {
                 Expr::Ident(ident) => {
-                    if let Some(Symbol::Function(function)) = self.scope.find_symbol(&ident) {
+                    if let Some(Symbol::Function(function)) = self.scope.find_symbol(&ident.0) {
                         let function_name = function.name.to_owned();
                         let function_params = function.parameters.to_owned();
                         let args = self.expr_list()?;
@@ -532,9 +532,9 @@ impl Parser {
                             ));
                         }
 
-                        Ok(Expr::FunctionCall(ExprFunctionCall::new(ident, args)))
+                        Ok(Expr::FunctionCall(ExprFunctionCall::new(ident.0, args)))
                     } else {
-                        return Err(ParserError::UndeclaredFunction(ident));
+                        return Err(ParserError::UndeclaredFunction(ident.0));
                     }
                 }
                 _ => todo!("Don't know what error to return yet"),
@@ -560,12 +560,15 @@ impl Parser {
 
         match expr {
             Expr::Ident(name) => match self.expr(Precedence::from(&token))? {
-                Expr::Ident(field) => match self.scope.find_symbol(&name).unwrap().type_() {
+                Expr::Ident(field) => match self.scope.find_symbol(&name.0).unwrap().type_() {
                     Type::Struct(struct_type) => {
                         match self.scope.find_type(&struct_type).unwrap() {
                             type_table::Type::Struct(s) => {
-                                if s.contains(&field) {
-                                    Ok(Expr::StructAccess(ExprStructAccess { name, field }))
+                                if s.contains(&field.0) {
+                                    Ok(Expr::StructAccess(ExprStructAccess {
+                                        name: name.0,
+                                        field: field.0,
+                                    }))
                                 } else {
                                     panic!("no such field bitch");
                                 }
@@ -629,8 +632,8 @@ mod test {
     use crate::{
         lexer::Lexer,
         parser::{
-            BinOp, Expr, ExprBinary, ExprCast, ExprLit, ExprUnary, IntLitReprError, Stmt,
-            StmtVarDecl, UIntLitRepr, UnOp,
+            BinOp, Expr, ExprBinary, ExprCast, ExprIdent, ExprLit, ExprUnary, IntLitReprError,
+            Stmt, StmtVarDecl, UIntLitRepr, UnOp,
         },
         type_::Type,
     };
@@ -676,7 +679,7 @@ mod test {
                     Stmt::VarDecl(StmtVarDecl::new(Type::U8, "foo".to_owned(), None)),
                     Stmt::Expr(Expr::Binary(ExprBinary::new(
                         BinOp::Assign,
-                        Box::new(Expr::Ident("foo".to_owned())),
+                        Box::new(Expr::Ident(ExprIdent("foo".to_owned()))),
                         Box::new(Expr::Binary(ExprBinary::new(
                             BinOp::Add,
                             Box::new(Expr::Cast(ExprCast::new(
@@ -704,12 +707,12 @@ mod test {
                     Stmt::VarDecl(StmtVarDecl::new(Type::I8, "bar".to_owned(), None)),
                     Stmt::Expr(Expr::Binary(ExprBinary::new(
                         BinOp::Assign,
-                        Box::new(Expr::Ident("bar".to_owned())),
+                        Box::new(Expr::Ident(ExprIdent("bar".to_owned()))),
                         Box::new(Expr::Binary(ExprBinary::new(
                             BinOp::Add,
                             Box::new(Expr::Cast(ExprCast::new(
                                 Type::I8,
-                                Box::new(Expr::Ident("foo".to_owned())),
+                                Box::new(Expr::Ident(ExprIdent("foo".to_owned()))),
                             ))),
                             Box::new(Expr::Binary(ExprBinary::new(
                                 BinOp::Div,
@@ -753,10 +756,10 @@ mod test {
                     Stmt::VarDecl(StmtVarDecl::new(Type::U8, "b".to_owned(), None)),
                     Stmt::Expr(Expr::Binary(ExprBinary::new(
                         BinOp::Assign,
-                        Box::new(Expr::Ident("a".to_owned())),
+                        Box::new(Expr::Ident(ExprIdent("a".to_owned()))),
                         Box::new(Expr::Binary(ExprBinary::new(
                             BinOp::Assign,
-                            Box::new(Expr::Ident("b".to_owned())),
+                            Box::new(Expr::Ident(ExprIdent("b".to_owned()))),
                             Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(69)))),
                         ))),
                     ))),
