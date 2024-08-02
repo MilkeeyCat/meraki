@@ -2,8 +2,8 @@ use super::{
     expr::{ExprBinary, ExprLit, ExprUnary},
     precedence::Precedence,
     stmt::StmtReturn,
-    BinOp, Expr, ExprCast, ExprIdent, ExprStruct, Expression, IntLitReprError, OpParseError, Stmt,
-    StmtFunction, StmtVarDecl, UIntLitRepr, UnOp,
+    BinOp, Expr, ExprCast, ExprError, ExprIdent, ExprStruct, Expression, IntLitReprError,
+    OpParseError, Stmt, StmtFunction, StmtVarDecl, UIntLitRepr, UnOp,
 };
 use crate::{
     lexer::{Lexer, LexerError, Token},
@@ -70,19 +70,28 @@ impl std::fmt::Display for ParserError {
 
 impl From<TypeError> for ParserError {
     fn from(value: TypeError) -> Self {
-        ParserError::Type(value)
+        Self::Type(value)
     }
 }
 
 impl From<SymbolTableError> for ParserError {
     fn from(value: SymbolTableError) -> Self {
-        ParserError::SymbolTable(value)
+        Self::SymbolTable(value)
     }
 }
 
 impl From<LexerError> for ParserError {
     fn from(value: LexerError) -> Self {
-        ParserError::Lexer(value)
+        Self::Lexer(value)
+    }
+}
+
+impl From<ExprError> for ParserError {
+    fn from(value: ExprError) -> Self {
+        match value {
+            ExprError::Type(e) => Self::Type(e),
+            ExprError::SymbolTable(e) => Self::SymbolTable(e),
+        }
     }
 }
 
@@ -560,7 +569,12 @@ impl Parser {
 
         match expr {
             Expr::Ident(name) => match self.expr(Precedence::from(&token))? {
-                Expr::Ident(field) => match self.scope.find_symbol(&name.0).unwrap().type_() {
+                Expr::Ident(field) => match self
+                    .scope
+                    .find_symbol(&name.0)
+                    .ok_or(SymbolTableError::NotFound(name.0.clone()))?
+                    .type_()
+                {
                     Type::Struct(struct_type) => {
                         match self.scope.find_type(&struct_type).unwrap() {
                             type_table::Type::Struct(s) => {

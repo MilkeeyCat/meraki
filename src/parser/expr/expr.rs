@@ -4,17 +4,39 @@ use crate::{
     codegen::locations::MoveDestination,
     parser::op::{BinOp, UnOp},
     scope::Scope,
-    symbol_table::Symbol,
+    symbol_table::{Symbol, SymbolTableError},
     type_::{Type, TypeError},
     type_table,
 };
 
 pub trait Expression {
-    fn type_(&self, scope: &Scope) -> Result<Type, TypeError>;
+    fn type_(&self, scope: &Scope) -> Result<Type, ExprError>;
 }
 
 pub trait LValue {
-    fn dest<'a>(&self, arch: &dyn Architecture, scope: &'a Scope) -> MoveDestination<'a>;
+    fn dest<'a>(
+        &self,
+        arch: &dyn Architecture,
+        scope: &'a Scope,
+    ) -> Result<MoveDestination<'a>, ExprError>;
+}
+
+#[derive(Debug)]
+pub enum ExprError {
+    Type(TypeError),
+    SymbolTable(SymbolTableError),
+}
+
+impl From<TypeError> for ExprError {
+    fn from(value: TypeError) -> Self {
+        Self::Type(value)
+    }
+}
+
+impl From<SymbolTableError> for ExprError {
+    fn from(value: SymbolTableError) -> Self {
+        Self::SymbolTable(value)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -30,7 +52,7 @@ pub enum Expr {
 }
 
 impl Expression for Expr {
-    fn type_(&self, scope: &Scope) -> Result<Type, TypeError> {
+    fn type_(&self, scope: &Scope) -> Result<Type, ExprError> {
         match self {
             Self::Binary(expr) => expr.type_(scope),
             Self::Unary(expr) => expr.type_(scope),
@@ -40,7 +62,10 @@ impl Expression for Expr {
             Self::Struct(expr_struct) => expr_struct.type_(scope),
             Self::StructAccess(expr_struct_access) => expr_struct_access.type_(scope),
             Self::FunctionCall(function_call) => {
-                match scope.find_symbol(&function_call.name).unwrap() {
+                match scope
+                    .find_symbol(&function_call.name)
+                    .ok_or(SymbolTableError::NotFound(function_call.name.clone()))?
+                {
                     Symbol::Function(function) => Ok(function.return_type.to_owned()),
                     _ => unreachable!(),
                 }
@@ -63,18 +88,18 @@ impl ExprBinary {
 }
 
 impl Expression for ExprBinary {
-    fn type_(&self, symtable: &Scope) -> Result<Type, TypeError> {
+    fn type_(&self, symtable: &Scope) -> Result<Type, ExprError> {
         match &self.op {
             BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div => {
                 let left_type = self.left.as_ref().type_(symtable)?;
                 let right_type = self.right.as_ref().type_(symtable)?;
 
-                Type::promote(left_type, right_type)
+                Ok(Type::promote(left_type, right_type)?)
             }
-            BinOp::Assign => self
+            BinOp::Assign => Ok(self
                 .left
                 .type_(symtable)?
-                .assign(self.right.type_(symtable)?),
+                .assign(self.right.type_(symtable)?)?),
             BinOp::LessThan
             | BinOp::GreaterThan
             | BinOp::LessEqual
@@ -93,7 +118,7 @@ pub enum ExprLit {
 }
 
 impl Expression for ExprLit {
-    fn type_(&self, _: &Scope) -> Result<Type, TypeError> {
+    fn type_(&self, _: &Scope) -> Result<Type, ExprError> {
         match self {
             ExprLit::Int(int) => Ok(int.type_()),
             ExprLit::UInt(uint) => Ok(uint.type_()),
@@ -122,7 +147,7 @@ impl std::fmt::Display for ExprLit {
 pub struct ExprIdent(pub String);
 
 impl Expression for ExprIdent {
-    fn type_(&self, scope: &Scope) -> Result<Type, TypeError> {
+    fn type_(&self, scope: &Scope) -> Result<Type, ExprError> {
         match scope
             .find_symbol(&self.0)
             .ok_or(TypeError::IdentNotFound(self.0.to_owned()))?
@@ -136,8 +161,15 @@ impl Expression for ExprIdent {
 }
 
 impl LValue for ExprIdent {
-    fn dest<'a>(&self, arch: &dyn Architecture, scope: &'a Scope) -> MoveDestination<'a> {
-        scope.find_symbol(&self.0).unwrap().to_dest(arch, scope)
+    fn dest<'a>(
+        &self,
+        arch: &dyn Architecture,
+        scope: &'a Scope,
+    ) -> Result<MoveDestination<'a>, ExprError> {
+        Ok(scope
+            .find_symbol(&self.0)
+            .ok_or(SymbolTableError::NotFound(self.0.clone()))?
+            .to_dest(arch, scope))
     }
 }
 
@@ -160,14 +192,22 @@ pub struct ExprStructAccess {
 }
 
 impl Expression for ExprStructAccess {
-    fn type_(&self, scope: &Scope) -> Result<Type, TypeError> {
-        match scope.find_symbol(&self.name).unwrap() {
+    fn type_(&self, scope: &Scope) -> Result<Type, ExprError> {
+        match scope
+            .find_symbol(&self.name)
+            .ok_or(SymbolTableError::NotFound(self.name.clone()))?
+        {
             Symbol::Local(local) => match &local.type_ {
-                Type::Struct(s) => match scope.find_type(&s).unwrap() {
-                    type_table::Type::Struct(sl) => {
-                        Ok(sl.get_field_type(&self.field).unwrap().to_owned())
+                Type::Struct(s) => {
+                    match scope
+                        .find_type(&s)
+                        .ok_or(SymbolTableError::NotFound(s.to_string()))?
+                    {
+                        type_table::Type::Struct(sl) => {
+                            Ok(sl.get_field_type(&self.field).unwrap().to_owned())
+                        }
                     }
-                },
+                }
                 _ => todo!(),
             },
             _ => todo!(),
@@ -176,8 +216,14 @@ impl Expression for ExprStructAccess {
 }
 
 impl LValue for ExprStructAccess {
-    fn dest<'a>(&self, arch: &dyn Architecture, scope: &'a Scope) -> MoveDestination<'a> {
-        let symbol = scope.find_symbol(&self.name).unwrap();
+    fn dest<'a>(
+        &self,
+        arch: &dyn Architecture,
+        scope: &'a Scope,
+    ) -> Result<MoveDestination<'a>, ExprError> {
+        let symbol = scope
+            .find_symbol(&self.name)
+            .ok_or(SymbolTableError::NotFound(self.name.clone()))?;
         let (field_offset, struct_size) = match symbol.type_() {
             Type::Struct(s) => match scope.find_type(&s).unwrap() {
                 type_table::Type::Struct(type_struct) => (
@@ -203,7 +249,7 @@ impl LValue for ExprStructAccess {
             _ => unreachable!(),
         };
 
-        dest
+        Ok(dest)
     }
 }
 
@@ -220,7 +266,7 @@ impl ExprFunctionCall {
 }
 
 impl Expression for ExprStruct {
-    fn type_(&self, _: &Scope) -> Result<Type, TypeError> {
+    fn type_(&self, _: &Scope) -> Result<Type, ExprError> {
         Ok(Type::Struct(self.name.clone()))
     }
 }
@@ -238,7 +284,7 @@ impl ExprUnary {
 }
 
 impl Expression for ExprUnary {
-    fn type_(&self, symtable: &Scope) -> Result<Type, TypeError> {
+    fn type_(&self, symtable: &Scope) -> Result<Type, ExprError> {
         match &self.op {
             UnOp::Negative => {
                 let mut expr_type = self.expr.type_(symtable)?;
@@ -264,9 +310,9 @@ impl ExprCast {
 }
 
 impl Expression for ExprCast {
-    fn type_(&self, symbtable: &Scope) -> Result<Type, TypeError> {
+    fn type_(&self, symbtable: &Scope) -> Result<Type, ExprError> {
         let expr_type = self.expr.type_(symbtable)?;
 
-        expr_type.cast(self.type_.clone())
+        Ok(expr_type.cast(self.type_.clone())?)
     }
 }

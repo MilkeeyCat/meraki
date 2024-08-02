@@ -2,13 +2,13 @@ use super::locations::{self, Local, MoveDestination, MoveSource};
 use crate::{
     archs::Architecture,
     parser::{
-        BinOp, CmpOp, Expr, ExprBinary, ExprFunctionCall, ExprLit, ExprStruct, ExprStructAccess,
-        ExprUnary, Expression, LValue, OpParseError, Stmt, StmtFunction, StmtReturn, StmtVarDecl,
-        UnOp,
+        BinOp, CmpOp, Expr, ExprBinary, ExprError, ExprFunctionCall, ExprLit, ExprStruct,
+        ExprStructAccess, ExprUnary, Expression, LValue, OpParseError, Stmt, StmtFunction,
+        StmtReturn, StmtVarDecl, UnOp,
     },
     register_allocator::AllocatorError,
     scope::Scope,
-    symbol_table::Symbol,
+    symbol_table::{Symbol, SymbolTableError},
     type_::{Type, TypeError},
     type_table,
 };
@@ -21,6 +21,7 @@ pub enum CodeGenError {
     Type(TypeError),
     Allocator(AllocatorError),
     Assign(Expr),
+    SymbolTable(SymbolTableError),
 }
 
 impl std::error::Error for CodeGenError {}
@@ -28,10 +29,11 @@ impl std::error::Error for CodeGenError {}
 impl std::fmt::Display for CodeGenError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::OpParse(e) => write!(f, "{}", e),
-            Self::Type(e) => write!(f, "{}", e),
-            Self::Allocator(e) => write!(f, "{}", e),
+            Self::OpParse(e) => write!(f, "{e}"),
+            Self::Type(e) => write!(f, "{e}"),
+            Self::Allocator(e) => write!(f, "{e}"),
             Self::Assign(e) => write!(f, "Can't assign to non ident {:?}", e),
+            Self::SymbolTable(e) => write!(f, "{e}"),
         }
     }
 }
@@ -54,6 +56,21 @@ impl From<OpParseError> for CodeGenError {
     }
 }
 
+impl From<SymbolTableError> for CodeGenError {
+    fn from(value: SymbolTableError) -> Self {
+        Self::SymbolTable(value)
+    }
+}
+
+impl From<ExprError> for CodeGenError {
+    fn from(value: ExprError) -> Self {
+        match value {
+            ExprError::Type(e) => Self::Type(e),
+            ExprError::SymbolTable(e) => Self::SymbolTable(e),
+        }
+    }
+}
+
 pub struct CodeGen<'a> {
     arch: &'a mut dyn Architecture,
     scope: Scope,
@@ -73,7 +90,7 @@ impl<'a> CodeGen<'a> {
 
     fn function(&mut self, func: StmtFunction) -> Result<(), CodeGenError> {
         self.scope.enter(*func.scope);
-        let offset = self.populate_offsets(&func.body);
+        let offset = self.populate_offsets(&func.body)?;
         self.arch.fn_preamble(&func.name, offset);
 
         for stmt in func.body {
@@ -114,7 +131,10 @@ impl<'a> CodeGen<'a> {
                 }
             }
             Expr::Ident(ident) => {
-                let symbol = self.scope.find_symbol(&ident.0).unwrap();
+                let symbol = self
+                    .scope
+                    .find_symbol(&ident.0)
+                    .ok_or(SymbolTableError::NotFound(ident.0))?;
 
                 if let Some(dest) = dest {
                     self.arch
@@ -168,10 +188,10 @@ impl<'a> CodeGen<'a> {
 
                 match *expr.left {
                     Expr::Ident(ident) => {
-                        lvalue_dest = ident.dest(self.arch, &scope_clone);
+                        lvalue_dest = ident.dest(self.arch, &scope_clone)?;
                     }
                     Expr::StructAccess(struct_access) => {
-                        lvalue_dest = struct_access.dest(self.arch, &scope_clone);
+                        lvalue_dest = struct_access.dest(self.arch, &scope_clone)?;
                     }
                     expr => {
                         return Err(CodeGenError::Assign(expr));
@@ -351,21 +371,20 @@ impl<'a> CodeGen<'a> {
         expr: ExprStructAccess,
         dest: MoveDestination,
     ) -> Result<(), CodeGenError> {
-        let symbol = self.scope.find_symbol(&expr.name).unwrap();
-        let (field_offset, field_size) = match symbol.type_() {
+        let symbol = self
+            .scope
+            .find_symbol(&expr.name)
+            .ok_or(SymbolTableError::NotFound(expr.name.clone()))?;
+        let field_offset = match symbol.type_() {
             Type::Struct(s) => match self.scope.find_type(&s).unwrap() {
-                type_table::Type::Struct(type_struct) => (
-                    type_struct.offset(self.arch, &expr.field, &self.scope),
-                    type_struct
-                        .get_field_type(&expr.field)
-                        .unwrap()
-                        .size(self.arch, &self.scope),
-                ),
+                type_table::Type::Struct(type_struct) => {
+                    type_struct.offset(self.arch, &expr.field, &self.scope)
+                }
             },
             _ => panic!(),
         };
 
-        let mut src = expr.dest(self.arch, &self.scope).to_source();
+        let mut src = expr.dest(self.arch, &self.scope)?.to_source();
         match &mut src {
             MoveSource::Local(local, _) => {
                 local.offset += field_offset;
@@ -395,12 +414,16 @@ impl<'a> CodeGen<'a> {
         Ok(())
     }
 
-    fn populate_offsets(&mut self, stmts: &Vec<Stmt>) -> usize {
+    fn populate_offsets(&mut self, stmts: &Vec<Stmt>) -> Result<usize, CodeGenError> {
         let mut offset = 1;
 
         for stmt in stmts {
             if let Stmt::VarDecl(var_decl) = stmt {
-                if let Symbol::Local(local) = self.scope.find_symbol_mut(&var_decl.name).unwrap() {
+                if let Symbol::Local(local) = self
+                    .scope
+                    .find_symbol_mut(&var_decl.name)
+                    .ok_or(SymbolTableError::NotFound(var_decl.name.clone()))?
+                {
                     local.offset = offset;
                     offset += var_decl.type_.size(self.arch, &self.scope);
                 }
@@ -409,12 +432,12 @@ impl<'a> CodeGen<'a> {
 
         let alignment = self.arch.alignment();
 
-        if offset < alignment {
+        Ok(if offset < alignment {
             alignment
         } else if offset % alignment == 0 {
             offset
         } else {
             ((offset / alignment) + 1) * alignment
-        }
+        })
     }
 }

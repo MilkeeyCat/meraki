@@ -45,14 +45,6 @@ impl Scope {
         }
     }
 
-    pub fn symbol_table(&self) -> &SymbolTable {
-        &self.0.last().unwrap().symbol_table
-    }
-
-    pub fn type_table(&mut self) -> &TypeTable {
-        &self.0.last().unwrap().type_table
-    }
-
     pub fn find_symbol(&self, name: &str) -> Option<&Symbol> {
         for scope in &self.0 {
             let symbol = scope.symbol_table.find(name);
