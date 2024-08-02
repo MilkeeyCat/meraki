@@ -1,5 +1,7 @@
 use super::{int_repr::UIntLitRepr, IntLitRepr};
 use crate::{
+    archs::Architecture,
+    codegen::locations::{MoveDestination, MoveSource},
     parser::op::{BinOp, UnOp},
     scope::Scope,
     symbol_table::Symbol,
@@ -9,6 +11,10 @@ use crate::{
 
 pub trait Expression {
     fn type_(&self, scope: &Scope) -> Result<Type, TypeError>;
+}
+
+pub trait LValue {
+    fn dest<'a>(&self, arch: &dyn Architecture, scope: &'a Scope) -> MoveDestination<'a>;
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -29,15 +35,7 @@ impl Expression for Expr {
             Self::Binary(expr) => expr.type_(scope),
             Self::Unary(expr) => expr.type_(scope),
             Self::Lit(literal) => literal.type_(scope),
-            Self::Ident(ident) => match scope
-                .find_symbol(&ident.0)
-                .ok_or(TypeError::IdentNotFound(ident.0.to_owned()))?
-            {
-                Symbol::Global(global_var) => Ok(global_var.type_.clone()),
-                Symbol::Local(local) => Ok(local.type_.clone()),
-                Symbol::Param(param) => Ok(param.type_.clone()),
-                Symbol::Function(func) => Ok(func.return_type.clone()),
-            },
+            Self::Ident(ident) => ident.type_(scope),
             Self::Cast(cast) => cast.type_(scope),
             Self::Struct(expr_struct) => expr_struct.type_(scope),
             Self::StructAccess(expr_struct_access) => expr_struct_access.type_(scope),
@@ -123,6 +121,28 @@ impl ToString for ExprLit {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprIdent(pub String);
 
+impl Expression for ExprIdent {
+    fn type_(&self, scope: &Scope) -> Result<Type, TypeError> {
+        match scope
+            .find_symbol(&self.0)
+            .ok_or(TypeError::IdentNotFound(self.0.to_owned()))?
+        {
+            Symbol::Global(global_var) => Ok(global_var.type_.clone()),
+            Symbol::Local(local) => Ok(local.type_.clone()),
+            Symbol::Param(param) => Ok(param.type_.clone()),
+            Symbol::Function(func) => Ok(func.return_type.clone()),
+        }
+    }
+}
+
+impl LValue for ExprIdent {
+    fn dest<'a>(&self, _: &dyn Architecture, scope: &'a Scope) -> MoveDestination<'a> {
+        let symbol = scope.find_symbol(&self.0).unwrap();
+
+        symbol.into()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprStruct {
     pub name: String,
@@ -154,6 +174,38 @@ impl Expression for ExprStructAccess {
             },
             _ => todo!(),
         }
+    }
+}
+
+impl LValue for ExprStructAccess {
+    fn dest<'a>(&self, arch: &dyn Architecture, scope: &'a Scope) -> MoveDestination<'a> {
+        let symbol = scope.find_symbol(&self.name).unwrap();
+        let (field_offset, struct_size) = match symbol.type_() {
+            Type::Struct(s) => match scope.find_type(&s).unwrap() {
+                type_table::Type::Struct(type_struct) => (
+                    type_struct.offset(arch, &self.field, scope),
+                    type_struct.size(arch, scope),
+                ),
+            },
+            _ => panic!(),
+        };
+
+        let mut dest: MoveDestination = symbol.into();
+        // NOTE: local variable use 1-based offset but struct offsets are 0-based, so to plumb it correctly gotta slap that -1
+        let new_offset = struct_size + dest.local_offset() - field_offset - 1;
+
+        match &mut dest {
+            MoveDestination::Local(local) => {
+                local.offset = new_offset;
+            }
+            MoveDestination::Global(global) => match &mut global.offset {
+                Some(offset) => *offset += new_offset,
+                None => global.offset = Some(new_offset),
+            },
+            _ => unreachable!(),
+        };
+
+        dest
     }
 }
 

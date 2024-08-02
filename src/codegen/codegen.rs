@@ -3,7 +3,8 @@ use crate::{
     archs::Architecture,
     parser::{
         BinOp, CmpOp, Expr, ExprBinary, ExprFunctionCall, ExprLit, ExprStruct, ExprStructAccess,
-        ExprUnary, Expression, OpParseError, Stmt, StmtFunction, StmtReturn, StmtVarDecl, UnOp,
+        ExprUnary, Expression, LValue, OpParseError, Stmt, StmtFunction, StmtReturn, StmtVarDecl,
+        UnOp,
     },
     register_allocator::AllocatorError,
     scope::Scope,
@@ -161,36 +162,28 @@ impl<'a> CodeGen<'a> {
     ) -> Result<(), CodeGenError> {
         match &expr.op {
             BinOp::Assign => {
-                let left = *expr.left;
-                if let Expr::Ident(name) = &left {
-                    let symbol = self.scope.find_symbol(&name.0).unwrap().clone();
-                    let symbol_dest: MoveDestination = (&symbol).into();
+                let lvalue_dest: MoveDestination;
+                //TODO: I dunno how to make it compile without this clone but feature me please fix it
+                let scope_clone = self.scope.clone();
+                let size = expr.left.type_(&self.scope)?.size(self.arch, &self.scope);
 
-                    // NOTE: clone bad
-                    self.expr(*expr.right, Some(symbol_dest.clone()))?;
-
-                    if let Some(dest) = dest {
-                        let r = self.arch.alloc()?;
-
-                        self.arch.mov(
-                            symbol_dest.to_source(symbol.type_().size(self.arch, &self.scope)),
-                            (&r).into(),
-                            &self.scope,
-                        );
-                        self.arch.mov(
-                            MoveSource::Register(SourceRegister {
-                                register: &r,
-                                size: symbol.type_().size(self.arch, &self.scope),
-                                signed: symbol.type_().signed(),
-                                offset: None,
-                            }),
-                            dest,
-                            &self.scope,
-                        );
-                        self.arch.free(r)?;
+                match *expr.left {
+                    Expr::Ident(ident) => {
+                        lvalue_dest = ident.dest(self.arch, &scope_clone);
                     }
-                } else {
-                    return Err(CodeGenError::Assign(left));
+                    Expr::StructAccess(struct_access) => {
+                        lvalue_dest = struct_access.dest(self.arch, &scope_clone);
+                    }
+                    expr => {
+                        return Err(CodeGenError::Assign(expr));
+                    }
+                };
+
+                self.expr(*expr.right, Some(lvalue_dest.clone()))?;
+
+                if let Some(dest) = dest {
+                    self.arch
+                        .mov(lvalue_dest.to_source(size), dest, &self.scope);
                 }
             }
             BinOp::Add => {
@@ -345,16 +338,20 @@ impl<'a> CodeGen<'a> {
         dest: MoveDestination,
     ) -> Result<(), CodeGenError> {
         let symbol = self.scope.find_symbol(&expr.name).unwrap();
-        let field_offset = match symbol.type_() {
+        let (field_offset, field_size) = match symbol.type_() {
             Type::Struct(s) => match self.scope.find_type(&s).unwrap() {
-                type_table::Type::Struct(type_struct) => {
-                    type_struct.offset(self.arch, &expr.field, &self.scope)
-                }
+                type_table::Type::Struct(type_struct) => (
+                    type_struct.offset(self.arch, &expr.field, &self.scope),
+                    type_struct
+                        .get_field_type(&expr.field)
+                        .unwrap()
+                        .size(self.arch, &self.scope),
+                ),
             },
             _ => panic!(),
         };
 
-        let mut src = symbol.to_source(self.arch, &self.scope);
+        let mut src = expr.dest(self.arch, &self.scope).to_source(field_size);
         match &mut src {
             MoveSource::Local(local) => {
                 local.offset += field_offset;
