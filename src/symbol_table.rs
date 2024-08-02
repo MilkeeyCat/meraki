@@ -1,6 +1,6 @@
 use crate::{
     archs::Architecture,
-    codegen::locations::{MoveSource, SourceGlobal, SourceLocal, SourceParam},
+    codegen::locations::{Global, Local, MoveDestination, MoveSource, SourceParam},
     scope::Scope,
     type_::Type,
 };
@@ -38,23 +38,45 @@ impl Symbol {
 
     pub fn to_source(&self, arch: &dyn Architecture, scope: &Scope) -> MoveSource {
         match self {
-            Self::Local(symbol) => MoveSource::Local(SourceLocal {
-                size: symbol.type_.size(arch, scope),
-                signed: symbol.type_.signed(),
+            Self::Local(symbol) => MoveSource::Local(
+                Local {
+                    size: symbol.type_.size(arch, scope),
+                    offset: symbol.offset,
+                },
+                symbol.type_.signed(),
+            ),
+            Self::Global(symbol) => MoveSource::Global(
+                Global {
+                    label: &symbol.name,
+                    size: symbol.type_.size(arch, scope),
+                    offset: None,
+                },
+                symbol.type_.signed(),
+            ),
+            Self::Param(symbol) => MoveSource::Param(
+                SourceParam {
+                    size: symbol.type_.size(arch, scope),
+                    n: symbol.n,
+                },
+                symbol.type_.signed(),
+            ),
+            Self::Function(_) => unreachable!(),
+        }
+    }
+
+    pub fn to_dest(&self, arch: &dyn Architecture, scope: &Scope) -> MoveDestination {
+        match self {
+            Symbol::Local(symbol) => MoveDestination::Local(Local {
                 offset: symbol.offset,
+                size: symbol.type_.size(arch, scope),
             }),
-            Self::Global(symbol) => MoveSource::Global(SourceGlobal {
+            Symbol::Global(symbol) => MoveDestination::Global(Global {
                 label: &symbol.name,
                 size: symbol.type_.size(arch, scope),
-                signed: symbol.type_.signed(),
                 offset: None,
             }),
-            Self::Param(symbol) => MoveSource::Param(SourceParam {
-                size: symbol.type_.size(arch, scope),
-                signed: symbol.type_.signed(),
-                n: symbol.n,
-            }),
-            Self::Function(_) => unreachable!(),
+            Symbol::Param(symbol) => todo!(),
+            Symbol::Function(_) => unreachable!(),
         }
     }
 }

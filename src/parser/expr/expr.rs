@@ -1,7 +1,7 @@
 use super::{int_repr::UIntLitRepr, IntLitRepr};
 use crate::{
     archs::Architecture,
-    codegen::locations::{MoveDestination, MoveSource},
+    codegen::locations::MoveDestination,
     parser::op::{BinOp, UnOp},
     scope::Scope,
     symbol_table::Symbol,
@@ -102,16 +102,16 @@ impl Expression for ExprLit {
     }
 }
 
-impl ToString for ExprLit {
-    fn to_string(&self) -> String {
+impl std::fmt::Display for ExprLit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Int(int) => int.to_string(),
-            Self::UInt(uint) => uint.to_string(),
+            Self::Int(int) => write!(f, "{}", int.to_string()),
+            Self::UInt(uint) => write!(f, "{}", uint.to_string()),
             Self::Bool(boolean) => {
                 if boolean == &true {
-                    String::from("1")
+                    write!(f, "1")
                 } else {
-                    String::from("0")
+                    write!(f, "1")
                 }
             }
         }
@@ -136,10 +136,8 @@ impl Expression for ExprIdent {
 }
 
 impl LValue for ExprIdent {
-    fn dest<'a>(&self, _: &dyn Architecture, scope: &'a Scope) -> MoveDestination<'a> {
-        let symbol = scope.find_symbol(&self.0).unwrap();
-
-        symbol.into()
+    fn dest<'a>(&self, arch: &dyn Architecture, scope: &'a Scope) -> MoveDestination<'a> {
+        scope.find_symbol(&self.0).unwrap().to_dest(arch, scope)
     }
 }
 
@@ -190,7 +188,7 @@ impl LValue for ExprStructAccess {
             _ => panic!(),
         };
 
-        let mut dest: MoveDestination = symbol.into();
+        let mut dest = symbol.to_dest(arch, scope);
         // NOTE: local variable use 1-based offset but struct offsets are 0-based, so to plumb it correctly gotta slap that -1
         let new_offset = struct_size + dest.local_offset() - field_offset - 1;
 

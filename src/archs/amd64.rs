@@ -1,13 +1,9 @@
 use super::arch::Architecture;
 use crate::{
-    codegen::locations::{
-        DestinationLocal, DestinationRegister, MoveDestination, MoveSource, Offset, SourceGlobal,
-        SourceLocal, SourceParam, SourceRegister,
-    },
+    codegen::locations::{self, Global, Local, MoveDestination, MoveSource, Offset, SourceParam},
     parser::{CmpOp, ExprLit, Expression},
     register_allocator::{AllocatorError, Register, RegisterAllocator},
     scope::Scope,
-    symbol_table::SymbolParam,
     type_::Type,
 };
 use indoc::formatdoc;
@@ -38,6 +34,7 @@ impl Architecture for Amd64 {
         }
     }
 
+    #[inline]
     fn alignment(&self) -> usize {
         16
     }
@@ -58,20 +55,22 @@ impl Architecture for Amd64 {
 
     fn size_name(size: usize) -> &'static str {
         match size {
-            1 => "byte",
-            2 => "word",
-            4 => "dword",
-            8 => "qword",
-            _ => panic!("im done"),
+            1 => "byte ptr",
+            2 => "word ptr",
+            4 => "dword ptr",
+            8 => "qword ptr",
+            _ => unreachable!(),
         }
     }
 
     fn mov(&mut self, src: MoveSource, dest: MoveDestination, scope: &Scope) {
         match src {
-            MoveSource::Global(global) => self.mov_global(global, dest, scope),
-            MoveSource::Local(local) => self.mov_local(local, dest, scope),
-            MoveSource::Param(param) => self.mov_param(param, dest, scope),
-            MoveSource::Register(register) => self.mov_register(register, dest, scope),
+            MoveSource::Global(global, signed) => self.mov_global(global, dest, signed, scope),
+            MoveSource::Local(local, signed) => self.mov_local(local, dest, signed, scope),
+            MoveSource::Param(param, signed) => self.mov_param(param, dest, signed, scope),
+            MoveSource::Register(register, signed) => {
+                self.mov_register(register, dest, signed, scope)
+            }
             MoveSource::Lit(literal) => self.mov_literal(literal, dest, scope),
         }
     }
@@ -106,13 +105,13 @@ impl Architecture for Amd64 {
         ));
     }
 
-    fn add(&mut self, r1: &Register, r2: &Register) {
+    fn add(&mut self, dest: &MoveDestination, r2: &locations::Register) {
         self.buf.push_str(&formatdoc!(
             "
             \tadd {}, {}
             ",
-            r1.qword(),
-            r2.qword(),
+            dest,
+            r2
         ));
     }
 
@@ -198,14 +197,18 @@ impl Architecture for Amd64 {
     }
 
     fn ret(&mut self, r: Register, type_: Type, scope: &Scope) {
-        //NOTE: free the register?
-        self.buf.push_str(&formatdoc!(
-            "
-            \t{} rax, {}
-            ",
-            Self::movx(type_.signed()),
-            r.from_size(type_.size(self, scope)),
-        ));
+        self.mov_impl(
+            (
+                &MoveDestination::Register(locations::Register {
+                    register: &r,
+                    size: type_.size(self, scope),
+                    offset: None,
+                }),
+                type_.size(self, scope),
+            ),
+            ("rax", 8),
+            type_.signed(),
+        );
     }
 
     fn jmp(&mut self, label: &str) {
@@ -267,71 +270,35 @@ impl Architecture for Amd64 {
 }
 
 impl Amd64 {
-    pub fn get_param(&mut self, param: SymbolParam) -> (String, Register) {
-        //NOTE: only 6 params are allowed in register, others go on stack
-        if param.n < 6 {
-            let r = self.registers.alloc().unwrap();
-            (
-                formatdoc!(
-                    "
-                    \tmov {}, {}
-                    ",
-                    r.qword(),
-                    self.registers
-                        .get(self.registers.len() - param.n - 1)
-                        .unwrap()
-                        .qword()
-                ),
-                r,
-            )
+    fn mov_impl<T, I>(
+        &mut self,
+        (src, src_size): (&T, usize),
+        (dest, dest_size): (&I, usize),
+        signed: bool,
+    ) where
+        T: std::fmt::Display + ?Sized,
+        I: std::fmt::Display + ?Sized,
+    {
+        if dest_size > src_size {
+            if signed {
+                self.buf.push_str(&formatdoc!("\tmovsx {dest}, {src}\n",));
+            } else {
+                self.buf.push_str(&formatdoc!("\tmovzx {dest}, {src}\n",));
+            }
         } else {
-            todo!();
-        }
-    }
-
-    fn movx(signed: bool) -> &'static str {
-        if signed {
-            "movsx"
-        } else {
-            "movzx"
+            self.buf.push_str(&formatdoc!("\tmov {dest}, {src}\n",));
         }
     }
 
     fn mov_literal(&mut self, literal: ExprLit, dest: MoveDestination, scope: &Scope) {
-        match dest {
-            MoveDestination::Local(local) => {
-                self.buf.push_str(&formatdoc!(
-                    "
-                    \tmov {} ptr [rbp - {}], {}
-                    ",
-                    Self::size_name(literal.type_(scope).unwrap().size(self, scope)),
-                    local.offset,
-                    literal.to_string(),
-                ));
-            }
-            MoveDestination::Global(global) => {
-                self.buf.push_str(&formatdoc!(
-                    "
-                    \tmov {} ptr [{}], {}
-                    ",
-                    Self::size_name(literal.type_(scope).unwrap().size(self, scope)),
-                    global.label,
-                    literal.to_string(),
-                ));
-            }
-            MoveDestination::Register(register) => {
-                self.buf.push_str(&formatdoc!(
-                    "
-                    \tmov {}, {}
-                    ",
-                    register.register.qword(),
-                    literal.to_string(),
-                ));
-            }
-        }
+        self.mov_impl(
+            (&literal, literal.type_(scope).unwrap().size(self, scope)),
+            (&dest, dest.size()),
+            literal.type_(scope).unwrap().signed(),
+        )
     }
 
-    fn mov_local(&mut self, src: SourceLocal, dest: MoveDestination, scope: &Scope) {
+    fn mov_local(&mut self, src: Local, dest: MoveDestination, signed: bool, scope: &Scope) {
         match dest {
             // NOTE: x86-64 doesn't support indirect to indirect addressing mode so we use tools we already have
             MoveDestination::Local(local) => {
@@ -352,28 +319,30 @@ impl Amd64 {
                     let r_tmp = self.alloc().unwrap();
 
                     self.mov_register(
-                        SourceRegister {
+                        locations::Register {
                             size: chunk_size,
                             offset: Some(Offset((size - chunk_size).try_into().unwrap())),
-                            signed: false,
                             register: &r,
                         },
-                        MoveDestination::Register(DestinationRegister {
+                        MoveDestination::Register(locations::Register {
+                            size: chunk_size,
                             offset: None,
                             register: &r_tmp,
                         }),
+                        signed,
                         scope,
                     );
                     self.mov_register(
-                        SourceRegister {
+                        locations::Register {
                             size: chunk_size,
                             offset: None,
-                            signed: false,
                             register: &r_tmp,
                         },
-                        MoveDestination::Local(DestinationLocal {
+                        MoveDestination::Local(Local {
                             offset: local.offset,
+                            size: chunk_size,
                         }),
+                        signed,
                         scope,
                     );
 
@@ -382,83 +351,98 @@ impl Amd64 {
 
                 self.free(r).unwrap();
             }
-            MoveDestination::Global(label) => {
-                // a lil bit of fuckery as well
+            MoveDestination::Global(_) => {
                 todo!();
             }
             MoveDestination::Register(register) => {
-                self.buf.push_str(&formatdoc!(
-                    "
-                    \t{} {}, {} ptr [rbp - {}]
-                    ",
-                    Self::movx(src.signed),
-                    register.register.qword(),
-                    Self::size_name(src.size),
-                    src.offset,
-                ));
+                self.mov_impl((&src, src.size), (&register, register.size), signed);
             }
         }
     }
 
-    fn mov_param(&mut self, src: SourceParam, dest: MoveDestination, scope: &Scope) {
+    fn mov_param(&mut self, src: SourceParam, dest: MoveDestination, signed: bool, scope: &Scope) {
         self.mov(
-            MoveSource::Register(SourceRegister {
-                register: &self
-                    .registers
-                    .get(self.registers.len() - 1 - src.n)
-                    .unwrap(),
-                size: src.size,
-                offset: None,
-                signed: src.signed,
-            }),
+            MoveSource::Register(
+                locations::Register {
+                    register: &self
+                        .registers
+                        .get(self.registers.len() - 1 - src.n)
+                        .unwrap(),
+                    size: src.size,
+                    offset: None,
+                },
+                signed,
+            ),
             dest,
             scope,
         );
     }
 
-    fn mov_global(&self, src: SourceGlobal, dest: MoveDestination, scope: &Scope) {
+    fn mov_global(&self, _src: Global, _dest: MoveDestination, _signed: bool, _scope: &Scope) {
         todo!();
     }
 
-    fn mov_register(&mut self, src: SourceRegister, dest: MoveDestination, scope: &Scope) {
-        match dest {
-            MoveDestination::Local(local) => {
-                self.buf.push_str(&formatdoc!(
-                    "
-                    \tmov {} ptr [rbp - {}], {}
-                    ",
-                    Self::size_name(src.size),
-                    local.offset,
-                    src.register.from_size(src.size),
-                ));
-            }
-            MoveDestination::Global(label) => {
-                todo!();
-            }
-            MoveDestination::Register(dest_register) => {
-                if let Some(offset) = src.offset {
-                    self.buf.push_str(&formatdoc!(
-                        "
-                        \t{} {}, {} ptr [{}{}]
-                        ",
-                        Self::movx(src.signed),
-                        dest_register.register.qword(),
-                        Self::size_name(src.size),
-                        src.register.qword(),
-                        offset
-                    ));
+    fn mov_register(
+        &mut self,
+        src: locations::Register,
+        dest: MoveDestination,
+        signed: bool,
+        _: &Scope,
+    ) {
+        self.mov_impl((&src, src.size), (&dest, dest.size()), signed)
+    }
+}
 
-                    return;
-                }
-
-                self.buf.push_str(&formatdoc!(
-                    "
-                    \tmov {}, {}
-                    ",
-                    dest_register.register.qword(),
-                    src.register.qword(),
-                ));
+impl std::fmt::Display for locations::Register<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.offset {
+            Some(offset) => {
+                write!(
+                    f,
+                    "{} [{}{}]",
+                    Amd64::size_name(self.size),
+                    self.register.qword(),
+                    offset
+                )
             }
+            None => {
+                write!(f, "{}", self.register.from_size(self.size))
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for Local {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} [rbp - {}]", Amd64::size_name(self.size), self.offset)
+    }
+}
+
+impl std::fmt::Display for Global<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.offset {
+            Some(offset) => {
+                write!(
+                    f,
+                    "{} [{} - {}]",
+                    Amd64::size_name(self.size),
+                    self.label,
+                    offset
+                )
+            }
+            None => {
+                write!(f, "{}", self.label)
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for MoveDestination<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Global(global) => write!(f, "{global}"),
+            Self::Local(local) => write!(f, "{local}"),
+            Self::Register(register) => write!(f, "{register}"),
         }
     }
 }

@@ -1,5 +1,5 @@
 use crate::{
-    codegen::locations::{MoveDestination, MoveSource},
+    codegen::locations::{self, MoveDestination, MoveSource},
     parser::CmpOp,
     register_allocator::{AllocatorError, Register},
     scope::Scope,
@@ -21,7 +21,7 @@ pub trait Architecture {
     fn mov(&mut self, src: MoveSource, dest: MoveDestination, scope: &Scope);
     fn negate(&mut self, r: &Register);
     fn not(&mut self, dest: &Register, src: &Register);
-    fn add(&mut self, dest: &Register, src: &Register);
+    fn add(&mut self, dest: &MoveDestination, src: &locations::Register);
     fn sub(&mut self, dest: &Register, src: &Register);
     fn mul(&mut self, dest: &Register, src: &Register);
     fn div(&mut self, dest: &Register, src: &Register);

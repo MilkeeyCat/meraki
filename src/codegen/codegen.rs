@@ -1,4 +1,4 @@
-use super::locations::{DestinationLocal, MoveDestination, MoveSource, SourceRegister};
+use super::locations::{self, Local, MoveDestination, MoveSource};
 use crate::{
     archs::Architecture,
     parser::{
@@ -165,7 +165,6 @@ impl<'a> CodeGen<'a> {
                 let lvalue_dest: MoveDestination;
                 //TODO: I dunno how to make it compile without this clone but feature me please fix it
                 let scope_clone = self.scope.clone();
-                let size = expr.left.type_(&self.scope)?.size(self.arch, &self.scope);
 
                 match *expr.left {
                     Expr::Ident(ident) => {
@@ -182,18 +181,29 @@ impl<'a> CodeGen<'a> {
                 self.expr(*expr.right, Some(lvalue_dest.clone()))?;
 
                 if let Some(dest) = dest {
-                    self.arch
-                        .mov(lvalue_dest.to_source(size), dest, &self.scope);
+                    self.arch.mov(lvalue_dest.to_source(), dest, &self.scope);
                 }
             }
             BinOp::Add => {
                 if let Some(dest) = dest {
                     self.expr(*expr.left, Some(dest.clone()))?;
 
+                    let size = expr
+                        .right
+                        .type_(&self.scope)
+                        .unwrap()
+                        .size(self.arch, &self.scope);
                     let r = self.arch.alloc()?;
                     self.expr(*expr.right, Some((&r).into()))?;
 
-                    self.arch.add(dest.register(), &r);
+                    self.arch.add(
+                        &dest,
+                        &locations::Register {
+                            register: &r,
+                            size,
+                            offset: None,
+                        },
+                    );
                     self.arch.free(r)?;
                 }
             }
@@ -322,9 +332,13 @@ impl<'a> CodeGen<'a> {
             let offset = type_struct.offset(self.arch, &name, &self.scope);
             self.expr(
                 expr,
-                Some(MoveDestination::Local(DestinationLocal {
+                Some(MoveDestination::Local(Local {
                     // NOTE: local variable use 1-based offset but struct offsets are 0-based, so to plumb it correctly gotta slap that -1
                     offset: struct_size + dest.local_offset() - offset - 1,
+                    size: type_struct
+                        .get_field_type(&name)
+                        .unwrap()
+                        .size(self.arch, &self.scope),
                 })),
             )?;
         }
@@ -351,12 +365,12 @@ impl<'a> CodeGen<'a> {
             _ => panic!(),
         };
 
-        let mut src = expr.dest(self.arch, &self.scope).to_source(field_size);
+        let mut src = expr.dest(self.arch, &self.scope).to_source();
         match &mut src {
-            MoveSource::Local(local) => {
+            MoveSource::Local(local, _) => {
                 local.offset += field_offset;
             }
-            MoveSource::Global(global) => match &mut global.offset {
+            MoveSource::Global(global, _) => match &mut global.offset {
                 Some(offset) => *offset += field_offset,
                 None => global.offset = Some(field_offset),
             },

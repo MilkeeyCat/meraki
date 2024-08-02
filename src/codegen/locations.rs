@@ -1,6 +1,6 @@
-use crate::{parser::ExprLit, register_allocator::Register, symbol_table::Symbol};
+use crate::{parser::ExprLit, register_allocator};
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Offset(pub isize);
 
 impl std::fmt::Display for Offset {
@@ -15,95 +15,58 @@ impl std::fmt::Display for Offset {
     }
 }
 
-#[derive(Debug)]
-pub struct SourceGlobal<'a> {
+#[derive(Clone, Debug)]
+pub struct Global<'a> {
     pub label: &'a str,
     pub size: usize,
-    pub signed: bool,
     pub offset: Option<usize>,
 }
 
-#[derive(Debug)]
-pub struct SourceLocal {
+#[derive(Clone, Debug)]
+pub struct Local {
     pub size: usize,
-    pub signed: bool,
     pub offset: usize,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SourceParam {
     pub size: usize,
-    pub signed: bool,
     pub n: usize,
 }
 
-#[derive(Debug)]
-pub struct SourceRegister<'a> {
-    pub register: &'a Register,
+#[derive(Clone, Debug)]
+pub struct Register<'a> {
+    pub register: &'a register_allocator::Register,
     pub size: usize,
-    pub signed: bool,
     pub offset: Option<Offset>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum MoveSource<'a> {
-    Global(SourceGlobal<'a>),
-    Local(SourceLocal),
-    Param(SourceParam),
-    Register(SourceRegister<'a>),
+    Global(Global<'a>, bool),
+    Local(Local, bool),
+    Param(SourceParam, bool),
+    Register(Register<'a>, bool),
     Lit(ExprLit),
 }
 
 #[derive(Clone, Debug)]
-pub struct DestinationGlobal<'a> {
-    pub label: &'a str,
-    pub offset: Option<usize>,
-}
-
-#[derive(Clone, Debug)]
-pub struct DestinationLocal {
-    pub offset: usize,
-}
-
-#[derive(Clone, Debug)]
-pub struct DestinationRegister<'a> {
-    pub register: &'a Register,
-    pub offset: Option<usize>,
-}
-
-#[derive(Clone, Debug)]
 pub enum MoveDestination<'a> {
-    Global(DestinationGlobal<'a>),
-    Local(DestinationLocal),
-    Register(DestinationRegister<'a>),
+    Global(Global<'a>),
+    Local(Local),
+    Register(Register<'a>),
 }
 
 impl<'a> MoveDestination<'a> {
-    pub fn to_source(self, size: usize) -> MoveSource<'a> {
+    pub fn to_source(self) -> MoveSource<'a> {
         match self {
-            MoveDestination::Global(global) => MoveSource::Global(SourceGlobal {
-                label: global.label,
-                offset: global.offset,
-                signed: false,
-                size,
-            }),
-            MoveDestination::Local(local) => MoveSource::Local(SourceLocal {
-                offset: local.offset,
-                signed: false,
-                size,
-            }),
-            MoveDestination::Register(register) => MoveSource::Register(SourceRegister {
-                register: register.register,
-                offset: register
-                    .offset
-                    .map(|offset| Offset(offset.try_into().unwrap())),
-                signed: false,
-                size,
-            }),
+            MoveDestination::Global(global) => MoveSource::Global(global, false),
+            MoveDestination::Local(local) => MoveSource::Local(local, false),
+            MoveDestination::Register(register) => MoveSource::Register(register, false),
         }
     }
 
-    pub fn register(self) -> &'a Register {
+    pub fn register(self) -> &'a register_allocator::Register {
         match self {
             Self::Register(register) => register.register,
             _ => unreachable!(),
@@ -116,29 +79,22 @@ impl<'a> MoveDestination<'a> {
             _ => unreachable!(),
         }
     }
-}
 
-impl<'a> From<&'a Register> for MoveDestination<'a> {
-    fn from(value: &'a Register) -> Self {
-        Self::Register(DestinationRegister {
-            register: value,
-            offset: None,
-        })
+    pub fn size(&self) -> usize {
+        match self {
+            MoveDestination::Global(global) => global.size,
+            MoveDestination::Local(local) => local.size,
+            MoveDestination::Register(register) => register.size,
+        }
     }
 }
 
-impl<'a> From<&'a Symbol> for MoveDestination<'a> {
-    fn from(value: &'a Symbol) -> Self {
-        match value {
-            Symbol::Local(symbol) => Self::Local(DestinationLocal {
-                offset: symbol.offset,
-            }),
-            Symbol::Global(symbol) => Self::Global(DestinationGlobal {
-                label: &symbol.name,
-                offset: None,
-            }),
-            Symbol::Param(symbol) => todo!(),
-            Symbol::Function(_) => unreachable!(),
-        }
+impl<'a> From<&'a register_allocator::Register> for MoveDestination<'a> {
+    fn from(value: &'a register_allocator::Register) -> Self {
+        Self::Register(Register {
+            register: value,
+            offset: None,
+            size: 8,
+        })
     }
 }
