@@ -1,8 +1,9 @@
+use super::SymbolTableError;
 use crate::{
     archs::Architecture,
     codegen::locations::{Global, Local, MoveDestination, MoveSource, SourceParam},
     scope::Scope,
-    type_::Type,
+    types::Type,
 };
 
 const MAX_SYMBOLS: usize = 512;
@@ -75,7 +76,7 @@ impl Symbol {
                 size: symbol.type_.size(arch, scope),
                 offset: None,
             }),
-            Symbol::Param(symbol) => todo!(),
+            Symbol::Param(_symbol) => todo!(),
             Symbol::Function(_) => unreachable!(),
         }
     }
@@ -106,21 +107,6 @@ pub struct SymbolFunction {
     pub name: String,
     pub return_type: Type,
     pub parameters: Vec<Type>,
-}
-
-#[derive(Debug, PartialEq)]
-pub enum SymbolTableError {
-    Redeclaration(String),
-    NotFound(String),
-}
-
-impl std::fmt::Display for SymbolTableError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Redeclaration(name) => write!(f, "Redeclaration of '{name}'"),
-            Self::NotFound(name) => write!(f, "Symbol '{name}' not found"),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

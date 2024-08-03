@@ -1,4 +1,4 @@
-use crate::type_::Type;
+use crate::types::Type;
 use std::{fmt::Display, num::ParseIntError};
 
 const I8_MIN: i64 = i8::MIN as i64;

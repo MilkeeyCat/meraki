@@ -1,0 +1,30 @@
+use super::Type;
+
+#[derive(Debug)]
+pub enum TypeError {
+    Promotion(Type, Type),
+    IdentNotFound(String),
+    Assignment(Type, Type),
+    Cast(Type, Type),
+    Return(Type, Type),
+    VoidVariable,
+}
+
+impl std::fmt::Display for TypeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::IdentNotFound(ident) => write!(f, "Ident {} not found", ident),
+            Self::Promotion(lhs, rhs) => {
+                write!(f, "Operation between {} and {} are not allowed", lhs, rhs)
+            }
+            Self::Assignment(lhs, rhs) => write!(f, "Can't assign {} to {}", lhs, rhs),
+            Self::Cast(from, to) => write!(f, "Can't cast {} into {}", from, to),
+            Self::Return(left, right) => write!(
+                f,
+                "Expected return value of type {},  got {} instead",
+                right, left
+            ),
+            Self::VoidVariable => write!(f, "Variable can't be of type void"),
+        }
+    }
+}

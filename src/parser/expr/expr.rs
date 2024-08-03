@@ -1,12 +1,12 @@
-use super::{int_repr::UIntLitRepr, IntLitRepr};
+use super::{int_repr::UIntLitRepr, ExprError, IntLitRepr};
 use crate::{
     archs::Architecture,
     codegen::locations::MoveDestination,
     parser::op::{BinOp, UnOp},
     scope::Scope,
     symbol_table::{Symbol, SymbolTableError},
-    type_::{Type, TypeError},
     type_table,
+    types::{Type, TypeError},
 };
 
 pub trait Expression {
@@ -19,24 +19,6 @@ pub trait LValue {
         arch: &dyn Architecture,
         scope: &'a Scope,
     ) -> Result<MoveDestination<'a>, ExprError>;
-}
-
-#[derive(Debug)]
-pub enum ExprError {
-    Type(TypeError),
-    SymbolTable(SymbolTableError),
-}
-
-impl From<TypeError> for ExprError {
-    fn from(value: TypeError) -> Self {
-        Self::Type(value)
-    }
-}
-
-impl From<SymbolTableError> for ExprError {
-    fn from(value: SymbolTableError) -> Self {
-        Self::SymbolTable(value)
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -136,7 +118,7 @@ impl std::fmt::Display for ExprLit {
                 if boolean == &true {
                     write!(f, "1")
                 } else {
-                    write!(f, "1")
+                    write!(f, "0")
                 }
             }
         }

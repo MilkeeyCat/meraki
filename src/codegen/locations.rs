@@ -1,4 +1,4 @@
-use crate::{parser::ExprLit, register_allocator};
+use crate::{parser::ExprLit, register};
 
 #[derive(Clone, Debug)]
 pub struct Offset(pub isize);
@@ -36,7 +36,7 @@ pub struct SourceParam {
 
 #[derive(Clone, Debug)]
 pub struct Register<'a> {
-    pub register: &'a register_allocator::Register,
+    pub register: &'a register::Register,
     pub size: usize,
     pub offset: Option<Offset>,
 }
@@ -66,7 +66,7 @@ impl<'a> MoveDestination<'a> {
         }
     }
 
-    pub fn register(self) -> &'a register_allocator::Register {
+    pub fn register(self) -> &'a register::Register {
         match self {
             Self::Register(register) => register.register,
             _ => unreachable!(),
@@ -89,8 +89,8 @@ impl<'a> MoveDestination<'a> {
     }
 }
 
-impl<'a> From<&'a register_allocator::Register> for MoveDestination<'a> {
-    fn from(value: &'a register_allocator::Register) -> Self {
+impl<'a> From<&'a register::Register> for MoveDestination<'a> {
+    fn from(value: &'a register::Register) -> Self {
         Self::Register(Register {
             register: value,
             offset: None,

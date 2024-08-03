@@ -1,19 +1,11 @@
-mod archs;
-mod codegen;
-mod lexer;
-mod parser;
-mod register_allocator;
-mod scope;
-mod symbol_table;
-mod type_;
-mod type_table;
-
-use std::{fs::File, io::Read};
-
-use crate::archs::{Amd64, Architecture};
 use clap::Parser;
-use codegen::CodeGen;
-use lexer::Lexer;
+use meraki::{
+    archs::{Amd64, Architecture},
+    codegen::CodeGen,
+    lexer::Lexer,
+    parser,
+};
+use std::{fs::File, io::Read};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]

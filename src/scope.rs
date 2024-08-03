@@ -1,7 +1,7 @@
 use crate::{
     symbol_table::{Symbol, SymbolTable},
-    type_::Type,
     type_table::TypeTable,
+    types::Type,
 };
 
 #[derive(Debug, Clone, PartialEq)]

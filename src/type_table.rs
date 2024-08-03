@@ -1,4 +1,4 @@
-use crate::{archs::Architecture, scope::Scope};
+use crate::{archs::Architecture, scope::Scope, types};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
@@ -8,7 +8,7 @@ pub enum Type {
 #[derive(Debug, Clone, PartialEq)]
 pub struct TypeStruct {
     pub name: String,
-    pub fields: Vec<(String, crate::type_::Type)>,
+    pub fields: Vec<(String, types::Type)>,
 }
 
 impl TypeStruct {
@@ -33,7 +33,7 @@ impl TypeStruct {
         offset
     }
 
-    pub fn get_field_type(&self, field: &str) -> Option<&crate::type_::Type> {
+    pub fn get_field_type(&self, field: &str) -> Option<&types::Type> {
         self.fields
             .iter()
             .find(|(name, _)| name == field)

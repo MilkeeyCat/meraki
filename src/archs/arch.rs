@@ -1,9 +1,9 @@
 use crate::{
     codegen::locations::{self, MoveDestination, MoveSource},
     parser::CmpOp,
-    register_allocator::{AllocatorError, Register},
+    register::{allocator::AllocatorError, Register},
     scope::Scope,
-    type_::Type,
+    types::Type,
 };
 
 pub trait Architecture {

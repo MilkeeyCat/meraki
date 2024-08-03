@@ -1,10 +1,13 @@
-use super::arch::Architecture;
 use crate::{
+    archs::Architecture,
     codegen::locations::{self, Global, Local, MoveDestination, MoveSource, Offset, SourceParam},
     parser::{CmpOp, ExprLit, Expression},
-    register_allocator::{AllocatorError, Register, RegisterAllocator},
+    register::{
+        allocator::{AllocatorError, RegisterAllocator},
+        Register,
+    },
     scope::Scope,
-    type_::Type,
+    types::Type,
 };
 use indoc::formatdoc;
 

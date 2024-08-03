@@ -1,5 +1,5 @@
 use super::Expr;
-use crate::{scope::ScopeImpl, type_::Type};
+use crate::{scope::ScopeImpl, types::Type};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
