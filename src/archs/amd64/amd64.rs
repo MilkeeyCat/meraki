@@ -1,5 +1,5 @@
 use crate::{
-    archs::Architecture,
+    archs::{ArchError, Architecture},
     codegen::locations::{self, Global, Local, MoveDestination, MoveSource, Offset, SourceParam},
     parser::{CmpOp, ExprLit, Expression},
     register::{
@@ -7,7 +7,7 @@ use crate::{
         Register,
     },
     scope::Scope,
-    types::Type,
+    types::{Type, TypeError},
 };
 use indoc::formatdoc;
 
@@ -66,7 +66,12 @@ impl Architecture for Amd64 {
         }
     }
 
-    fn mov(&mut self, src: MoveSource, dest: MoveDestination, scope: &Scope) {
+    fn mov(
+        &mut self,
+        src: MoveSource,
+        dest: MoveDestination,
+        scope: &Scope,
+    ) -> Result<(), ArchError> {
         match src {
             MoveSource::Global(global, signed) => self.mov_global(global, dest, signed, scope),
             MoveSource::Local(local, signed) => self.mov_local(local, dest, signed, scope),
@@ -199,19 +204,21 @@ impl Architecture for Amd64 {
         ));
     }
 
-    fn ret(&mut self, r: Register, type_: Type, scope: &Scope) {
+    fn ret(&mut self, r: Register, type_: Type, scope: &Scope) -> Result<(), TypeError> {
         self.mov_impl(
             (
                 &MoveDestination::Register(locations::Register {
                     register: &r,
-                    size: type_.size(self, scope),
+                    size: type_.size(self, scope)?,
                     offset: None,
                 }),
-                type_.size(self, scope),
+                type_.size(self, scope)?,
             ),
             ("rax", 8),
             type_.signed(),
         );
+
+        Ok(())
     }
 
     fn jmp(&mut self, label: &str) {
@@ -293,20 +300,33 @@ impl Amd64 {
         }
     }
 
-    fn mov_literal(&mut self, literal: ExprLit, dest: MoveDestination, scope: &Scope) {
+    fn mov_literal(
+        &mut self,
+        literal: ExprLit,
+        dest: MoveDestination,
+        scope: &Scope,
+    ) -> Result<(), ArchError> {
         self.mov_impl(
-            (&literal, literal.type_(scope).unwrap().size(self, scope)),
+            (&literal, literal.type_(scope)?.size(self, scope)?),
             (&dest, dest.size()),
-            literal.type_(scope).unwrap().signed(),
-        )
+            literal.type_(scope)?.signed(),
+        );
+
+        Ok(())
     }
 
-    fn mov_local(&mut self, src: Local, dest: MoveDestination, signed: bool, scope: &Scope) {
+    fn mov_local(
+        &mut self,
+        src: Local,
+        dest: MoveDestination,
+        signed: bool,
+        scope: &Scope,
+    ) -> Result<(), ArchError> {
         match dest {
             // NOTE: x86-64 doesn't support indirect to indirect addressing mode so we use tools we already have
             MoveDestination::Local(local) => {
                 let mut size = src.size;
-                let r = self.alloc().unwrap();
+                let r = self.alloc()?;
 
                 self.lea(&r, src.offset);
 
@@ -319,7 +339,7 @@ impl Amd64 {
                         0 => unreachable!(),
                     };
 
-                    let r_tmp = self.alloc().unwrap();
+                    let r_tmp = self.alloc()?;
 
                     self.mov_register(
                         locations::Register {
@@ -334,7 +354,7 @@ impl Amd64 {
                         }),
                         signed,
                         scope,
-                    );
+                    )?;
                     self.mov_register(
                         locations::Register {
                             size: chunk_size,
@@ -347,12 +367,13 @@ impl Amd64 {
                         }),
                         signed,
                         scope,
-                    );
+                    )?;
 
+                    self.free(r_tmp)?;
                     size -= chunk_size;
                 }
 
-                self.free(r).unwrap();
+                self.free(r)?;
             }
             MoveDestination::Global(_) => {
                 todo!();
@@ -360,10 +381,18 @@ impl Amd64 {
             MoveDestination::Register(register) => {
                 self.mov_impl((&src, src.size), (&register, register.size), signed);
             }
-        }
+        };
+
+        Ok(())
     }
 
-    fn mov_param(&mut self, src: SourceParam, dest: MoveDestination, signed: bool, scope: &Scope) {
+    fn mov_param(
+        &mut self,
+        src: SourceParam,
+        dest: MoveDestination,
+        signed: bool,
+        scope: &Scope,
+    ) -> Result<(), ArchError> {
         self.mov(
             MoveSource::Register(
                 locations::Register {
@@ -378,10 +407,18 @@ impl Amd64 {
             ),
             dest,
             scope,
-        );
+        )?;
+
+        Ok(())
     }
 
-    fn mov_global(&self, _src: Global, _dest: MoveDestination, _signed: bool, _scope: &Scope) {
+    fn mov_global(
+        &self,
+        _src: Global,
+        _dest: MoveDestination,
+        _signed: bool,
+        _scope: &Scope,
+    ) -> Result<(), ArchError> {
         todo!();
     }
 
@@ -391,8 +428,10 @@ impl Amd64 {
         dest: MoveDestination,
         signed: bool,
         _: &Scope,
-    ) {
-        self.mov_impl((&src, src.size), (&dest, dest.size()), signed)
+    ) -> Result<(), ArchError> {
+        self.mov_impl((&src, src.size), (&dest, dest.size()), signed);
+
+        Ok(())
     }
 }
 

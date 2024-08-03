@@ -1,5 +1,8 @@
-mod amd64;
 mod arch;
+mod error;
 
-pub use amd64::Amd64;
 pub use arch::Architecture;
+pub use error::ArchError;
+
+mod amd64;
+pub use amd64::*;

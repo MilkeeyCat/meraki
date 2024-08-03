@@ -1,6 +1,6 @@
 use super::Type;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum TypeError {
     Promotion(Type, Type),
     IdentNotFound(String),
@@ -8,6 +8,7 @@ pub enum TypeError {
     Cast(Type, Type),
     Return(Type, Type),
     VoidVariable,
+    Nonexistent(String),
 }
 
 impl std::fmt::Display for TypeError {
@@ -25,6 +26,7 @@ impl std::fmt::Display for TypeError {
                 right, left
             ),
             Self::VoidVariable => write!(f, "Variable can't be of type void"),
+            Self::Nonexistent(name) => write!(f, "Type '{name}' doens't exits"),
         }
     }
 }

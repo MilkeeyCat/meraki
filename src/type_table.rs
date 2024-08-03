@@ -1,4 +1,8 @@
-use crate::{archs::Architecture, scope::Scope, types};
+use crate::{
+    archs::Architecture,
+    scope::Scope,
+    types::{self, TypeError},
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
@@ -12,14 +16,22 @@ pub struct TypeStruct {
 }
 
 impl TypeStruct {
-    pub fn size(&self, arch: &dyn Architecture, scope: &Scope) -> usize {
-        self.fields
+    pub fn size(&self, arch: &dyn Architecture, scope: &Scope) -> Result<usize, TypeError> {
+        Ok(self
+            .fields
             .iter()
             .map(|(_, type_)| type_.size(arch, scope))
-            .sum()
+            .collect::<Result<Vec<_>, _>>()?
+            .iter()
+            .sum())
     }
 
-    pub fn offset(&self, arch: &dyn Architecture, name: &str, scope: &Scope) -> usize {
+    pub fn offset(
+        &self,
+        arch: &dyn Architecture,
+        name: &str,
+        scope: &Scope,
+    ) -> Result<usize, TypeError> {
         let mut offset = 0;
 
         for (field_name, type_) in &self.fields {
@@ -27,10 +39,10 @@ impl TypeStruct {
                 break;
             }
 
-            offset += type_.size(arch, scope);
+            offset += type_.size(arch, scope)?;
         }
 
-        offset
+        Ok(offset)
     }
 
     pub fn get_field_type(&self, field: &str) -> Option<&types::Type> {

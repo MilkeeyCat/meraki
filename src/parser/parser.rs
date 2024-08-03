@@ -227,9 +227,15 @@ impl Parser {
             Token::I16 => Ok(Type::I16),
             Token::Bool => Ok(Type::Bool),
             Token::Void => Ok(Type::Void),
-            Token::Ident(ident) => Ok(match self.scope.find_type(&ident).unwrap() {
-                type_table::Type::Struct(_) => Type::Struct(ident),
-            }),
+            Token::Ident(ident) => Ok(
+                match self
+                    .scope
+                    .find_type(&ident)
+                    .ok_or(TypeError::Nonexistent(ident.clone()))?
+                {
+                    type_table::Type::Struct(_) => Type::Struct(ident),
+                },
+            ),
             token => Err(ParserError::ParseType(token)),
         }
     }
@@ -400,7 +406,11 @@ impl Parser {
         while !self.cur_token_is(&Token::RBrace) {
             match self.next_token()? {
                 Token::Ident(field) => {
-                    if !match self.scope.find_type(&name).expect("Type doesn't exist") {
+                    if !match self
+                        .scope
+                        .find_type(&name)
+                        .ok_or(TypeError::Nonexistent(name.clone()))?
+                    {
                         type_table::Type::Struct(type_struct) => type_struct
                             .fields
                             .iter()
@@ -452,9 +462,8 @@ impl Parser {
                         let args = self.expr_list()?;
                         let args_types = args
                             .iter()
-                            .map(|expr| expr.type_(&self.scope).unwrap())
-                            .collect::<Vec<Type>>();
-
+                            .map(|expr| expr.type_(&self.scope))
+                            .collect::<Result<Vec<_>, _>>()?;
                         if function_params != args_types {
                             return Err(ParserError::FunctionArguments(
                                 function_name,
@@ -498,7 +507,11 @@ impl Parser {
                     .type_()
                 {
                     Type::Struct(struct_type) => {
-                        match self.scope.find_type(&struct_type).unwrap() {
+                        match self
+                            .scope
+                            .find_type(&struct_type)
+                            .ok_or(TypeError::Nonexistent(struct_type))?
+                        {
                             type_table::Type::Struct(s) => {
                                 if s.contains(&field.0) {
                                     Ok(Expr::StructAccess(ExprStructAccess {

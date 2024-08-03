@@ -1,4 +1,5 @@
 use crate::{
+    archs::ArchError,
     parser::{Expr, ExprError, OpParseError},
     register::allocator::AllocatorError,
     symbol_table::SymbolTableError,
@@ -57,6 +58,16 @@ impl From<ExprError> for CodeGenError {
         match value {
             ExprError::Type(e) => Self::Type(e),
             ExprError::SymbolTable(e) => Self::SymbolTable(e),
+        }
+    }
+}
+
+impl From<ArchError> for CodeGenError {
+    fn from(value: ArchError) -> Self {
+        match value {
+            ArchError::Type(e) => Self::Type(e),
+            ArchError::Allocator(e) => Self::Allocator(e),
+            ArchError::SymbolTable(e) => Self::SymbolTable(e),
         }
     }
 }

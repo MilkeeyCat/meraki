@@ -1,9 +1,10 @@
+use super::ArchError;
 use crate::{
     codegen::locations::{self, MoveDestination, MoveSource},
     parser::CmpOp,
     register::{allocator::AllocatorError, Register},
     scope::Scope,
-    types::Type,
+    types::{Type, TypeError},
 };
 
 pub trait Architecture {
@@ -18,7 +19,12 @@ pub trait Architecture {
     where
         Self: Sized;
     fn declare(&mut self, name: &str, size: usize);
-    fn mov(&mut self, src: MoveSource, dest: MoveDestination, scope: &Scope);
+    fn mov(
+        &mut self,
+        src: MoveSource,
+        dest: MoveDestination,
+        scope: &Scope,
+    ) -> Result<(), ArchError>;
     fn negate(&mut self, r: &Register);
     fn not(&mut self, dest: &Register, src: &Register);
     fn add(&mut self, dest: &MoveDestination, src: &locations::Register);
@@ -28,7 +34,7 @@ pub trait Architecture {
     fn cmp(&mut self, dest: &Register, src: &Register, cmp: CmpOp);
     fn fn_preamble(&mut self, name: &str, stackframe: usize);
     fn fn_postamble(&mut self, name: &str, stackframe: usize);
-    fn ret(&mut self, r: Register, type_: Type, scope: &Scope);
+    fn ret(&mut self, r: Register, type_: Type, scope: &Scope) -> Result<(), TypeError>;
     fn jmp(&mut self, label: &str);
     fn call_fn(&mut self, name: &str, r: Option<&Register>);
     fn move_function_argument(&mut self, r: Register, i: usize);

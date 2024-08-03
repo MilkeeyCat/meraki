@@ -11,7 +11,7 @@ use crate::{
     scope::Scope,
     symbol_table::{Symbol, SymbolTableError},
     type_table,
-    types::Type,
+    types::{Type, TypeError},
 };
 use std::fs::File;
 use std::io::Write;
@@ -26,11 +26,13 @@ impl<'a> CodeGen<'a> {
         Self { arch, scope }
     }
 
-    fn declare(&mut self, variable: StmtVarDecl) {
+    fn declare(&mut self, variable: StmtVarDecl) -> Result<(), CodeGenError> {
         if !self.scope.local() {
             self.arch
-                .declare(&variable.name, variable.type_.size(self.arch, &self.scope))
+                .declare(&variable.name, variable.type_.size(self.arch, &self.scope)?)
         }
+
+        Ok(())
     }
 
     fn function(&mut self, func: StmtFunction) -> Result<(), CodeGenError> {
@@ -54,7 +56,7 @@ impl<'a> CodeGen<'a> {
             let type_ = expr.type_(&self.scope)?;
             let r = self.arch.alloc()?;
             self.expr(expr, Some((&r).into()))?;
-            self.arch.ret(r, type_, &self.scope);
+            self.arch.ret(r, type_, &self.scope)?;
         }
 
         self.arch.jmp(label);
@@ -67,7 +69,7 @@ impl<'a> CodeGen<'a> {
             Expr::Binary(bin_expr) => self.bin_expr(bin_expr, dest)?,
             Expr::Lit(lit) => {
                 if let Some(dest) = dest {
-                    self.arch.mov(MoveSource::Lit(lit), dest, &self.scope)
+                    self.arch.mov(MoveSource::Lit(lit), dest, &self.scope)?
                 }
             }
             Expr::Unary(unary_expr) => {
@@ -83,12 +85,12 @@ impl<'a> CodeGen<'a> {
 
                 if let Some(dest) = dest {
                     self.arch
-                        .mov(symbol.to_source(self.arch, &self.scope), dest, &self.scope);
+                        .mov(symbol.to_source(self.arch, &self.scope)?, dest, &self.scope)?;
                 }
             }
             Expr::Cast(cast_expr) => {
                 //TODO: move this elsewhere
-                let type_size = cast_expr.type_(&self.scope)?.size(self.arch, &self.scope);
+                let type_size = cast_expr.type_(&self.scope)?.size(self.arch, &self.scope)?;
                 let expr = match *cast_expr.expr {
                     Expr::Lit(ExprLit::Int(mut int)) => {
                         int.zero_except_n_bytes(type_size);
@@ -146,7 +148,7 @@ impl<'a> CodeGen<'a> {
                 self.expr(*expr.right, Some(lvalue_dest.clone()))?;
 
                 if let Some(dest) = dest {
-                    self.arch.mov(lvalue_dest.to_source(), dest, &self.scope);
+                    self.arch.mov(lvalue_dest.to_source(), dest, &self.scope)?;
                 }
             }
             BinOp::Add => {
@@ -155,9 +157,8 @@ impl<'a> CodeGen<'a> {
 
                     let size = expr
                         .right
-                        .type_(&self.scope)
-                        .unwrap()
-                        .size(self.arch, &self.scope);
+                        .type_(&self.scope)?
+                        .size(self.arch, &self.scope)?;
                     let r = self.arch.alloc()?;
                     self.expr(*expr.right, Some((&r).into()))?;
 
@@ -230,7 +231,7 @@ impl<'a> CodeGen<'a> {
     fn stmt(&mut self, stmt: Stmt) -> Result<(), CodeGenError> {
         match stmt {
             Stmt::Expr(expr) => self.expr(expr, None).map(|_| ()),
-            Stmt::VarDecl(var_decl) => Ok(self.declare(var_decl)),
+            Stmt::VarDecl(var_decl) => self.declare(var_decl),
             Stmt::Function(func) => self.function(func),
             Stmt::Return(ret) => self.ret(ret),
         }
@@ -285,16 +286,20 @@ impl<'a> CodeGen<'a> {
     }
 
     fn struct_expr(&mut self, expr: ExprStruct, dest: MoveDestination) -> Result<(), CodeGenError> {
-        let type_struct = match self.scope.find_type(&expr.name).unwrap() {
+        let type_struct = match self
+            .scope
+            .find_type(&expr.name)
+            .ok_or(TypeError::Nonexistent(expr.name))?
+        {
             type_table::Type::Struct(type_) => type_,
             _ => panic!("Expected type to be struct"),
         }
         .clone();
         //NOTE: clone bad ^
-        let struct_size = type_struct.size(self.arch, &self.scope);
+        let struct_size = type_struct.size(self.arch, &self.scope)?;
 
         for (name, expr) in expr.fields.into_iter() {
-            let offset = type_struct.offset(self.arch, &name, &self.scope);
+            let offset = type_struct.offset(self.arch, &name, &self.scope)?;
             self.expr(
                 expr,
                 Some(MoveDestination::Local(Local {
@@ -303,7 +308,7 @@ impl<'a> CodeGen<'a> {
                     size: type_struct
                         .get_field_type(&name)
                         .unwrap()
-                        .size(self.arch, &self.scope),
+                        .size(self.arch, &self.scope)?,
                 })),
             )?;
         }
@@ -321,9 +326,9 @@ impl<'a> CodeGen<'a> {
             .find_symbol(&expr.name)
             .ok_or(SymbolTableError::NotFound(expr.name.clone()))?;
         let field_offset = match symbol.type_() {
-            Type::Struct(s) => match self.scope.find_type(&s).unwrap() {
+            Type::Struct(s) => match self.scope.find_type(&s).ok_or(TypeError::Nonexistent(s))? {
                 type_table::Type::Struct(type_struct) => {
-                    type_struct.offset(self.arch, &expr.field, &self.scope)
+                    type_struct.offset(self.arch, &expr.field, &self.scope)?
                 }
             },
             _ => panic!(),
@@ -341,7 +346,7 @@ impl<'a> CodeGen<'a> {
             _ => unreachable!(),
         };
 
-        self.arch.mov(src, dest, &self.scope);
+        self.arch.mov(src, dest, &self.scope)?;
 
         Ok(())
     }
@@ -370,7 +375,7 @@ impl<'a> CodeGen<'a> {
                     .ok_or(SymbolTableError::NotFound(var_decl.name.clone()))?
                 {
                     local.offset = offset;
-                    offset += var_decl.type_.size(self.arch, &self.scope);
+                    offset += var_decl.type_.size(self.arch, &self.scope)?;
                 }
             }
         }

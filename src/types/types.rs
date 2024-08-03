@@ -116,16 +116,19 @@ impl Type {
         return Err(TypeError::Cast(self, type_));
     }
 
-    pub fn size(&self, arch: &dyn Architecture, scope: &Scope) -> usize {
-        match self {
+    pub fn size(&self, arch: &dyn Architecture, scope: &Scope) -> Result<usize, TypeError> {
+        Ok(match self {
             Type::Void => 0,
             Type::I8 | Type::U8 | Type::Bool => 1,
             Type::I16 | Type::U16 => 2,
-            Type::Struct(structure) => match scope.find_type(structure).unwrap() {
-                crate::type_table::Type::Struct(structure) => structure.size(arch, scope),
+            Type::Struct(structure) => match scope
+                .find_type(structure)
+                .ok_or(TypeError::Nonexistent(structure.to_string()))?
+            {
+                crate::type_table::Type::Struct(structure) => structure.size(arch, scope)?,
             },
             _ => arch.size(self),
-        }
+        })
     }
 }
 

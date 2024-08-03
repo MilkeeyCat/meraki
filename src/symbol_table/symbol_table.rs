@@ -37,11 +37,15 @@ impl Symbol {
         }
     }
 
-    pub fn to_source(&self, arch: &dyn Architecture, scope: &Scope) -> MoveSource {
-        match self {
+    pub fn to_source(
+        &self,
+        arch: &dyn Architecture,
+        scope: &Scope,
+    ) -> Result<MoveSource, SymbolTableError> {
+        Ok(match self {
             Self::Local(symbol) => MoveSource::Local(
                 Local {
-                    size: symbol.type_.size(arch, scope),
+                    size: symbol.type_.size(arch, scope)?,
                     offset: symbol.offset,
                 },
                 symbol.type_.signed(),
@@ -49,36 +53,40 @@ impl Symbol {
             Self::Global(symbol) => MoveSource::Global(
                 Global {
                     label: &symbol.name,
-                    size: symbol.type_.size(arch, scope),
+                    size: symbol.type_.size(arch, scope)?,
                     offset: None,
                 },
                 symbol.type_.signed(),
             ),
             Self::Param(symbol) => MoveSource::Param(
                 SourceParam {
-                    size: symbol.type_.size(arch, scope),
+                    size: symbol.type_.size(arch, scope)?,
                     n: symbol.n,
                 },
                 symbol.type_.signed(),
             ),
             Self::Function(_) => unreachable!(),
-        }
+        })
     }
 
-    pub fn to_dest(&self, arch: &dyn Architecture, scope: &Scope) -> MoveDestination {
-        match self {
+    pub fn to_dest(
+        &self,
+        arch: &dyn Architecture,
+        scope: &Scope,
+    ) -> Result<MoveDestination, SymbolTableError> {
+        Ok(match self {
             Symbol::Local(symbol) => MoveDestination::Local(Local {
                 offset: symbol.offset,
-                size: symbol.type_.size(arch, scope),
+                size: symbol.type_.size(arch, scope)?,
             }),
             Symbol::Global(symbol) => MoveDestination::Global(Global {
                 label: &symbol.name,
-                size: symbol.type_.size(arch, scope),
+                size: symbol.type_.size(arch, scope)?,
                 offset: None,
             }),
             Symbol::Param(_symbol) => todo!(),
             Symbol::Function(_) => unreachable!(),
-        }
+        })
     }
 }
 

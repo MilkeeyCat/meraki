@@ -151,7 +151,7 @@ impl LValue for ExprIdent {
         Ok(scope
             .find_symbol(&self.0)
             .ok_or(SymbolTableError::NotFound(self.0.clone()))?
-            .to_dest(arch, scope))
+            .to_dest(arch, scope)?)
     }
 }
 
@@ -183,7 +183,7 @@ impl Expression for ExprStructAccess {
                 Type::Struct(s) => {
                     match scope
                         .find_type(&s)
-                        .ok_or(SymbolTableError::NotFound(s.to_string()))?
+                        .ok_or(TypeError::Nonexistent(s.to_owned()))?
                     {
                         type_table::Type::Struct(sl) => {
                             Ok(sl.get_field_type(&self.field).unwrap().to_owned())
@@ -207,16 +207,16 @@ impl LValue for ExprStructAccess {
             .find_symbol(&self.name)
             .ok_or(SymbolTableError::NotFound(self.name.clone()))?;
         let (field_offset, struct_size) = match symbol.type_() {
-            Type::Struct(s) => match scope.find_type(&s).unwrap() {
+            Type::Struct(s) => match scope.find_type(&s).ok_or(TypeError::Nonexistent(s))? {
                 type_table::Type::Struct(type_struct) => (
-                    type_struct.offset(arch, &self.field, scope),
-                    type_struct.size(arch, scope),
+                    type_struct.offset(arch, &self.field, scope)?,
+                    type_struct.size(arch, scope)?,
                 ),
             },
             _ => panic!(),
         };
 
-        let mut dest = symbol.to_dest(arch, scope);
+        let mut dest = symbol.to_dest(arch, scope)?;
         // NOTE: local variable use 1-based offset but struct offsets are 0-based, so to plumb it correctly gotta slap that -1
         let new_offset = struct_size + dest.local_offset() - field_offset - 1;
 
