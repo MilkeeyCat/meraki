@@ -3,6 +3,7 @@ use crate::{
     types::TypeError,
 };
 
+#[derive(Debug)]
 pub enum ArchError {
     Type(TypeError),
     Allocator(AllocatorError),

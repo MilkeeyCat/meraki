@@ -19,7 +19,7 @@ pub struct Amd64 {
 impl Architecture for Amd64 {
     fn new() -> Self {
         Self {
-            buf: String::from(".section .text\n"),
+            buf: String::new(),
             registers: RegisterAllocator::new(vec![
                 Register::new("r15b", "r15w", "r15d", "r15"),
                 Register::new("r14b", "r14w", "r14d", "r14"),
@@ -274,7 +274,8 @@ impl Architecture for Amd64 {
         ));
     }
 
-    fn finish(&self) -> Vec<u8> {
+    fn finish(&mut self) -> Vec<u8> {
+        self.buf.insert_str(0, ".section .text\n");
         self.buf.as_bytes().to_vec()
     }
 }
@@ -473,7 +474,7 @@ impl std::fmt::Display for Global<'_> {
                 )
             }
             None => {
-                write!(f, "{}", self.label)
+                write!(f, "{} [{}]", Amd64::size_name(self.size), self.label)
             }
         }
     }
@@ -485,6 +486,97 @@ impl std::fmt::Display for MoveDestination<'_> {
             Self::Global(global) => write!(f, "{global}"),
             Self::Local(local) => write!(f, "{local}"),
             Self::Register(register) => write!(f, "{register}"),
+        }
+    }
+}
+
+mod test {
+    use crate::parser::IntLitRepr;
+
+    #[test]
+    fn mov_literal() {
+        use super::Amd64;
+        use crate::codegen::locations::Offset;
+        use crate::{
+            archs::Architecture,
+            codegen::locations::{self, MoveDestination},
+            parser::{ExprLit, UIntLitRepr},
+            register::Register,
+            scope::Scope,
+        };
+
+        let r = Register::new("r15b", "r15w", "r15d", "r15");
+        let scope = Scope::new();
+        let tests = vec![
+            (
+                (
+                    MoveDestination::Global(locations::Global {
+                        size: 4,
+                        offset: Some(5),
+                        label: "foo",
+                    }),
+                    ExprLit::UInt(UIntLitRepr::new(15_000)),
+                ),
+                "\tmov dword ptr [foo - 5], 15000\n",
+            ),
+            (
+                (
+                    MoveDestination::Global(locations::Global {
+                        size: 8,
+                        offset: None,
+                        label: "foo",
+                    }),
+                    ExprLit::Int(IntLitRepr::new(-5)),
+                ),
+                "\tmov qword ptr [foo], -5\n",
+            ),
+            (
+                (
+                    MoveDestination::Local(locations::Local { size: 4, offset: 1 }),
+                    ExprLit::UInt(UIntLitRepr::new(5)),
+                ),
+                "\tmov dword ptr [rbp - 1], 5\n",
+            ),
+            (
+                (
+                    MoveDestination::Register(locations::Register {
+                        size: 8,
+                        offset: None,
+                        register: &r,
+                    }),
+                    ExprLit::UInt(UIntLitRepr::new(5)),
+                ),
+                "\tmov r15, 5\n",
+            ),
+            (
+                (
+                    MoveDestination::Register(locations::Register {
+                        size: 8,
+                        offset: Some(Offset(-15)),
+                        register: &r,
+                    }),
+                    ExprLit::UInt(UIntLitRepr::new(5)),
+                ),
+                "\tmov qword ptr [r15 - 15], 5\n",
+            ),
+            (
+                (
+                    MoveDestination::Register(locations::Register {
+                        size: 2,
+                        offset: Some(Offset(8)),
+                        register: &r,
+                    }),
+                    ExprLit::Int(IntLitRepr::new(-7)),
+                ),
+                "\tmov word ptr [r15 + 8], -7\n",
+            ),
+        ];
+
+        for ((dest, lit), expected) in tests {
+            let mut arch = Amd64::new();
+            arch.mov_literal(lit, dest, &scope).unwrap();
+
+            assert_eq!(arch.buf, expected);
         }
     }
 }

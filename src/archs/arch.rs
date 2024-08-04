@@ -39,5 +39,5 @@ pub trait Architecture {
     fn call_fn(&mut self, name: &str, r: Option<&Register>);
     fn move_function_argument(&mut self, r: Register, i: usize);
     fn lea(&mut self, dest: &Register, offset: usize);
-    fn finish(&self) -> Vec<u8>;
+    fn finish(&mut self) -> Vec<u8>;
 }
