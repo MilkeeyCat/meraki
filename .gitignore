@@ -1,4 +1,1 @@
 target
-playground/*
-!playground/Makefile
-!playground/main.mk
