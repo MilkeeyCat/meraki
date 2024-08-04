@@ -491,20 +491,17 @@ impl std::fmt::Display for MoveDestination<'_> {
 }
 
 mod test {
-    use crate::parser::IntLitRepr;
+    use super::Amd64;
+    use crate::{
+        archs::Architecture,
+        codegen::locations::{self, MoveDestination, Offset},
+        parser::{ExprLit, IntLitRepr, UIntLitRepr},
+        register::Register,
+        scope::Scope,
+    };
 
     #[test]
     fn mov_literal() {
-        use super::Amd64;
-        use crate::codegen::locations::Offset;
-        use crate::{
-            archs::Architecture,
-            codegen::locations::{self, MoveDestination},
-            parser::{ExprLit, UIntLitRepr},
-            register::Register,
-            scope::Scope,
-        };
-
         let r = Register::new("r15b", "r15w", "r15d", "r15");
         let scope = Scope::new();
         let tests = vec![
@@ -575,6 +572,133 @@ mod test {
         for ((dest, lit), expected) in tests {
             let mut arch = Amd64::new();
             arch.mov_literal(lit, dest, &scope).unwrap();
+
+            assert_eq!(arch.buf, expected);
+        }
+    }
+
+    #[test]
+    fn mov_register() {
+        let r = Register::new("r15b", "r15w", "r15d", "r15");
+        let r2 = Register::new("r14b", "r14w", "r14d", "r14");
+        let scope = Scope::new();
+        let tests = vec![
+            (
+                (
+                    MoveDestination::Global(locations::Global {
+                        size: 4,
+                        offset: Some(5),
+                        label: "foo",
+                    }),
+                    locations::Register {
+                        offset: None,
+                        size: 4,
+                        register: &r,
+                    },
+                    false,
+                ),
+                "\tmov dword ptr [foo - 5], r15d\n",
+            ),
+            (
+                (
+                    MoveDestination::Global(locations::Global {
+                        size: 8,
+                        offset: None,
+                        label: "foo",
+                    }),
+                    locations::Register {
+                        offset: None,
+                        size: 4,
+                        register: &r,
+                    },
+                    false,
+                ),
+                "\tmovzx qword ptr [foo], r15d\n",
+            ),
+            (
+                (
+                    MoveDestination::Global(locations::Global {
+                        size: 8,
+                        offset: None,
+                        label: "foo",
+                    }),
+                    locations::Register {
+                        offset: None,
+                        size: 4,
+                        register: &r,
+                    },
+                    true,
+                ),
+                "\tmovsx qword ptr [foo], r15d\n",
+            ),
+            (
+                (
+                    MoveDestination::Local(locations::Local {
+                        size: 1,
+                        offset: 10,
+                    }),
+                    locations::Register {
+                        offset: None,
+                        size: 1,
+                        register: &r,
+                    },
+                    true,
+                ),
+                "\tmov byte ptr [rbp - 10], r15b\n",
+            ),
+            (
+                (
+                    MoveDestination::Register(locations::Register {
+                        size: 2,
+                        offset: Some(Offset(10)),
+                        register: &r2,
+                    }),
+                    locations::Register {
+                        offset: None,
+                        size: 1,
+                        register: &r,
+                    },
+                    true,
+                ),
+                "\tmovsx word ptr [r14 + 10], r15b\n",
+            ),
+            (
+                (
+                    MoveDestination::Register(locations::Register {
+                        size: 8,
+                        offset: None,
+                        register: &r2,
+                    }),
+                    locations::Register {
+                        offset: None,
+                        size: 4,
+                        register: &r,
+                    },
+                    false,
+                ),
+                "\tmovzx r14, r15d\n",
+            ),
+            (
+                (
+                    MoveDestination::Register(locations::Register {
+                        size: 1,
+                        offset: None,
+                        register: &r2,
+                    }),
+                    locations::Register {
+                        offset: None,
+                        size: 1,
+                        register: &r,
+                    },
+                    false,
+                ),
+                "\tmov r14b, r15b\n",
+            ),
+        ];
+
+        for ((dest, r, signed), expected) in tests {
+            let mut arch = Amd64::new();
+            arch.mov_register(r, dest, signed, &scope).unwrap();
 
             assert_eq!(arch.buf, expected);
         }
