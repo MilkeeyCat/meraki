@@ -351,17 +351,12 @@ impl<'a> CodeGen<'a> {
         Ok(())
     }
 
-    pub fn compile(&mut self, program: Vec<Stmt>, path: &str) -> Result<(), CodeGenError> {
-        let mut file = File::create(path).expect(&format!("Failed to open a file {}", path));
-
+    pub fn compile(&mut self, program: Vec<Stmt>) -> Result<Vec<u8>, CodeGenError> {
         for stmt in program {
             self.stmt(stmt)?;
         }
 
-        file.write_all(&self.arch.finish())
-            .expect("Failed to write generated code to output file");
-
-        Ok(())
+        Ok(self.arch.finish())
     }
 
     fn populate_offsets(&mut self, stmts: &Vec<Stmt>) -> Result<usize, CodeGenError> {

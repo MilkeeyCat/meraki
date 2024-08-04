@@ -307,7 +307,7 @@ impl Amd64 {
         scope: &Scope,
     ) -> Result<(), ArchError> {
         self.mov_impl(
-            (&literal, literal.type_(scope)?.size(self, scope)?),
+            (&literal, 8),
             (&dest, dest.size()),
             literal.type_(scope)?.signed(),
         );

@@ -7,3 +7,4 @@ pub mod scope;
 pub mod symbol_table;
 pub mod type_table;
 pub mod types;
+pub mod compile;
