@@ -12,24 +12,24 @@ use std::{
     process::Stdio,
 };
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[command(version, about, long_about = None)]
 pub struct CompileArgs {
     /// Source code filenames
     #[arg(required = true, num_args = 1..)]
-    file: PathBuf,
+    pub file: PathBuf,
 
     /// Output binary file name
     #[arg(short, default_value = "a.out")]
-    output: Option<PathBuf>,
+    pub output: Option<PathBuf>,
 
     /// Produce assembly output
     #[arg(short = 'S', default_value_t = false, group = "output_t")]
-    assembly_only: bool,
+    pub assembly_only: bool,
 
     /// Compile and assemble but do not link
     #[arg(short = 'c', default_value_t = false, group = "output_t")]
-    object_only: bool,
+    pub object_only: bool,
 }
 
 pub fn compile(args: CompileArgs) -> Result<(), Box<dyn std::error::Error>> {
