@@ -13,8 +13,6 @@ use crate::{
     type_table,
     types::{Type, TypeError},
 };
-use std::fs::File;
-use std::io::Write;
 
 pub struct CodeGen<'a> {
     arch: &'a mut dyn Architecture,
@@ -55,8 +53,16 @@ impl<'a> CodeGen<'a> {
         if let Some(expr) = ret.expr {
             let type_ = expr.type_(&self.scope)?;
             let r = self.arch.alloc()?;
+
             self.expr(expr, Some((&r).into()))?;
-            self.arch.ret(r, type_, &self.scope)?;
+            self.arch.ret(MoveSource::Register(
+                locations::Register {
+                    register: &r,
+                    size: type_.size(self.arch, &self.scope)?,
+                    offset: None,
+                },
+                type_.signed(),
+            ))?;
         }
 
         self.arch.jmp(label);
@@ -155,20 +161,20 @@ impl<'a> CodeGen<'a> {
                 if let Some(dest) = dest {
                     self.expr(*expr.left, Some(dest.clone()))?;
 
-                    let size = expr
-                        .right
-                        .type_(&self.scope)?
-                        .size(self.arch, &self.scope)?;
+                    let type_ = expr.right.type_(&self.scope)?;
                     let r = self.arch.alloc()?;
                     self.expr(*expr.right, Some((&r).into()))?;
 
                     self.arch.add(
                         &dest,
-                        &locations::Register {
-                            register: &r,
-                            size,
-                            offset: None,
-                        },
+                        &MoveSource::Register(
+                            locations::Register {
+                                register: &r,
+                                size: type_.size(self.arch, &self.scope)?,
+                                offset: None,
+                            },
+                            false,
+                        ),
                     );
                     self.arch.free(r)?;
                 }
@@ -178,9 +184,20 @@ impl<'a> CodeGen<'a> {
                     self.expr(*expr.left, Some(dest.clone()))?;
 
                     let r = self.arch.alloc()?;
+                    let type_ = expr.right.type_(&self.scope)?;
                     self.expr(*expr.right, Some((&r).into()))?;
 
-                    self.arch.sub(dest.register(), &r);
+                    self.arch.sub(
+                        &dest,
+                        &MoveSource::Register(
+                            locations::Register {
+                                register: &r,
+                                size: type_.size(self.arch, &self.scope)?,
+                                offset: None,
+                            },
+                            type_.signed(),
+                        ),
+                    );
                     self.arch.free(r)?;
                 }
             }
@@ -189,9 +206,20 @@ impl<'a> CodeGen<'a> {
                     self.expr(*expr.left, Some(dest.clone()))?;
 
                     let r = self.arch.alloc()?;
+                    let type_ = expr.right.type_(&self.scope)?;
                     self.expr(*expr.right, Some((&r).into()))?;
 
-                    self.arch.mul(dest.register(), &r);
+                    self.arch.mul(
+                        &dest,
+                        &MoveSource::Register(
+                            locations::Register {
+                                register: &r,
+                                size: type_.size(self.arch, &self.scope)?,
+                                offset: None,
+                            },
+                            type_.signed(),
+                        ),
+                    );
                     self.arch.free(r)?;
                 }
             }
@@ -200,9 +228,20 @@ impl<'a> CodeGen<'a> {
                     self.expr(*expr.left, Some(dest.clone()))?;
 
                     let r = self.arch.alloc()?;
+                    let type_ = expr.right.type_(&self.scope)?;
                     self.expr(*expr.right, Some((&r).into()))?;
 
-                    self.arch.div(dest.register(), &r);
+                    self.arch.div(
+                        &dest,
+                        &MoveSource::Register(
+                            locations::Register {
+                                register: &r,
+                                size: type_.size(self.arch, &self.scope)?,
+                                offset: None,
+                            },
+                            type_.signed(),
+                        ),
+                    );
                     self.arch.free(r)?;
                 }
             }
@@ -216,10 +255,21 @@ impl<'a> CodeGen<'a> {
                     self.expr(*expr.left, Some(dest.clone()))?;
 
                     let r = self.arch.alloc()?;
+                    let type_ = expr.right.type_(&self.scope)?;
                     self.expr(*expr.right, Some((&r).into()))?;
 
-                    self.arch
-                        .cmp(dest.register(), &r, CmpOp::try_from(&expr.op)?);
+                    self.arch.cmp(
+                        &dest,
+                        &MoveSource::Register(
+                            locations::Register {
+                                register: &r,
+                                size: type_.size(self.arch, &self.scope)?,
+                                offset: None,
+                            },
+                            type_.signed(),
+                        ),
+                        CmpOp::try_from(&expr.op)?,
+                    );
                     self.arch.free(r)?;
                 }
             }
@@ -245,13 +295,13 @@ impl<'a> CodeGen<'a> {
         match unary_expr.op {
             UnOp::Negative => {
                 self.expr(*unary_expr.expr, Some(dest.clone()))?;
-                self.arch.negate(dest.register());
+                self.arch.negate(&dest);
             }
             UnOp::Not => {
                 let r = self.arch.alloc()?;
 
                 self.expr(*unary_expr.expr, Some((&r).into()))?;
-                self.arch.not(&r, dest.register());
+                self.arch.not(&(&r).into(), &dest);
                 self.arch.free(r)?;
             }
         };
@@ -277,7 +327,7 @@ impl<'a> CodeGen<'a> {
         }
 
         if let Some(dest) = dest {
-            self.arch.call_fn(&call.name, Some(dest.register()));
+            self.arch.call_fn(&call.name, Some(&dest));
         } else {
             self.arch.call_fn(&call.name, None);
         }

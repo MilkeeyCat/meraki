@@ -109,6 +109,17 @@ impl Expression for ExprLit {
     }
 }
 
+impl ExprLit {
+    pub fn signed(&self) -> bool {
+        match self {
+            ExprLit::Int(int) => int.type_(),
+            ExprLit::UInt(uint) => uint.type_(),
+            ExprLit::Bool(_) => Type::Bool,
+        }
+        .signed()
+    }
+}
+
 impl std::fmt::Display for ExprLit {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

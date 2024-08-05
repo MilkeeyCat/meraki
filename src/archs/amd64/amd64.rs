@@ -14,12 +14,14 @@ use indoc::formatdoc;
 pub struct Amd64 {
     buf: String,
     registers: RegisterAllocator,
+    rax: Register,
 }
 
 impl Architecture for Amd64 {
     fn new() -> Self {
         Self {
             buf: String::new(),
+            rax: Register::new("al", "ax", "eax", "rax"),
             registers: RegisterAllocator::new(vec![
                 Register::new("r15b", "r15w", "r15d", "r15"),
                 Register::new("r14b", "r14w", "r14d", "r14"),
@@ -93,89 +95,84 @@ impl Architecture for Amd64 {
         ));
     }
 
-    fn negate(&mut self, r: &Register) {
+    fn negate(&mut self, dest: &MoveDestination) {
         self.buf.push_str(&formatdoc!(
             "
-            \tneg {}
+            \tneg {dest}
             ",
-            r.qword(),
         ));
     }
 
-    fn not(&mut self, r1: &Register, r2: &Register) {
+    fn not(&mut self, dest: &MoveDestination, dest2: &MoveDestination) {
         self.buf.push_str(&formatdoc!(
             "
-            \tcmp {}, 0
-            \tsete {}
+            \tcmp {dest}, 0
+            \tsete {dest2}
             ",
-            r1.qword(),
-            r2.byte(),
         ));
     }
 
-    fn add(&mut self, dest: &MoveDestination, r2: &locations::Register) {
+    fn add(&mut self, dest: &MoveDestination, src: &MoveSource) {
         self.buf.push_str(&formatdoc!(
             "
-            \tadd {}, {}
-            ",
-            dest,
-            r2
+            \tadd {dest}, {src}
+            "
         ));
     }
 
-    fn sub(&mut self, r1: &Register, r2: &Register) {
+    fn sub(&mut self, dest: &MoveDestination, src: &MoveSource) {
         self.buf.push_str(&formatdoc!(
             "
-            \tsub {}, {}
+            \tsub {dest}, {src}
             ",
-            r1.qword(),
-            r2.qword(),
         ));
     }
 
-    fn mul(&mut self, r1: &Register, r2: &Register) {
+    fn mul(&mut self, dest: &MoveDestination, src: &MoveSource) {
+        self.mov_impl(
+            (&dest, dest.size()),
+            (self.rax.from_size(src.size()), src.size()),
+            src.signed(),
+        );
         self.buf.push_str(&formatdoc!(
             "
-            \timul {}, {}
+            \timul {src}
             ",
-            r1.qword(),
-            r2.qword(),
         ));
+        self.mov_impl(
+            (self.rax.from_size(src.size()), src.size()),
+            (&dest, dest.size()),
+            src.signed(),
+        );
     }
 
     //NOTE: if mafs doesn't works, prolly because of this
-    fn div(&mut self, r1: &Register, r2: &Register) {
+    fn div(&mut self, dest: &MoveDestination, src: &MoveSource) {
+        self.mov_impl((&dest, dest.size()), ("rax", 8), src.signed());
         self.buf.push_str(&formatdoc!(
             "
-            \tmov rax, {}
             \tcqo
-            \tidiv {}
-            \tmov {}, rax
+            \tidiv {src}
             ",
-            r1.qword(),
-            r2.qword(),
-            r1.qword(),
         ));
+        self.mov_impl(("rax", 8), (&dest, dest.size()), src.signed());
     }
 
-    fn cmp(&mut self, r1: &Register, r2: &Register, cmp: CmpOp) {
+    fn cmp(&mut self, dest: &MoveDestination, src: &MoveSource, cmp: CmpOp) {
         let ins = match cmp {
-            CmpOp::LessThan => formatdoc!("setl {}", r1.byte()),
-            CmpOp::LessEqual => formatdoc!("setle {}", r1.byte()),
-            CmpOp::GreaterThan => formatdoc!("setg {}", r1.byte()),
-            CmpOp::GreaterEqual => formatdoc!("setge {}", r1.byte()),
-            CmpOp::Equal => formatdoc!("sete {}", r1.byte()),
-            CmpOp::NotEqual => formatdoc!("setne {}", r1.byte()),
+            CmpOp::LessThan => "setl",
+            CmpOp::LessEqual => "setle",
+            CmpOp::GreaterThan => "setg",
+            CmpOp::GreaterEqual => "setge",
+            CmpOp::Equal => "sete",
+            CmpOp::NotEqual => "setne",
         };
 
         self.buf.push_str(&formatdoc!(
             "
-           \tcmp {}, {}
-           \t{}
-           ",
-            r1.qword(),
-            r2.qword(),
-            ins,
+            \tcmp {dest}, {src}
+            \t{ins} {dest}
+            ",
         ));
     }
 
@@ -204,19 +201,8 @@ impl Architecture for Amd64 {
         ));
     }
 
-    fn ret(&mut self, r: Register, type_: Type, scope: &Scope) -> Result<(), TypeError> {
-        self.mov_impl(
-            (
-                &MoveDestination::Register(locations::Register {
-                    register: &r,
-                    size: type_.size(self, scope)?,
-                    offset: None,
-                }),
-                type_.size(self, scope)?,
-            ),
-            ("rax", 8),
-            type_.signed(),
-        );
+    fn ret(&mut self, src: MoveSource) -> Result<(), TypeError> {
+        self.mov_impl((&src, src.size()), ("rax", 8), src.signed());
 
         Ok(())
     }
@@ -230,15 +216,14 @@ impl Architecture for Amd64 {
         ));
     }
 
-    fn call_fn(&mut self, name: &str, r: Option<&Register>) {
-        match r {
-            Some(r) => {
+    fn call_fn(&mut self, name: &str, dest: Option<&MoveDestination>) {
+        match dest {
+            Some(dest) => {
                 self.buf.push_str(&formatdoc!(
                     "
                     \tcall {name}
-                    \tmov {}, rax
+                    \tmov {dest}, rax
                     ",
-                    r.qword()
                 ));
             }
             None => {
@@ -486,6 +471,18 @@ impl std::fmt::Display for MoveDestination<'_> {
             Self::Global(global) => write!(f, "{global}"),
             Self::Local(local) => write!(f, "{local}"),
             Self::Register(register) => write!(f, "{register}"),
+        }
+    }
+}
+
+impl std::fmt::Display for MoveSource<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Global(global, _) => write!(f, "{global}"),
+            Self::Local(local, _) => write!(f, "{local}"),
+            Self::Register(register, _) => write!(f, "{register}"),
+            Self::Lit(lit) => write!(f, "{lit}"),
+            Self::Param(_, _) => todo!(),
         }
     }
 }

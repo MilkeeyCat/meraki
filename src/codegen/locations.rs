@@ -1,4 +1,9 @@
-use crate::{parser::ExprLit, register};
+use crate::{
+    archs::Architecture,
+    parser::{ExprError, ExprLit, Expression},
+    register,
+    scope::Scope,
+};
 
 #[derive(Clone, Debug)]
 pub struct Offset(pub isize);
@@ -48,6 +53,28 @@ pub enum MoveSource<'a> {
     Param(SourceParam, bool),
     Register(Register<'a>, bool),
     Lit(ExprLit),
+}
+
+impl<'a> MoveSource<'a> {
+    pub fn signed(&self) -> bool {
+        match self {
+            Self::Global(_, signed) => *signed,
+            Self::Local(_, signed) => *signed,
+            Self::Param(_, signed) => *signed,
+            Self::Register(_, signed) => *signed,
+            Self::Lit(lit) => lit.signed(),
+        }
+    }
+
+    pub fn size(&self) -> usize {
+        match self {
+            Self::Global(global, _) => global.size,
+            Self::Local(local, _) => local.size,
+            Self::Register(register, _) => register.size,
+            Self::Lit(lit) => todo!(),
+            Self::Param(_, _) => todo!(),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]

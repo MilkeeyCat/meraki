@@ -1,6 +1,6 @@
 use super::ArchError;
 use crate::{
-    codegen::locations::{self, MoveDestination, MoveSource},
+    codegen::locations::{MoveDestination, MoveSource},
     parser::CmpOp,
     register::{allocator::AllocatorError, Register},
     scope::Scope,
@@ -25,18 +25,18 @@ pub trait Architecture {
         dest: MoveDestination,
         scope: &Scope,
     ) -> Result<(), ArchError>;
-    fn negate(&mut self, r: &Register);
-    fn not(&mut self, dest: &Register, src: &Register);
-    fn add(&mut self, dest: &MoveDestination, src: &locations::Register);
-    fn sub(&mut self, dest: &Register, src: &Register);
-    fn mul(&mut self, dest: &Register, src: &Register);
-    fn div(&mut self, dest: &Register, src: &Register);
-    fn cmp(&mut self, dest: &Register, src: &Register, cmp: CmpOp);
+    fn negate(&mut self, dest: &MoveDestination);
+    fn not(&mut self, dest: &MoveDestination, dest2: &MoveDestination);
+    fn add(&mut self, dest: &MoveDestination, src: &MoveSource);
+    fn sub(&mut self, dest: &MoveDestination, src: &MoveSource);
+    fn mul(&mut self, dest: &MoveDestination, src: &MoveSource);
+    fn div(&mut self, dest: &MoveDestination, src: &MoveSource);
+    fn cmp(&mut self, dest: &MoveDestination, src: &MoveSource, cmp: CmpOp);
     fn fn_preamble(&mut self, name: &str, stackframe: usize);
     fn fn_postamble(&mut self, name: &str, stackframe: usize);
-    fn ret(&mut self, r: Register, type_: Type, scope: &Scope) -> Result<(), TypeError>;
+    fn ret(&mut self, src: MoveSource) -> Result<(), TypeError>;
     fn jmp(&mut self, label: &str);
-    fn call_fn(&mut self, name: &str, r: Option<&Register>);
+    fn call_fn(&mut self, name: &str, r: Option<&MoveDestination>);
     fn move_function_argument(&mut self, r: Register, i: usize);
     fn lea(&mut self, dest: &Register, offset: usize);
     fn finish(&mut self) -> Vec<u8>;
