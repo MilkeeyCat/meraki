@@ -10,6 +10,7 @@ pub enum Precedence {
     Sum,
     Product,
     Prefix,
+    Cast,
     Access,
     Call,
     Highest,
@@ -42,7 +43,8 @@ impl Precedence {
             Self::Sum => Self::Equality,
             Self::Product => Self::Sum,
             Self::Prefix => Self::Product,
-            Self::Access => Self::Prefix,
+            Self::Cast => Self::Prefix,
+            Self::Access => Self::Cast,
             Self::Call => Self::Access,
             Self::Highest => Self::Call,
         }

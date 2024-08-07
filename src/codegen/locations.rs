@@ -133,4 +133,18 @@ impl<'a> MoveDestination<'a> {
             MoveDestination::Register(register) => register.size,
         }
     }
+
+    pub fn set_size(&mut self, size: usize) {
+        match self {
+            MoveDestination::Global(global) => {
+                global.size = size;
+            }
+            MoveDestination::Local(local) => {
+                local.size = size;
+            }
+            MoveDestination::Register(register) => {
+                register.size = size;
+            }
+        };
+    }
 }

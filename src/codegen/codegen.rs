@@ -70,7 +70,7 @@ impl<'a> CodeGen<'a> {
         Ok(())
     }
 
-    fn expr(&mut self, expr: Expr, dest: Option<MoveDestination>) -> Result<(), CodeGenError> {
+    fn expr(&mut self, expr: Expr, mut dest: Option<MoveDestination>) -> Result<(), CodeGenError> {
         match expr {
             Expr::Binary(bin_expr) => self.bin_expr(bin_expr, dest)?,
             Expr::Lit(lit) => {
@@ -110,6 +110,11 @@ impl<'a> CodeGen<'a> {
                     }
                     expr => expr,
                 };
+
+                if let Some(dest) = &mut dest {
+                    dest.set_size(expr.type_(&self.scope)?.size(self.arch, &self.scope)?);
+                }
+
                 self.expr(expr, dest)?;
             }
             Expr::FunctionCall(func_call) => self.call_function(func_call, dest)?,

@@ -581,7 +581,7 @@ impl Parser {
             Token::U8 | Token::I8 | Token::U16 | Token::I16 | Token::Bool | Token::Void => {
                 let type_ = self.parse_type()?;
                 self.expect(&Token::RParen)?;
-                let expr = self.expr(Precedence::Highest)?;
+                let expr = self.expr(Precedence::Cast)?;
 
                 Ok(Expr::Cast(ExprCast::new(type_, Box::new(expr))))
             }
