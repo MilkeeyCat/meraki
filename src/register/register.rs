@@ -1,3 +1,5 @@
+use crate::codegen::locations::{self, MoveDestination};
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Register {
     byte: &'static str,
@@ -45,5 +47,13 @@ impl Register {
             8 => self.qword(),
             _ => unreachable!(),
         }
+    }
+
+    pub fn to_dest(&self, size: usize) -> MoveDestination {
+        MoveDestination::Register(locations::Register {
+            register: self,
+            offset: None,
+            size,
+        })
     }
 }

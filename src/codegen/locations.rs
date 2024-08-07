@@ -134,13 +134,3 @@ impl<'a> MoveDestination<'a> {
         }
     }
 }
-
-impl<'a> From<&'a register::Register> for MoveDestination<'a> {
-    fn from(value: &'a register::Register) -> Self {
-        Self::Register(Register {
-            register: value,
-            offset: None,
-            size: 8,
-        })
-    }
-}

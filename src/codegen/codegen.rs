@@ -54,7 +54,7 @@ impl<'a> CodeGen<'a> {
             let type_ = expr.type_(&self.scope)?;
             let r = self.arch.alloc()?;
 
-            self.expr(expr, Some((&r).into()))?;
+            self.expr(expr, Some(r.to_dest(type_.size(self.arch, &self.scope)?)))?;
             self.arch.ret(MoveSource::Register(
                 locations::Register {
                     register: &r,
@@ -163,7 +163,10 @@ impl<'a> CodeGen<'a> {
 
                     let type_ = expr.right.type_(&self.scope)?;
                     let r = self.arch.alloc()?;
-                    self.expr(*expr.right, Some((&r).into()))?;
+                    self.expr(
+                        *expr.right,
+                        Some(r.to_dest(type_.size(self.arch, &self.scope)?)),
+                    )?;
 
                     self.arch.add(
                         &dest,
@@ -185,7 +188,10 @@ impl<'a> CodeGen<'a> {
 
                     let r = self.arch.alloc()?;
                     let type_ = expr.right.type_(&self.scope)?;
-                    self.expr(*expr.right, Some((&r).into()))?;
+                    self.expr(
+                        *expr.right,
+                        Some(r.to_dest(type_.size(self.arch, &self.scope)?)),
+                    )?;
 
                     self.arch.sub(
                         &dest,
@@ -207,7 +213,10 @@ impl<'a> CodeGen<'a> {
 
                     let r = self.arch.alloc()?;
                     let type_ = expr.right.type_(&self.scope)?;
-                    self.expr(*expr.right, Some((&r).into()))?;
+                    self.expr(
+                        *expr.right,
+                        Some(r.to_dest(type_.size(self.arch, &self.scope)?)),
+                    )?;
 
                     self.arch.mul(
                         &dest,
@@ -229,7 +238,10 @@ impl<'a> CodeGen<'a> {
 
                     let r = self.arch.alloc()?;
                     let type_ = expr.right.type_(&self.scope)?;
-                    self.expr(*expr.right, Some((&r).into()))?;
+                    self.expr(
+                        *expr.right,
+                        Some(r.to_dest(type_.size(self.arch, &self.scope)?)),
+                    )?;
 
                     self.arch.div(
                         &dest,
@@ -256,7 +268,10 @@ impl<'a> CodeGen<'a> {
 
                     let r = self.arch.alloc()?;
                     let type_ = expr.right.type_(&self.scope)?;
-                    self.expr(*expr.right, Some((&r).into()))?;
+                    self.expr(
+                        *expr.right,
+                        Some(r.to_dest(type_.size(self.arch, &self.scope)?)),
+                    )?;
 
                     self.arch.cmp(
                         &dest,
@@ -298,10 +313,15 @@ impl<'a> CodeGen<'a> {
                 self.arch.negate(&dest);
             }
             UnOp::Not => {
+                let type_ = unary_expr.type_(&self.scope)?;
                 let r = self.arch.alloc()?;
 
-                self.expr(*unary_expr.expr, Some((&r).into()))?;
-                self.arch.not(&(&r).into(), &dest);
+                self.expr(
+                    *unary_expr.expr,
+                    Some(r.to_dest(type_.size(self.arch, &self.scope)?)),
+                )?;
+                self.arch
+                    .not(&r.to_dest(type_.size(self.arch, &self.scope)?), &dest);
                 self.arch.free(r)?;
             }
         };
@@ -319,8 +339,13 @@ impl<'a> CodeGen<'a> {
         }
 
         for (i, argument) in call.arguments.into_iter().enumerate() {
+            let type_ = argument.type_(&self.scope)?;
             let r = self.arch.alloc()?;
-            self.expr(argument, Some((&r).into()))?;
+
+            self.expr(
+                argument,
+                Some(r.to_dest(type_.size(self.arch, &self.scope)?)),
+            )?;
 
             //NOTE: should the register be freed?
             self.arch.move_function_argument(r, i);

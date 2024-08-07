@@ -242,7 +242,6 @@ impl LValue for ExprStructAccess {
             type_ => panic!("{type_:?}"),
         };
 
-        //let mut dest = symbol.to_dest(arch, scope)?;
         let new_offset = &dest.local_offset() + &field_offset;
 
         match &mut dest {

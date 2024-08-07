@@ -155,7 +155,19 @@ impl Architecture for Amd64 {
             \tidiv {src}
             ",
         ));
-        self.mov_impl(("rax", 8), (&dest, dest.size()), src.signed());
+        self.mov_impl(
+            (
+                &locations::Register {
+                    register: &self.rax.clone(),
+                    //FIXME: clone bad ^
+                    size: src.size(),
+                    offset: None,
+                },
+                src.size(),
+            ),
+            (&dest, dest.size()),
+            src.signed(),
+        );
     }
 
     fn cmp(&mut self, dest: &MoveDestination, src: &MoveSource, cmp: CmpOp) {
