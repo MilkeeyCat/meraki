@@ -1,7 +1,7 @@
 use super::SymbolTableError;
 use crate::{
     archs::Architecture,
-    codegen::locations::{Global, Local, MoveDestination, MoveSource, SourceParam},
+    codegen::locations::{Global, Local, MoveDestination, MoveSource, Offset, SourceParam},
     scope::Scope,
     types::Type,
 };
@@ -46,7 +46,7 @@ impl Symbol {
             Self::Local(symbol) => MoveSource::Local(
                 Local {
                     size: symbol.type_.size(arch, scope)?,
-                    offset: symbol.offset,
+                    offset: symbol.offset.clone(),
                 },
                 symbol.type_.signed(),
             ),
@@ -76,7 +76,7 @@ impl Symbol {
     ) -> Result<MoveDestination, SymbolTableError> {
         Ok(match self {
             Symbol::Local(symbol) => MoveDestination::Local(Local {
-                offset: symbol.offset,
+                offset: symbol.offset.clone(),
                 size: symbol.type_.size(arch, scope)?,
             }),
             Symbol::Global(symbol) => MoveDestination::Global(Global {
@@ -99,7 +99,7 @@ pub struct SymbolGlobal {
 #[derive(Debug, Clone, PartialEq)]
 pub struct SymbolLocal {
     pub name: String,
-    pub offset: usize,
+    pub offset: Offset,
     pub type_: Type,
 }
 

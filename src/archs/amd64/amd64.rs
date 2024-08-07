@@ -249,10 +249,10 @@ impl Architecture for Amd64 {
         ));
     }
 
-    fn lea(&mut self, dest: &Register, offset: usize) {
+    fn lea(&mut self, dest: &Register, offset: Offset) {
         self.buf.push_str(&formatdoc!(
             "
-            \tlea {}, [rbp - {}]
+            \tlea {}, [rbp{}]
             ",
             dest.qword(),
             offset,
@@ -348,7 +348,7 @@ impl Amd64 {
                             register: &r_tmp,
                         },
                         MoveDestination::Local(Local {
-                            offset: local.offset,
+                            offset: local.offset.clone(),
                             size: chunk_size,
                         }),
                         signed,
@@ -442,7 +442,7 @@ impl std::fmt::Display for locations::Register<'_> {
 
 impl std::fmt::Display for Local {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} [rbp - {}]", Amd64::size_name(self.size), self.offset)
+        write!(f, "{} [rbp{}]", Amd64::size_name(self.size), self.offset)
     }
 }
 
@@ -452,7 +452,7 @@ impl std::fmt::Display for Global<'_> {
             Some(offset) => {
                 write!(
                     f,
-                    "{} [{} - {}]",
+                    "{} [{}{}]",
                     Amd64::size_name(self.size),
                     self.label,
                     offset
@@ -506,7 +506,7 @@ mod test {
                 (
                     MoveDestination::Global(locations::Global {
                         size: 4,
-                        offset: Some(5),
+                        offset: Some(Offset(-5)),
                         label: "foo",
                     }),
                     ExprLit::UInt(UIntLitRepr::new(15_000)),
@@ -526,7 +526,10 @@ mod test {
             ),
             (
                 (
-                    MoveDestination::Local(locations::Local { size: 4, offset: 1 }),
+                    MoveDestination::Local(locations::Local {
+                        size: 4,
+                        offset: Offset(-1),
+                    }),
                     ExprLit::UInt(UIntLitRepr::new(5)),
                 ),
                 "\tmov dword ptr [rbp - 1], 5\n",
@@ -584,7 +587,7 @@ mod test {
                 (
                     MoveDestination::Global(locations::Global {
                         size: 4,
-                        offset: Some(5),
+                        offset: Some(Offset(-5)),
                         label: "foo",
                     }),
                     locations::Register {
@@ -632,7 +635,7 @@ mod test {
                 (
                     MoveDestination::Local(locations::Local {
                         size: 1,
-                        offset: 10,
+                        offset: Offset(-10),
                     }),
                     locations::Register {
                         offset: None,

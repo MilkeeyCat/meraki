@@ -1,12 +1,31 @@
-use crate::{
-    archs::Architecture,
-    parser::{ExprError, ExprLit, Expression},
-    register,
-    scope::Scope,
-};
+use crate::{parser::ExprLit, register};
 
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Offset(pub isize);
+
+impl std::ops::Add<isize> for &Offset {
+    type Output = Offset;
+
+    fn add(self, rhs: isize) -> Self::Output {
+        Offset(self.0 + rhs)
+    }
+}
+
+impl std::ops::Add<&Offset> for &Offset {
+    type Output = Offset;
+
+    fn add(self, rhs: &Offset) -> Self::Output {
+        Offset(self.0 + rhs.0)
+    }
+}
+
+impl std::ops::Sub<isize> for &Offset {
+    type Output = Offset;
+
+    fn sub(self, rhs: isize) -> Self::Output {
+        Offset(self.0 - rhs)
+    }
+}
 
 impl std::fmt::Display for Offset {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -24,13 +43,13 @@ impl std::fmt::Display for Offset {
 pub struct Global<'a> {
     pub label: &'a str,
     pub size: usize,
-    pub offset: Option<usize>,
+    pub offset: Option<Offset>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Local {
     pub size: usize,
-    pub offset: usize,
+    pub offset: Offset,
 }
 
 #[derive(Clone, Debug)]
@@ -100,9 +119,9 @@ impl<'a> MoveDestination<'a> {
         }
     }
 
-    pub fn local_offset(&self) -> usize {
+    pub fn local_offset(&self) -> Offset {
         match self {
-            Self::Local(local) => local.offset,
+            Self::Local(local) => local.offset.clone(),
             _ => unreachable!(),
         }
     }

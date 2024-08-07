@@ -6,6 +6,7 @@ use super::{
     StmtVarDecl, UIntLitRepr, UnOp,
 };
 use crate::{
+    codegen::locations::Offset,
     lexer::{Lexer, Token},
     parser::{ExprFunctionCall, ExprStructAccess},
     scope::Scope,
@@ -285,7 +286,7 @@ impl Parser {
                 .push(Symbol::Local(SymbolLocal {
                     name: name.clone(),
                     type_: type_.clone(),
-                    offset: 0,
+                    offset: Offset::default(),
                 }))?;
         } else {
             self.scope

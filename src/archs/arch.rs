@@ -1,6 +1,6 @@
 use super::ArchError;
 use crate::{
-    codegen::locations::{MoveDestination, MoveSource},
+    codegen::locations::{MoveDestination, MoveSource, Offset},
     parser::CmpOp,
     register::{allocator::AllocatorError, Register},
     scope::Scope,
@@ -38,6 +38,6 @@ pub trait Architecture {
     fn jmp(&mut self, label: &str);
     fn call_fn(&mut self, name: &str, r: Option<&MoveDestination>);
     fn move_function_argument(&mut self, r: Register, i: usize);
-    fn lea(&mut self, dest: &Register, offset: usize);
+    fn lea(&mut self, dest: &Register, offset: Offset);
     fn finish(&mut self) -> Vec<u8>;
 }

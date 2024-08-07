@@ -1,5 +1,6 @@
 use crate::{
     archs::Architecture,
+    codegen::locations::Offset,
     scope::Scope,
     types::{self, TypeError},
 };
@@ -31,7 +32,7 @@ impl TypeStruct {
         arch: &dyn Architecture,
         name: &str,
         scope: &Scope,
-    ) -> Result<usize, TypeError> {
+    ) -> Result<Offset, TypeError> {
         let mut offset = 0;
 
         for (field_name, type_) in &self.fields {
@@ -39,10 +40,10 @@ impl TypeStruct {
                 break;
             }
 
-            offset += type_.size(arch, scope)?;
+            offset += type_.size(arch, scope)? as isize;
         }
 
-        Ok(offset)
+        Ok(Offset(offset))
     }
 
     pub fn get_field_type(&self, field: &str) -> Option<&types::Type> {

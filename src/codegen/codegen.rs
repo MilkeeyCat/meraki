@@ -1,5 +1,5 @@
 use super::{
-    locations::{self, Local, MoveDestination, MoveSource},
+    locations::{self, Local, MoveDestination, MoveSource, Offset},
     CodeGenError,
 };
 use crate::{
@@ -11,7 +11,7 @@ use crate::{
     scope::Scope,
     symbol_table::{Symbol, SymbolTableError},
     type_table,
-    types::{Type, TypeError},
+    types::TypeError,
 };
 
 pub struct CodeGen<'a> {
@@ -346,15 +346,13 @@ impl<'a> CodeGen<'a> {
         }
         .clone();
         //NOTE: clone bad ^
-        let struct_size = type_struct.size(self.arch, &self.scope)?;
 
         for (name, expr) in expr.fields.into_iter() {
             let offset = type_struct.offset(self.arch, &name, &self.scope)?;
             self.expr(
                 expr,
                 Some(MoveDestination::Local(Local {
-                    // NOTE: local variable use 1-based offset but struct offsets are 0-based, so to plumb it correctly gotta slap that -1
-                    offset: struct_size + dest.local_offset() - offset - 1,
+                    offset: &dest.local_offset() + &offset,
                     size: type_struct
                         .get_field_type(&name)
                         .unwrap()
@@ -371,30 +369,7 @@ impl<'a> CodeGen<'a> {
         expr: ExprStructAccess,
         dest: MoveDestination,
     ) -> Result<(), CodeGenError> {
-        let symbol = self
-            .scope
-            .find_symbol(&expr.name)
-            .ok_or(SymbolTableError::NotFound(expr.name.clone()))?;
-        let field_offset = match symbol.type_() {
-            Type::Struct(s) => match self.scope.find_type(&s).ok_or(TypeError::Nonexistent(s))? {
-                type_table::Type::Struct(type_struct) => {
-                    type_struct.offset(self.arch, &expr.field, &self.scope)?
-                }
-            },
-            _ => panic!(),
-        };
-
-        let mut src = expr.dest(self.arch, &self.scope)?.to_source();
-        match &mut src {
-            MoveSource::Local(local, _) => {
-                local.offset += field_offset;
-            }
-            MoveSource::Global(global, _) => match &mut global.offset {
-                Some(offset) => *offset += field_offset,
-                None => global.offset = Some(field_offset),
-            },
-            _ => unreachable!(),
-        };
+        let src = expr.dest(self.arch, &self.scope)?.to_source();
 
         self.arch.mov(src, dest, &self.scope)?;
 
@@ -410,21 +385,23 @@ impl<'a> CodeGen<'a> {
     }
 
     fn populate_offsets(&mut self, stmts: &Vec<Stmt>) -> Result<usize, CodeGenError> {
-        let mut offset = 1;
+        let mut offset = 0;
 
         for stmt in stmts {
             if let Stmt::VarDecl(var_decl) = stmt {
+                let size = var_decl.type_.size(self.arch, &self.scope)? as isize;
                 if let Symbol::Local(local) = self
                     .scope
                     .find_symbol_mut(&var_decl.name)
                     .ok_or(SymbolTableError::NotFound(var_decl.name.clone()))?
                 {
-                    local.offset = offset;
-                    offset += var_decl.type_.size(self.arch, &self.scope)?;
+                    offset -= size;
+                    local.offset = Offset(offset);
                 }
             }
         }
 
+        let offset = offset.unsigned_abs();
         let alignment = self.arch.alignment();
 
         Ok(if offset < alignment {

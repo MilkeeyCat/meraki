@@ -217,26 +217,24 @@ impl LValue for ExprStructAccess {
         let symbol = scope
             .find_symbol(&self.name)
             .ok_or(SymbolTableError::NotFound(self.name.clone()))?;
-        let (field_offset, struct_size) = match symbol.type_() {
+        let field_offset = match symbol.type_() {
             Type::Struct(s) => match scope.find_type(&s).ok_or(TypeError::Nonexistent(s))? {
-                type_table::Type::Struct(type_struct) => (
-                    type_struct.offset(arch, &self.field, scope)?,
-                    type_struct.size(arch, scope)?,
-                ),
+                type_table::Type::Struct(type_struct) => {
+                    type_struct.offset(arch, &self.field, scope)?
+                }
             },
             _ => panic!(),
         };
 
         let mut dest = symbol.to_dest(arch, scope)?;
-        // NOTE: local variable use 1-based offset but struct offsets are 0-based, so to plumb it correctly gotta slap that -1
-        let new_offset = struct_size + dest.local_offset() - field_offset - 1;
+        let new_offset = &dest.local_offset() + &field_offset;
 
         match &mut dest {
             MoveDestination::Local(local) => {
                 local.offset = new_offset;
             }
             MoveDestination::Global(global) => match &mut global.offset {
-                Some(offset) => *offset += new_offset,
+                Some(offset) => *offset = &*offset + &new_offset,
                 None => global.offset = Some(new_offset),
             },
             _ => unreachable!(),
