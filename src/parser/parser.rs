@@ -501,12 +501,7 @@ impl Parser {
 
         match expr {
             Expr::Ident(name) => match self.expr(Precedence::from(&token))? {
-                Expr::Ident(field) => match self
-                    .scope
-                    .find_symbol(&name.0)
-                    .ok_or(SymbolTableError::NotFound(name.0.clone()))?
-                    .type_()
-                {
+                Expr::Ident(field) => match name.type_(&self.scope)? {
                     Type::Struct(struct_type) => {
                         match self
                             .scope
@@ -516,7 +511,31 @@ impl Parser {
                             type_table::Type::Struct(s) => {
                                 if s.contains(&field.0) {
                                     Ok(Expr::StructAccess(ExprStructAccess {
-                                        name: name.0,
+                                        expr: Box::new(Expr::Ident(name)),
+                                        field: field.0,
+                                    }))
+                                } else {
+                                    panic!("no such field bitch");
+                                }
+                            }
+                        }
+                    }
+                    _ => panic!(),
+                },
+                _ => panic!("sdasdasd"),
+            },
+            Expr::StructAccess(expr) => match self.expr(Precedence::from(&token))? {
+                Expr::Ident(field) => match expr.type_(&self.scope)? {
+                    Type::Struct(struct_type) => {
+                        match self
+                            .scope
+                            .find_type(&struct_type)
+                            .ok_or(TypeError::Nonexistent(struct_type))?
+                        {
+                            type_table::Type::Struct(s) => {
+                                if s.contains(&field.0) {
+                                    Ok(Expr::StructAccess(ExprStructAccess {
+                                        expr: Box::new(Expr::StructAccess(expr)),
                                         field: field.0,
                                     }))
                                 } else {

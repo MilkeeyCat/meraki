@@ -5,12 +5,12 @@ pub enum Precedence {
     #[default]
     Lowest,
     Assign,
-    Access,
     Comparison,
     Equality,
     Sum,
     Product,
     Prefix,
+    Access,
     Call,
     Highest,
 }
@@ -37,13 +37,13 @@ impl Precedence {
         match self {
             Self::Lowest => panic!(),
             Self::Assign => Self::Lowest,
-            Self::Access => Self::Assign,
-            Self::Comparison => Self::Access,
+            Self::Comparison => Self::Assign,
             Self::Equality => Self::Comparison,
             Self::Sum => Self::Equality,
             Self::Product => Self::Sum,
             Self::Prefix => Self::Product,
-            Self::Call => Self::Prefix,
+            Self::Access => Self::Prefix,
+            Self::Call => Self::Access,
             Self::Highest => Self::Call,
         }
     }

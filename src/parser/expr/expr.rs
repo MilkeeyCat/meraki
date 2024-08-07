@@ -180,30 +180,40 @@ impl ExprStruct {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprStructAccess {
-    pub name: String,
+    pub expr: Box<Expr>,
     pub field: String,
 }
 
 impl Expression for ExprStructAccess {
     fn type_(&self, scope: &Scope) -> Result<Type, ExprError> {
-        match scope
-            .find_symbol(&self.name)
-            .ok_or(SymbolTableError::NotFound(self.name.clone()))?
-        {
-            Symbol::Local(local) => match &local.type_ {
-                Type::Struct(s) => {
+        match self.expr.as_ref() {
+            Expr::Ident(expr) => match expr.type_(&scope)? {
+                Type::Struct(struct_name) => {
                     match scope
-                        .find_type(&s)
-                        .ok_or(TypeError::Nonexistent(s.to_owned()))?
+                        .find_type(&struct_name)
+                        .ok_or(TypeError::Nonexistent(struct_name.to_owned()))?
                     {
-                        type_table::Type::Struct(sl) => {
-                            Ok(sl.get_field_type(&self.field).unwrap().to_owned())
+                        type_table::Type::Struct(type_struct) => {
+                            Ok(type_struct.get_field_type(&self.field).unwrap().to_owned())
                         }
                     }
                 }
                 _ => todo!(),
             },
-            _ => todo!(),
+            Expr::StructAccess(expr) => match expr.type_(&scope)? {
+                Type::Struct(struct_name) => {
+                    match scope
+                        .find_type(&struct_name)
+                        .ok_or(TypeError::Nonexistent(struct_name.to_owned()))?
+                    {
+                        type_table::Type::Struct(type_struct) => {
+                            Ok(type_struct.get_field_type(&self.field).unwrap().to_owned())
+                        }
+                    }
+                }
+                _ => todo!(),
+            },
+            expr => panic!("Expression {expr:?} can't be used to access struct field value"),
         }
     }
 }
@@ -214,29 +224,39 @@ impl LValue for ExprStructAccess {
         arch: &dyn Architecture,
         scope: &'a Scope,
     ) -> Result<MoveDestination<'a>, ExprError> {
-        let symbol = scope
-            .find_symbol(&self.name)
-            .ok_or(SymbolTableError::NotFound(self.name.clone()))?;
-        let field_offset = match symbol.type_() {
-            Type::Struct(s) => match scope.find_type(&s).ok_or(TypeError::Nonexistent(s))? {
-                type_table::Type::Struct(type_struct) => {
-                    type_struct.offset(arch, &self.field, scope)?
-                }
-            },
+        let mut dest = match self.expr.as_ref() {
+            Expr::Ident(expr) => expr.dest(arch, scope)?,
+            Expr::StructAccess(expr) => expr.dest(arch, scope)?,
             _ => panic!(),
         };
+        let (field_offset, field_size) = match self.expr.type_(scope)? {
+            Type::Struct(s) => match scope.find_type(&s).ok_or(TypeError::Nonexistent(s))? {
+                type_table::Type::Struct(type_struct) => (
+                    type_struct.offset(arch, &self.field, scope)?,
+                    type_struct
+                        .get_field_type(&self.field)
+                        .unwrap()
+                        .size(arch, scope)?,
+                ),
+            },
+            type_ => panic!("{type_:?}"),
+        };
 
-        let mut dest = symbol.to_dest(arch, scope)?;
+        //let mut dest = symbol.to_dest(arch, scope)?;
         let new_offset = &dest.local_offset() + &field_offset;
 
         match &mut dest {
             MoveDestination::Local(local) => {
                 local.offset = new_offset;
+                local.size = field_size;
             }
-            MoveDestination::Global(global) => match &mut global.offset {
-                Some(offset) => *offset = &*offset + &new_offset,
-                None => global.offset = Some(new_offset),
-            },
+            MoveDestination::Global(global) => {
+                global.size = field_size;
+                match &mut global.offset {
+                    Some(offset) => *offset = &*offset + &new_offset,
+                    None => global.offset = Some(new_offset),
+                }
+            }
             _ => unreachable!(),
         };
 
