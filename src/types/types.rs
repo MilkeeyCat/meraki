@@ -44,6 +44,10 @@ impl Type {
         }
     }
 
+    fn ptr(&self) -> bool {
+        matches!(self, Self::Ptr(..))
+    }
+
     pub fn signed(&self) -> bool {
         match self {
             Self::I8 | Self::I16 => true,
@@ -112,6 +116,10 @@ impl Type {
         }
 
         if (self.bool() && type_.int()) || (self.int() && type_.bool()) {
+            return Ok(type_);
+        }
+
+        if self.ptr() && type_.ptr() {
             return Ok(type_);
         }
 
