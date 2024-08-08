@@ -1,8 +1,14 @@
 use clap::Parser;
 use meraki::compile::{compile, CompileArgs};
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
     let options = CompileArgs::parse();
+    if let Err(e) = compile(options) {
+        die(e);
+    }
+}
 
-    compile(options)
+fn die(err: Box<dyn std::error::Error>) -> ! {
+    eprintln!("{}", err);
+    std::process::exit(1);
 }

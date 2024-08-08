@@ -129,7 +129,7 @@ impl Type {
             {
                 crate::type_table::Type::Struct(structure) => structure.size(arch, scope)?,
             },
-            _ => arch.size(self),
+            type_ => arch.size(type_),
         })
     }
 
