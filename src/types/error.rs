@@ -9,6 +9,7 @@ pub enum TypeError {
     Return(Type, Type),
     VoidVariable,
     Nonexistent(String),
+    Deref(Type),
 }
 
 impl std::fmt::Display for TypeError {
@@ -27,6 +28,7 @@ impl std::fmt::Display for TypeError {
             ),
             Self::VoidVariable => write!(f, "Variable can't be of type void"),
             Self::Nonexistent(name) => write!(f, "Type '{name}' doens't exits"),
+            Self::Deref(type_) => write!(f, "Type {type_} is not pointer"),
         }
     }
 }

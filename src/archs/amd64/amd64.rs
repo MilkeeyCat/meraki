@@ -354,20 +354,12 @@ impl Amd64 {
         match dest {
             // NOTE: x86-64 doesn't support indirect to indirect addressing mode so we use tools we already have
             MoveDestination::Local(local) => {
-                let mut size = src.size;
+                let size = src.size;
                 let r = self.alloc()?;
 
                 self.lea(&r, &MoveDestination::Local(src));
 
-                while size > 0 {
-                    let chunk_size = match size {
-                        8.. => 8,
-                        4..=7 => 4,
-                        2..=3 => 2,
-                        1 => 1,
-                        0 => unreachable!(),
-                    };
-
+                for chunk_size in Self::size_iter(size) {
                     let r_tmp = self.alloc()?;
 
                     self.mov_register(
@@ -399,7 +391,6 @@ impl Amd64 {
                     )?;
 
                     self.free(r_tmp)?;
-                    size -= chunk_size;
                 }
 
                 self.free(r)?;
@@ -430,11 +421,46 @@ impl Amd64 {
         src: locations::Register,
         dest: MoveDestination,
         signed: bool,
-        _: &Scope,
+        scope: &Scope,
     ) -> Result<(), ArchError> {
-        self.mov_impl((&src, src.size), (&dest, dest.size()), signed);
+        match (&src.offset, &dest) {
+            (Some(_), MoveDestination::Local(_)) | (Some(_), MoveDestination::Global(_)) => {
+                let size = src.size;
+                let r = self.alloc()?;
+
+                self.mov(
+                    MoveSource::Register(src.clone(), signed),
+                    r.to_dest(size),
+                    scope,
+                )?;
+                self.mov(r.to_dest(size).to_source(signed), dest, scope)?;
+
+                self.free(r)?;
+            }
+            _ => self.mov_impl((&src, src.size), (&dest, dest.size()), signed),
+        }
 
         Ok(())
+    }
+
+    /// Transform variable size into iterator or sizes which can be used for `mov`
+    /// For example if you use value 11 you will have iterator wil values [8, 2, 1]
+    fn size_iter(mut size: usize) -> impl Iterator<Item = usize> {
+        let mut sizes = Vec::new();
+        while size > 0 {
+            let chunk_size = match size {
+                8.. => 8,
+                4..=7 => 4,
+                2..=3 => 2,
+                1 => 1,
+                0 => unreachable!(),
+            };
+
+            sizes.push(chunk_size);
+            size -= chunk_size;
+        }
+
+        sizes.into_iter()
     }
 }
 

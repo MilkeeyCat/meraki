@@ -44,6 +44,7 @@ impl Parser {
                 (Token::Bang, Self::unary_expr),
                 (Token::LParen, Self::grouped_expr),
                 (Token::Ampersand, Self::addr_expr),
+                (Token::Asterisk, Self::deref_expr),
             ]),
             infix_fns: HashMap::from([
                 (Token::Plus, Self::bin_expr as InfixFn),
@@ -608,6 +609,18 @@ impl Parser {
         }
 
         Ok(Expr::Unary(ExprUnary::new(UnOp::Address, Box::new(expr))))
+    }
+
+    fn deref_expr(&mut self) -> Result<Expr, ParserError> {
+        self.expect(&Token::Asterisk)?;
+
+        let expr = self.expr(Precedence::default())?;
+        match expr.type_(&self.scope)? {
+            Type::Ptr(_) => {}
+            _ => panic!("Can't dereference an expression of type not pointer"),
+        };
+
+        Ok(Expr::Unary(ExprUnary::new(UnOp::Deref, Box::new(expr))))
     }
 }
 

@@ -68,6 +68,7 @@ pub enum UnOp {
     Not,
     Negative,
     Address,
+    Deref,
 }
 
 impl TryFrom<&Token> for UnOp {

@@ -360,6 +360,38 @@ impl CodeGen {
                     &self.scope,
                 )?;
             }
+            UnOp::Deref => {
+                let dest2 = match unary_expr.expr.as_ref() {
+                    Expr::Ident(expr) => expr.dest(&self.arch, &self.scope)?,
+                    Expr::StructAccess(expr) => expr.dest(&self.arch, &self.scope)?,
+                    _ => panic!(),
+                };
+                let r = self.arch.alloc()?;
+
+                self.arch.mov(
+                    dest2.to_source(unary_expr.type_(&self.scope)?.signed()),
+                    MoveDestination::Register(locations::Register {
+                        register: &r,
+                        offset: None,
+                        size: 8,
+                    }),
+                    &self.scope,
+                )?;
+                self.arch.mov(
+                    MoveSource::Register(
+                        locations::Register {
+                            register: &r,
+                            size: unary_expr
+                                .type_(&self.scope)?
+                                .size(&self.arch, &self.scope)?,
+                            offset: Some(Offset(0)),
+                        },
+                        unary_expr.expr.type_(&self.scope)?.signed(),
+                    ),
+                    dest,
+                    &self.scope,
+                )?;
+            }
         };
 
         Ok(())

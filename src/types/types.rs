@@ -132,6 +132,13 @@ impl Type {
             _ => arch.size(self),
         })
     }
+
+    pub fn pointed_type(&self) -> Result<Type, TypeError> {
+        match self {
+            Self::Ptr(type_) => Ok(type_.as_ref().to_owned()),
+            type_ => Err(TypeError::Deref(type_.clone())),
+        }
+    }
 }
 
 #[cfg(test)]

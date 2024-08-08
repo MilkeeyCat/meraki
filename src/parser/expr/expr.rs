@@ -298,16 +298,17 @@ impl ExprUnary {
 
 impl Expression for ExprUnary {
     fn type_(&self, scope: &Scope) -> Result<Type, ExprError> {
-        match &self.op {
+        Ok(match &self.op {
             UnOp::Negative => {
                 let mut expr_type = self.expr.type_(scope)?;
                 expr_type.to_signed();
 
-                Ok(expr_type)
+                expr_type
             }
-            UnOp::Not => Ok(Type::Bool),
-            UnOp::Address => Ok(Type::Ptr(Box::new(self.expr.type_(scope)?))),
-        }
+            UnOp::Not => Type::Bool,
+            UnOp::Address => Type::Ptr(Box::new(self.expr.type_(scope)?)),
+            UnOp::Deref => self.expr.type_(scope)?.pointed_type()?,
+        })
     }
 }
 
