@@ -10,9 +10,7 @@ use crate::{
     lexer::{Lexer, Token},
     parser::{ExprFunctionCall, ExprStructAccess},
     scope::Scope,
-    symbol_table::{
-        Symbol, SymbolFunction, SymbolGlobal, SymbolLocal, SymbolParam, SymbolTableError,
-    },
+    symbol_table::{Symbol, SymbolFunction, SymbolGlobal, SymbolLocal, SymbolParam},
     type_table::{self, TypeStruct},
     types::{Type, TypeError},
 };

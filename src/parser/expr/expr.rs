@@ -1,6 +1,6 @@
 use super::{int_repr::UIntLitRepr, ExprError, IntLitRepr};
 use crate::{
-    archs::Architecture,
+    archs::Arch,
     codegen::locations::MoveDestination,
     parser::op::{BinOp, UnOp},
     scope::Scope,
@@ -14,11 +14,7 @@ pub trait Expression {
 }
 
 pub trait LValue {
-    fn dest<'a>(
-        &self,
-        arch: &dyn Architecture,
-        scope: &'a Scope,
-    ) -> Result<MoveDestination<'a>, ExprError>;
+    fn dest<'a>(&self, arch: &Arch, scope: &'a Scope) -> Result<MoveDestination<'a>, ExprError>;
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -154,11 +150,7 @@ impl Expression for ExprIdent {
 }
 
 impl LValue for ExprIdent {
-    fn dest<'a>(
-        &self,
-        arch: &dyn Architecture,
-        scope: &'a Scope,
-    ) -> Result<MoveDestination<'a>, ExprError> {
+    fn dest<'a>(&self, arch: &Arch, scope: &'a Scope) -> Result<MoveDestination<'a>, ExprError> {
         Ok(scope
             .find_symbol(&self.0)
             .ok_or(SymbolTableError::NotFound(self.0.clone()))?
@@ -219,11 +211,7 @@ impl Expression for ExprStructAccess {
 }
 
 impl LValue for ExprStructAccess {
-    fn dest<'a>(
-        &self,
-        arch: &dyn Architecture,
-        scope: &'a Scope,
-    ) -> Result<MoveDestination<'a>, ExprError> {
+    fn dest<'a>(&self, arch: &Arch, scope: &'a Scope) -> Result<MoveDestination<'a>, ExprError> {
         let mut dest = match self.expr.as_ref() {
             Expr::Ident(expr) => expr.dest(arch, scope)?,
             Expr::StructAccess(expr) => expr.dest(arch, scope)?,
@@ -232,11 +220,11 @@ impl LValue for ExprStructAccess {
         let (field_offset, field_size) = match self.expr.type_(scope)? {
             Type::Struct(s) => match scope.find_type(&s).ok_or(TypeError::Nonexistent(s))? {
                 type_table::Type::Struct(type_struct) => (
-                    type_struct.offset(arch, &self.field, scope)?,
+                    type_struct.offset(&arch, &self.field, scope)?,
                     type_struct
                         .get_field_type(&self.field)
                         .unwrap()
-                        .size(arch, scope)?,
+                        .size(&arch, scope)?,
                 ),
             },
             type_ => panic!("{type_:?}"),

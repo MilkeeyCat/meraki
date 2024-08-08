@@ -3,7 +3,7 @@ use super::{
     CodeGenError,
 };
 use crate::{
-    archs::Architecture,
+    archs::Arch,
     parser::{
         BinOp, CmpOp, Expr, ExprBinary, ExprFunctionCall, ExprLit, ExprStruct, ExprStructAccess,
         ExprUnary, Expression, LValue, Stmt, StmtFunction, StmtReturn, StmtVarDecl, UnOp,
@@ -14,20 +14,22 @@ use crate::{
     types::TypeError,
 };
 
-pub struct CodeGen<'a> {
-    arch: &'a mut dyn Architecture,
+pub struct CodeGen {
+    arch: Arch,
     scope: Scope,
 }
 
-impl<'a> CodeGen<'a> {
-    pub fn new(arch: &'a mut dyn Architecture, scope: Scope) -> Self {
+impl CodeGen {
+    pub fn new(arch: Arch, scope: Scope) -> Self {
         Self { arch, scope }
     }
 
     fn declare(&mut self, variable: StmtVarDecl) -> Result<(), CodeGenError> {
         if !self.scope.local() {
-            self.arch
-                .declare(&variable.name, variable.type_.size(self.arch, &self.scope)?)
+            self.arch.declare(
+                &variable.name,
+                variable.type_.size(&self.arch, &self.scope)?,
+            )
         }
 
         Ok(())
@@ -54,11 +56,11 @@ impl<'a> CodeGen<'a> {
             let type_ = expr.type_(&self.scope)?;
             let r = self.arch.alloc()?;
 
-            self.expr(expr, Some(r.to_dest(type_.size(self.arch, &self.scope)?)))?;
+            self.expr(expr, Some(r.to_dest(type_.size(&self.arch, &self.scope)?)))?;
             self.arch.ret(MoveSource::Register(
                 locations::Register {
                     register: &r,
-                    size: type_.size(self.arch, &self.scope)?,
+                    size: type_.size(&self.arch, &self.scope)?,
                     offset: None,
                 },
                 type_.signed(),
@@ -90,13 +92,18 @@ impl<'a> CodeGen<'a> {
                     .ok_or(SymbolTableError::NotFound(ident.0))?;
 
                 if let Some(dest) = dest {
-                    self.arch
-                        .mov(symbol.to_source(self.arch, &self.scope)?, dest, &self.scope)?;
+                    let arch = self.arch.clone();
+                    //FIXME: dat's baaaaaad ^
+                    let src = symbol.to_source(&arch, &self.scope)?;
+
+                    self.arch.mov(src, dest, &self.scope)?;
                 }
             }
             Expr::Cast(cast_expr) => {
                 //TODO: move this elsewhere
-                let type_size = cast_expr.type_(&self.scope)?.size(self.arch, &self.scope)?;
+                let type_size = cast_expr
+                    .type_(&self.scope)?
+                    .size(&self.arch, &self.scope)?;
                 let expr = match *cast_expr.expr {
                     Expr::Lit(ExprLit::Int(mut int)) => {
                         int.zero_except_n_bytes(type_size);
@@ -112,7 +119,7 @@ impl<'a> CodeGen<'a> {
                 };
 
                 if let Some(dest) = &mut dest {
-                    dest.set_size(expr.type_(&self.scope)?.size(self.arch, &self.scope)?);
+                    dest.set_size(expr.type_(&self.scope)?.size(&self.arch, &self.scope)?);
                 }
 
                 self.expr(expr, dest)?;
@@ -146,20 +153,22 @@ impl<'a> CodeGen<'a> {
 
                 match *expr.left {
                     Expr::Ident(ident) => {
-                        lvalue_dest = ident.dest(self.arch, &scope_clone)?;
+                        lvalue_dest = ident.dest(&self.arch, &scope_clone)?;
                     }
                     Expr::StructAccess(struct_access) => {
-                        lvalue_dest = struct_access.dest(self.arch, &scope_clone)?;
+                        lvalue_dest = struct_access.dest(&self.arch, &scope_clone)?;
                     }
                     expr => {
                         return Err(CodeGenError::Assign(expr));
                     }
                 };
 
+                let type_ = expr.right.type_(&self.scope)?;
                 self.expr(*expr.right, Some(lvalue_dest.clone()))?;
 
                 if let Some(dest) = dest {
-                    self.arch.mov(lvalue_dest.to_source(), dest, &self.scope)?;
+                    self.arch
+                        .mov(lvalue_dest.to_source(type_.signed()), dest, &self.scope)?;
                 }
             }
             BinOp::Add => {
@@ -170,7 +179,7 @@ impl<'a> CodeGen<'a> {
                     let r = self.arch.alloc()?;
                     self.expr(
                         *expr.right,
-                        Some(r.to_dest(type_.size(self.arch, &self.scope)?)),
+                        Some(r.to_dest(type_.size(&self.arch, &self.scope)?)),
                     )?;
 
                     self.arch.add(
@@ -178,7 +187,7 @@ impl<'a> CodeGen<'a> {
                         &MoveSource::Register(
                             locations::Register {
                                 register: &r,
-                                size: type_.size(self.arch, &self.scope)?,
+                                size: type_.size(&self.arch, &self.scope)?,
                                 offset: None,
                             },
                             false,
@@ -195,7 +204,7 @@ impl<'a> CodeGen<'a> {
                     let type_ = expr.right.type_(&self.scope)?;
                     self.expr(
                         *expr.right,
-                        Some(r.to_dest(type_.size(self.arch, &self.scope)?)),
+                        Some(r.to_dest(type_.size(&self.arch, &self.scope)?)),
                     )?;
 
                     self.arch.sub(
@@ -203,7 +212,7 @@ impl<'a> CodeGen<'a> {
                         &MoveSource::Register(
                             locations::Register {
                                 register: &r,
-                                size: type_.size(self.arch, &self.scope)?,
+                                size: type_.size(&self.arch, &self.scope)?,
                                 offset: None,
                             },
                             type_.signed(),
@@ -220,7 +229,7 @@ impl<'a> CodeGen<'a> {
                     let type_ = expr.right.type_(&self.scope)?;
                     self.expr(
                         *expr.right,
-                        Some(r.to_dest(type_.size(self.arch, &self.scope)?)),
+                        Some(r.to_dest(type_.size(&self.arch, &self.scope)?)),
                     )?;
 
                     self.arch.mul(
@@ -228,7 +237,7 @@ impl<'a> CodeGen<'a> {
                         &MoveSource::Register(
                             locations::Register {
                                 register: &r,
-                                size: type_.size(self.arch, &self.scope)?,
+                                size: type_.size(&self.arch, &self.scope)?,
                                 offset: None,
                             },
                             type_.signed(),
@@ -245,7 +254,7 @@ impl<'a> CodeGen<'a> {
                     let type_ = expr.right.type_(&self.scope)?;
                     self.expr(
                         *expr.right,
-                        Some(r.to_dest(type_.size(self.arch, &self.scope)?)),
+                        Some(r.to_dest(type_.size(&self.arch, &self.scope)?)),
                     )?;
 
                     self.arch.div(
@@ -253,7 +262,7 @@ impl<'a> CodeGen<'a> {
                         &MoveSource::Register(
                             locations::Register {
                                 register: &r,
-                                size: type_.size(self.arch, &self.scope)?,
+                                size: type_.size(&self.arch, &self.scope)?,
                                 offset: None,
                             },
                             type_.signed(),
@@ -275,7 +284,7 @@ impl<'a> CodeGen<'a> {
                     let type_ = expr.right.type_(&self.scope)?;
                     self.expr(
                         *expr.right,
-                        Some(r.to_dest(type_.size(self.arch, &self.scope)?)),
+                        Some(r.to_dest(type_.size(&self.arch, &self.scope)?)),
                     )?;
 
                     self.arch.cmp(
@@ -283,7 +292,7 @@ impl<'a> CodeGen<'a> {
                         &MoveSource::Register(
                             locations::Register {
                                 register: &r,
-                                size: type_.size(self.arch, &self.scope)?,
+                                size: type_.size(&self.arch, &self.scope)?,
                                 offset: None,
                             },
                             type_.signed(),
@@ -323,10 +332,10 @@ impl<'a> CodeGen<'a> {
 
                 self.expr(
                     *unary_expr.expr,
-                    Some(r.to_dest(type_.size(self.arch, &self.scope)?)),
+                    Some(r.to_dest(type_.size(&self.arch, &self.scope)?)),
                 )?;
                 self.arch
-                    .not(&r.to_dest(type_.size(self.arch, &self.scope)?), &dest);
+                    .not(&r.to_dest(type_.size(&self.arch, &self.scope)?), &dest);
                 self.arch.free(r)?;
             }
         };
@@ -349,7 +358,7 @@ impl<'a> CodeGen<'a> {
 
             self.expr(
                 argument,
-                Some(r.to_dest(type_.size(self.arch, &self.scope)?)),
+                Some(r.to_dest(type_.size(&self.arch, &self.scope)?)),
             )?;
 
             //NOTE: should the register be freed?
@@ -378,7 +387,7 @@ impl<'a> CodeGen<'a> {
         //NOTE: clone bad ^
 
         for (name, expr) in expr.fields.into_iter() {
-            let offset = type_struct.offset(self.arch, &name, &self.scope)?;
+            let offset = type_struct.offset(&self.arch, &name, &self.scope)?;
             self.expr(
                 expr,
                 Some(MoveDestination::Local(Local {
@@ -386,7 +395,7 @@ impl<'a> CodeGen<'a> {
                     size: type_struct
                         .get_field_type(&name)
                         .unwrap()
-                        .size(self.arch, &self.scope)?,
+                        .size(&self.arch, &self.scope)?,
                 })),
             )?;
         }
@@ -399,7 +408,9 @@ impl<'a> CodeGen<'a> {
         expr: ExprStructAccess,
         dest: MoveDestination,
     ) -> Result<(), CodeGenError> {
-        let src = expr.dest(self.arch, &self.scope)?.to_source();
+        let src = expr
+            .dest(&self.arch, &self.scope)?
+            .to_source(expr.type_(&self.scope)?.signed());
 
         self.arch.mov(src, dest, &self.scope)?;
 
@@ -419,7 +430,7 @@ impl<'a> CodeGen<'a> {
 
         for stmt in stmts {
             if let Stmt::VarDecl(var_decl) = stmt {
-                let size = var_decl.type_.size(self.arch, &self.scope)? as isize;
+                let size = var_decl.type_.size(&self.arch, &self.scope)? as isize;
                 if let Symbol::Local(local) = self
                     .scope
                     .find_symbol_mut(&var_decl.name)

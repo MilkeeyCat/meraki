@@ -1,6 +1,7 @@
 use super::AllocatorError;
 use crate::register::Register;
 
+#[derive(Clone)]
 pub struct RegisterAllocator {
     registers: Vec<Register>,
     used: Vec<u8>,

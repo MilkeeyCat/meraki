@@ -1,5 +1,5 @@
 use super::TypeError;
-use crate::{archs::Architecture, scope::Scope};
+use crate::{archs::Arch, scope::Scope};
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Type {
@@ -116,7 +116,7 @@ impl Type {
         return Err(TypeError::Cast(self, type_));
     }
 
-    pub fn size(&self, arch: &dyn Architecture, scope: &Scope) -> Result<usize, TypeError> {
+    pub fn size(&self, arch: &Arch, scope: &Scope) -> Result<usize, TypeError> {
         Ok(match self {
             Type::Void => 0,
             Type::I8 | Type::U8 | Type::Bool => 1,

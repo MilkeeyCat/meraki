@@ -1,6 +1,6 @@
 use crate::{
     archs::{ArchError, Architecture},
-    codegen::locations::{self, Global, Local, MoveDestination, MoveSource, Offset, SourceParam},
+    codegen::locations::{self, Global, Local, MoveDestination, MoveSource, Offset},
     parser::{CmpOp, ExprLit, Expression},
     register::{
         allocator::{AllocatorError, RegisterAllocator},
@@ -11,6 +11,7 @@ use crate::{
 };
 use indoc::formatdoc;
 
+#[derive(Clone)]
 pub struct Amd64 {
     buf: String,
     registers: RegisterAllocator,
@@ -77,7 +78,6 @@ impl Architecture for Amd64 {
         match src {
             MoveSource::Global(global, signed) => self.mov_global(global, dest, signed, scope),
             MoveSource::Local(local, signed) => self.mov_local(local, dest, signed, scope),
-            MoveSource::Param(param, signed) => self.mov_param(param, dest, signed, scope),
             MoveSource::Register(register, signed) => {
                 self.mov_register(register, dest, signed, scope)
             }
@@ -261,6 +261,10 @@ impl Architecture for Amd64 {
         ));
     }
 
+    fn param_dest(&self) -> MoveDestination {
+        todo!();
+    }
+
     fn lea(&mut self, dest: &Register, offset: Offset) {
         self.buf.push_str(&formatdoc!(
             "
@@ -384,32 +388,6 @@ impl Amd64 {
         Ok(())
     }
 
-    fn mov_param(
-        &mut self,
-        src: SourceParam,
-        dest: MoveDestination,
-        signed: bool,
-        scope: &Scope,
-    ) -> Result<(), ArchError> {
-        self.mov(
-            MoveSource::Register(
-                locations::Register {
-                    register: &self
-                        .registers
-                        .get(self.registers.len() - 1 - src.n)
-                        .unwrap(),
-                    size: src.size,
-                    offset: None,
-                },
-                signed,
-            ),
-            dest,
-            scope,
-        )?;
-
-        Ok(())
-    }
-
     fn mov_global(
         &self,
         _src: Global,
@@ -494,7 +472,6 @@ impl std::fmt::Display for MoveSource<'_> {
             Self::Local(local, _) => write!(f, "{local}"),
             Self::Register(register, _) => write!(f, "{register}"),
             Self::Lit(lit) => write!(f, "{lit}"),
-            Self::Param(_, _) => todo!(),
         }
     }
 }

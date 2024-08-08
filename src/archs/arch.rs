@@ -7,7 +7,11 @@ use crate::{
     types::{Type, TypeError},
 };
 
-pub trait Architecture {
+pub trait ArchitectureClone {
+    fn clone_box(&self) -> Arch;
+}
+
+pub trait Architecture: ArchitectureClone {
     fn new() -> Self
     where
         Self: Sized;
@@ -38,6 +42,24 @@ pub trait Architecture {
     fn jmp(&mut self, label: &str);
     fn call_fn(&mut self, name: &str, r: Option<&MoveDestination>);
     fn move_function_argument(&mut self, r: Register, i: usize);
+    fn param_dest(&self) -> MoveDestination;
     fn lea(&mut self, dest: &Register, offset: Offset);
     fn finish(&mut self) -> Vec<u8>;
+}
+
+pub type Arch = Box<dyn Architecture>;
+
+impl<T> ArchitectureClone for T
+where
+    T: 'static + Architecture + Clone,
+{
+    fn clone_box(&self) -> Arch {
+        Box::new(self.clone())
+    }
+}
+
+impl Clone for Arch {
+    fn clone(&self) -> Self {
+        self.clone_box()
+    }
 }

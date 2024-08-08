@@ -1,5 +1,5 @@
 use crate::{
-    archs::Architecture,
+    archs::{Arch, Architecture},
     codegen::locations::Offset,
     scope::Scope,
     types::{self, TypeError},
@@ -17,7 +17,7 @@ pub struct TypeStruct {
 }
 
 impl TypeStruct {
-    pub fn size(&self, arch: &dyn Architecture, scope: &Scope) -> Result<usize, TypeError> {
+    pub fn size(&self, arch: &Arch, scope: &Scope) -> Result<usize, TypeError> {
         Ok(self
             .fields
             .iter()
@@ -27,12 +27,7 @@ impl TypeStruct {
             .sum())
     }
 
-    pub fn offset(
-        &self,
-        arch: &dyn Architecture,
-        name: &str,
-        scope: &Scope,
-    ) -> Result<Offset, TypeError> {
+    pub fn offset(&self, arch: &Arch, name: &str, scope: &Scope) -> Result<Offset, TypeError> {
         let mut offset = 0;
 
         for (field_name, type_) in &self.fields {

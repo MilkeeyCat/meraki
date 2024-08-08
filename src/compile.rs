@@ -44,7 +44,7 @@ pub fn compile(args: CompileArgs) -> Result<(), Box<dyn std::error::Error>> {
     dbg!(&stmts);
     dbg!(&scope);
 
-    let code = CodeGen::new(&mut Amd64::new(), scope).compile(stmts)?;
+    let code = CodeGen::new(Box::new(Amd64::new()), scope).compile(stmts)?;
 
     if args.assembly_only {
         let asm_filename = args.file.with_extension("s");

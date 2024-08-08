@@ -53,12 +53,6 @@ pub struct Local {
 }
 
 #[derive(Clone, Debug)]
-pub struct SourceParam {
-    pub size: usize,
-    pub n: usize,
-}
-
-#[derive(Clone, Debug)]
 pub struct Register<'a> {
     pub register: &'a register::Register,
     pub size: usize,
@@ -69,7 +63,6 @@ pub struct Register<'a> {
 pub enum MoveSource<'a> {
     Global(Global<'a>, bool),
     Local(Local, bool),
-    Param(SourceParam, bool),
     Register(Register<'a>, bool),
     Lit(ExprLit),
 }
@@ -79,7 +72,6 @@ impl<'a> MoveSource<'a> {
         match self {
             Self::Global(_, signed) => *signed,
             Self::Local(_, signed) => *signed,
-            Self::Param(_, signed) => *signed,
             Self::Register(_, signed) => *signed,
             Self::Lit(lit) => lit.signed(),
         }
@@ -91,7 +83,6 @@ impl<'a> MoveSource<'a> {
             Self::Local(local, _) => local.size,
             Self::Register(register, _) => register.size,
             Self::Lit(lit) => todo!(),
-            Self::Param(_, _) => todo!(),
         }
     }
 }
@@ -104,11 +95,11 @@ pub enum MoveDestination<'a> {
 }
 
 impl<'a> MoveDestination<'a> {
-    pub fn to_source(self) -> MoveSource<'a> {
+    pub fn to_source(self, signed: bool) -> MoveSource<'a> {
         match self {
-            MoveDestination::Global(global) => MoveSource::Global(global, false),
-            MoveDestination::Local(local) => MoveSource::Local(local, false),
-            MoveDestination::Register(register) => MoveSource::Register(register, false),
+            MoveDestination::Global(global) => MoveSource::Global(global, signed),
+            MoveDestination::Local(local) => MoveSource::Local(local, signed),
+            MoveDestination::Register(register) => MoveSource::Register(register, signed),
         }
     }
 
