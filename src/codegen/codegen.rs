@@ -338,6 +338,28 @@ impl CodeGen {
                     .not(&r.to_dest(type_.size(&self.arch, &self.scope)?), &dest);
                 self.arch.free(r)?;
             }
+            UnOp::Address => {
+                let dest2 = match unary_expr.expr.as_ref() {
+                    Expr::Ident(expr) => expr.dest(&self.arch, &self.scope)?,
+                    Expr::StructAccess(expr) => expr.dest(&self.arch, &self.scope)?,
+                    _ => panic!(),
+                };
+                let r = self.arch.alloc()?;
+
+                self.arch.lea(&r, &dest2);
+                self.arch.mov(
+                    MoveSource::Register(
+                        locations::Register {
+                            register: &r,
+                            size: 8, //FIXME: how do I get the size for a pointer type?
+                            offset: None,
+                        },
+                        unary_expr.expr.type_(&self.scope)?.signed(),
+                    ),
+                    dest,
+                    &self.scope,
+                )?;
+            }
         };
 
         Ok(())

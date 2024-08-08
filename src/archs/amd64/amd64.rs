@@ -11,6 +11,8 @@ use crate::{
 };
 use indoc::formatdoc;
 
+const MAX_REGISTER_SIZE: usize = 8;
+
 #[derive(Clone)]
 pub struct Amd64 {
     buf: String,
@@ -47,6 +49,7 @@ impl Architecture for Amd64 {
 
     fn size(&self, type_: &Type) -> usize {
         match type_ {
+            Type::Ptr(_) => MAX_REGISTER_SIZE,
             _ => unreachable!(),
         }
     }
@@ -265,14 +268,38 @@ impl Architecture for Amd64 {
         todo!();
     }
 
-    fn lea(&mut self, dest: &Register, offset: Offset) {
-        self.buf.push_str(&formatdoc!(
-            "
-            \tlea {}, [rbp{}]
-            ",
-            dest.qword(),
-            offset,
-        ));
+    fn lea(&mut self, dest: &Register, dest2: &MoveDestination) {
+        match dest2 {
+            MoveDestination::Local(local) => {
+                self.buf.push_str(&formatdoc!(
+                    "
+                    \tlea {}, [rbp{}]
+                    ",
+                    dest.qword(),
+                    local.offset,
+                ));
+            }
+            MoveDestination::Global(global) => {
+                self.buf.push_str(&formatdoc!(
+                    "
+                    \tlea {}, [{}{}]
+                    ",
+                    dest.qword(),
+                    global.label,
+                    (&global.offset).as_ref().unwrap_or(&Offset::default()),
+                ));
+            }
+            MoveDestination::Register(register) => {
+                self.buf.push_str(&formatdoc!(
+                    "
+                    \tlea {}, [{}{}]
+                    ",
+                    dest.qword(),
+                    register.register.from_size(register.size),
+                    (&register.offset).as_ref().unwrap_or(&Offset::default()),
+                ));
+            }
+        }
     }
 
     fn finish(&mut self) -> Vec<u8> {
@@ -330,7 +357,7 @@ impl Amd64 {
                 let mut size = src.size;
                 let r = self.alloc()?;
 
-                self.lea(&r, src.offset);
+                self.lea(&r, &MoveDestination::Local(src));
 
                 while size > 0 {
                     let chunk_size = match size {

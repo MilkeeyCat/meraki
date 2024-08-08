@@ -10,6 +10,7 @@ pub enum Type {
     Bool,
     Void,
     Struct(String),
+    Ptr(Box<Type>),
 }
 
 impl std::fmt::Display for Type {
@@ -21,6 +22,7 @@ impl std::fmt::Display for Type {
             Self::I16 => write!(f, "i16"),
             Self::Bool => write!(f, "bool"),
             Self::Void => write!(f, "void"),
+            Self::Ptr(type_) => write!(f, "{type_}*"),
             Self::Struct(name) => write!(f, "struct '{name}'"),
         }
     }

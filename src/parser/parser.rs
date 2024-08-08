@@ -43,6 +43,7 @@ impl Parser {
                 (Token::Minus, Self::unary_expr),
                 (Token::Bang, Self::unary_expr),
                 (Token::LParen, Self::grouped_expr),
+                (Token::Ampersand, Self::addr_expr),
             ]),
             infix_fns: HashMap::from([
                 (Token::Plus, Self::bin_expr as InfixFn),
@@ -217,9 +218,7 @@ impl Parser {
     }
 
     fn parse_type(&mut self) -> Result<Type, ParserError> {
-        let token = self.next_token()?;
-
-        match token {
+        let mut base = match self.next_token()? {
             Token::U8 => Ok(Type::U8),
             Token::U16 => Ok(Type::U16),
             Token::I8 => Ok(Type::I8),
@@ -236,7 +235,15 @@ impl Parser {
                 },
             ),
             token => Err(ParserError::ParseType(token)),
+        }?;
+
+        while self.cur_token_is(&Token::Asterisk) {
+            self.expect(&Token::Asterisk)?;
+
+            base = Type::Ptr(Box::new(base));
         }
+
+        Ok(base)
     }
 
     fn parse_return(&mut self) -> Result<Stmt, ParserError> {
@@ -590,6 +597,17 @@ impl Parser {
                 expr
             }
         }
+    }
+
+    fn addr_expr(&mut self) -> Result<Expr, ParserError> {
+        self.expect(&Token::Ampersand)?;
+
+        let expr = self.expr(Precedence::default())?;
+        if !expr.lvalue() {
+            panic!("Can't get address of {expr:?}");
+        }
+
+        Ok(Expr::Unary(ExprUnary::new(UnOp::Address, Box::new(expr))))
     }
 }
 

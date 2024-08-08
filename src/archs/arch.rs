@@ -43,7 +43,7 @@ pub trait Architecture: ArchitectureClone {
     fn call_fn(&mut self, name: &str, r: Option<&MoveDestination>);
     fn move_function_argument(&mut self, r: Register, i: usize);
     fn param_dest(&self) -> MoveDestination;
-    fn lea(&mut self, dest: &Register, offset: Offset);
+    fn lea(&mut self, dest: &Register, dest2: &MoveDestination);
     fn finish(&mut self) -> Vec<u8>;
 }
 

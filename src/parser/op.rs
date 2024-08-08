@@ -67,6 +67,7 @@ impl TryFrom<&Token> for BinOp {
 pub enum UnOp {
     Not,
     Negative,
+    Address,
 }
 
 impl TryFrom<&Token> for UnOp {

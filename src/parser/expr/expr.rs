@@ -52,6 +52,21 @@ impl Expression for Expr {
     }
 }
 
+impl Expr {
+    pub fn lvalue(&self) -> bool {
+        match self {
+            Self::Binary(_) => false,
+            Self::Unary(_) => false,
+            Self::Lit(_) => false,
+            Self::Ident(_) => true,
+            Self::Cast(_) => false,
+            Self::Struct(_) => false,
+            Self::StructAccess(_) => true,
+            Self::FunctionCall(_) => false,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprBinary {
     pub op: BinOp,
@@ -282,15 +297,16 @@ impl ExprUnary {
 }
 
 impl Expression for ExprUnary {
-    fn type_(&self, symtable: &Scope) -> Result<Type, ExprError> {
+    fn type_(&self, scope: &Scope) -> Result<Type, ExprError> {
         match &self.op {
             UnOp::Negative => {
-                let mut expr_type = self.expr.type_(symtable)?;
+                let mut expr_type = self.expr.type_(scope)?;
                 expr_type.to_signed();
 
                 Ok(expr_type)
             }
             UnOp::Not => Ok(Type::Bool),
+            UnOp::Address => Ok(Type::Ptr(Box::new(self.expr.type_(scope)?))),
         }
     }
 }
