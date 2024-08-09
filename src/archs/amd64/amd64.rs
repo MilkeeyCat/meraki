@@ -169,8 +169,7 @@ impl Architecture for Amd64 {
         self.mov_impl(
             (
                 &locations::Register {
-                    register: &self.rax.clone(),
-                    //FIXME: clone bad ^
+                    register: self.rax,
                     size: src.size(),
                     offset: None,
                 },
@@ -374,12 +373,12 @@ impl Amd64 {
                         locations::Register {
                             size: chunk_size,
                             offset: Some(Offset((size - chunk_size).try_into().unwrap())),
-                            register: &r,
+                            register: r,
                         },
                         MoveDestination::Register(locations::Register {
                             size: chunk_size,
                             offset: None,
-                            register: &r_tmp,
+                            register: r_tmp,
                         }),
                         signed,
                         scope,
@@ -388,7 +387,7 @@ impl Amd64 {
                         locations::Register {
                             size: chunk_size,
                             offset: None,
-                            register: &r_tmp,
+                            register: r_tmp,
                         },
                         MoveDestination::Local(Local {
                             offset: local.offset.clone(),
@@ -472,7 +471,7 @@ impl Amd64 {
     }
 }
 
-impl std::fmt::Display for locations::Register<'_> {
+impl std::fmt::Display for locations::Register {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.offset {
             Some(offset) => {
@@ -589,7 +588,7 @@ mod test {
                     MoveDestination::Register(locations::Register {
                         size: 8,
                         offset: None,
-                        register: &r,
+                        register: r,
                     }),
                     ExprLit::UInt(UIntLitRepr::new(5)),
                 ),
@@ -600,7 +599,7 @@ mod test {
                     MoveDestination::Register(locations::Register {
                         size: 8,
                         offset: Some(Offset(-15)),
-                        register: &r,
+                        register: r,
                     }),
                     ExprLit::UInt(UIntLitRepr::new(5)),
                 ),
@@ -611,7 +610,7 @@ mod test {
                     MoveDestination::Register(locations::Register {
                         size: 2,
                         offset: Some(Offset(8)),
-                        register: &r,
+                        register: r,
                     }),
                     ExprLit::Int(IntLitRepr::new(-7)),
                 ),
@@ -643,7 +642,7 @@ mod test {
                     locations::Register {
                         offset: None,
                         size: 4,
-                        register: &r,
+                        register: r,
                     },
                     false,
                 ),
@@ -659,7 +658,7 @@ mod test {
                     locations::Register {
                         offset: None,
                         size: 4,
-                        register: &r,
+                        register: r,
                     },
                     false,
                 ),
@@ -675,7 +674,7 @@ mod test {
                     locations::Register {
                         offset: None,
                         size: 4,
-                        register: &r,
+                        register: r,
                     },
                     true,
                 ),
@@ -690,7 +689,7 @@ mod test {
                     locations::Register {
                         offset: None,
                         size: 1,
-                        register: &r,
+                        register: r,
                     },
                     true,
                 ),
@@ -701,12 +700,12 @@ mod test {
                     MoveDestination::Register(locations::Register {
                         size: 2,
                         offset: Some(Offset(10)),
-                        register: &r2,
+                        register: r2,
                     }),
                     locations::Register {
                         offset: None,
                         size: 1,
-                        register: &r,
+                        register: r,
                     },
                     true,
                 ),
@@ -717,12 +716,12 @@ mod test {
                     MoveDestination::Register(locations::Register {
                         size: 8,
                         offset: None,
-                        register: &r2,
+                        register: r2,
                     }),
                     locations::Register {
                         offset: None,
                         size: 4,
-                        register: &r,
+                        register: r,
                     },
                     false,
                 ),
@@ -733,12 +732,12 @@ mod test {
                     MoveDestination::Register(locations::Register {
                         size: 1,
                         offset: None,
-                        register: &r2,
+                        register: r2,
                     }),
                     locations::Register {
                         offset: None,
                         size: 1,
-                        register: &r,
+                        register: r,
                     },
                     false,
                 ),

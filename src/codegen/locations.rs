@@ -53,8 +53,8 @@ pub struct Local {
 }
 
 #[derive(Clone, Debug)]
-pub struct Register<'a> {
-    pub register: &'a register::Register,
+pub struct Register {
+    pub register: register::Register,
     pub size: usize,
     pub offset: Option<Offset>,
 }
@@ -63,7 +63,7 @@ pub struct Register<'a> {
 pub enum MoveSource<'a> {
     Global(Global<'a>, bool),
     Local(Local, bool),
-    Register(Register<'a>, bool),
+    Register(Register, bool),
     Lit(ExprLit),
 }
 
@@ -91,7 +91,7 @@ impl<'a> MoveSource<'a> {
 pub enum MoveDestination<'a> {
     Global(Global<'a>),
     Local(Local),
-    Register(Register<'a>),
+    Register(Register),
 }
 
 impl<'a> MoveDestination<'a> {
@@ -103,7 +103,7 @@ impl<'a> MoveDestination<'a> {
         }
     }
 
-    pub fn register(self) -> &'a register::Register {
+    pub fn register(self) -> register::Register {
         match self {
             Self::Register(register) => register.register,
             _ => unreachable!(),

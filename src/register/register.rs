@@ -1,6 +1,6 @@
 use crate::codegen::locations::{self, MoveDestination};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Register {
     byte: &'static str,
     word: &'static str,
@@ -51,7 +51,7 @@ impl Register {
 
     pub fn to_dest(&self, size: usize) -> MoveDestination {
         MoveDestination::Register(locations::Register {
-            register: self,
+            register: self.to_owned(),
             offset: None,
             size,
         })

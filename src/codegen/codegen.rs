@@ -59,7 +59,7 @@ impl CodeGen {
             self.expr(expr, Some(r.to_dest(type_.size(&self.arch, &self.scope)?)))?;
             self.arch.ret(MoveSource::Register(
                 locations::Register {
-                    register: &r,
+                    register: r,
                     size: type_.size(&self.arch, &self.scope)?,
                     offset: None,
                 },
@@ -186,7 +186,7 @@ impl CodeGen {
                         &dest,
                         &MoveSource::Register(
                             locations::Register {
-                                register: &r,
+                                register: r,
                                 size: type_.size(&self.arch, &self.scope)?,
                                 offset: None,
                             },
@@ -211,7 +211,7 @@ impl CodeGen {
                         &dest,
                         &MoveSource::Register(
                             locations::Register {
-                                register: &r,
+                                register: r,
                                 size: type_.size(&self.arch, &self.scope)?,
                                 offset: None,
                             },
@@ -236,7 +236,7 @@ impl CodeGen {
                         &dest,
                         &MoveSource::Register(
                             locations::Register {
-                                register: &r,
+                                register: r,
                                 size: type_.size(&self.arch, &self.scope)?,
                                 offset: None,
                             },
@@ -261,7 +261,7 @@ impl CodeGen {
                         &dest,
                         &MoveSource::Register(
                             locations::Register {
-                                register: &r,
+                                register: r,
                                 size: type_.size(&self.arch, &self.scope)?,
                                 offset: None,
                             },
@@ -291,7 +291,7 @@ impl CodeGen {
                         &dest,
                         &MoveSource::Register(
                             locations::Register {
-                                register: &r,
+                                register: r,
                                 size: type_.size(&self.arch, &self.scope)?,
                                 offset: None,
                             },
@@ -350,7 +350,7 @@ impl CodeGen {
                 self.arch.mov(
                     MoveSource::Register(
                         locations::Register {
-                            register: &r,
+                            register: r,
                             size: 8, //FIXME: how do I get the size for a pointer type?
                             offset: None,
                         },
@@ -371,7 +371,7 @@ impl CodeGen {
                 self.arch.mov(
                     dest2.to_source(unary_expr.type_(&self.scope)?.signed()),
                     MoveDestination::Register(locations::Register {
-                        register: &r,
+                        register: r,
                         offset: None,
                         size: 8,
                     }),
@@ -380,7 +380,7 @@ impl CodeGen {
                 self.arch.mov(
                     MoveSource::Register(
                         locations::Register {
-                            register: &r,
+                            register: r,
                             size: unary_expr
                                 .type_(&self.scope)?
                                 .size(&self.arch, &self.scope)?,
