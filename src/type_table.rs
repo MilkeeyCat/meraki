@@ -1,5 +1,5 @@
 use crate::{
-    archs::{Arch, Architecture},
+    archs::Arch,
     codegen::locations::Offset,
     scope::Scope,
     types::{self, TypeError},
@@ -18,27 +18,38 @@ pub struct TypeStruct {
 
 impl TypeStruct {
     pub fn size(&self, arch: &Arch, scope: &Scope) -> Result<usize, TypeError> {
-        Ok(self
-            .fields
-            .iter()
-            .map(|(_, type_)| type_.size(arch, scope))
-            .collect::<Result<Vec<_>, _>>()?
-            .iter()
-            .sum())
+        let mut offset = 0;
+        let mut largest = 0;
+
+        for (_, type_) in &self.fields {
+            let size = type_.size(arch, scope)?;
+
+            offset = arch.align(offset, size);
+            offset += size;
+
+            if size > largest {
+                largest = size;
+            }
+        }
+
+        // Align to the largest element in the struct
+        Ok(arch.align(offset, largest))
     }
 
     pub fn offset(&self, arch: &Arch, name: &str, scope: &Scope) -> Result<Offset, TypeError> {
         let mut offset = 0;
 
         for (field_name, type_) in &self.fields {
+            let size = type_.size(arch, scope)?;
+            offset = arch.align(offset, size);
             if name == field_name {
                 break;
             }
 
-            offset += type_.size(arch, scope)? as isize;
+            offset += size;
         }
 
-        Ok(Offset(offset))
+        Ok(Offset(offset as isize))
     }
 
     pub fn get_field_type(&self, field: &str) -> Option<&types::Type> {

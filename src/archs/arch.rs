@@ -1,6 +1,6 @@
 use super::ArchError;
 use crate::{
-    codegen::locations::{MoveDestination, MoveSource, Offset},
+    codegen::locations::{MoveDestination, MoveSource},
     parser::CmpOp,
     register::{allocator::AllocatorError, Register},
     scope::Scope,
@@ -16,6 +16,7 @@ pub trait Architecture: ArchitectureClone {
     where
         Self: Sized;
     fn alignment(&self) -> usize;
+    fn align(&self, offset: usize, size: usize) -> usize;
     fn size(&self, type_: &Type) -> usize;
     fn alloc(&mut self) -> Result<Register, AllocatorError>;
     fn free(&mut self, register: Register) -> Result<(), AllocatorError>;

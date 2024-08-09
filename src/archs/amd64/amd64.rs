@@ -47,6 +47,14 @@ impl Architecture for Amd64 {
         16
     }
 
+    fn align(&self, offset: usize, size: usize) -> usize {
+        if offset % size == 0 {
+            offset
+        } else {
+            offset + size - (offset % size)
+        }
+    }
+
     fn size(&self, type_: &Type) -> usize {
         match type_ {
             Type::Ptr(_) => MAX_REGISTER_SIZE,
