@@ -413,22 +413,22 @@ impl Parser {
         while !self.cur_token_is(&Token::RBrace) {
             match self.next_token()? {
                 Token::Ident(field) => {
-                    if !match self
+                    let type_ = match self
                         .scope
                         .find_type(&name)
                         .ok_or(TypeError::Nonexistent(name.clone()))?
                     {
-                        type_table::Type::Struct(type_struct) => type_struct
-                            .fields
-                            .iter()
-                            .find(|(name, _)| name == &field)
-                            .is_some(),
-                    } {
-                        todo!("Field {field} doesn't exist in struct {name}");
-                    }
+                        type_table::Type::Struct(type_struct) => {
+                            match type_struct.fields.iter().find(|(name, _)| name == &field) {
+                                Some((_, type_)) => type_.clone(),
+                                _ => todo!("Field {field} doesn't exist in struct {name}"),
+                            }
+                        }
+                    };
 
                     self.expect(&Token::Colon)?;
                     let expr = self.expr(Precedence::Lowest)?;
+                    type_.assign(expr.type_(&self.scope)?)?;
 
                     self.expect(&Token::Comma)?;
                     fields.push((field, expr));
