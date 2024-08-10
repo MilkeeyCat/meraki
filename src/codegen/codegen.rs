@@ -152,11 +152,14 @@ impl CodeGen {
                 let scope_clone = self.scope.clone();
 
                 match *expr.left {
-                    Expr::Ident(ident) => {
-                        lvalue_dest = ident.dest(&self.arch, &scope_clone)?;
+                    Expr::Ident(expr) => {
+                        lvalue_dest = expr.dest(&mut self.arch, &scope_clone)?;
                     }
-                    Expr::StructAccess(struct_access) => {
-                        lvalue_dest = struct_access.dest(&self.arch, &scope_clone)?;
+                    Expr::StructAccess(expr) => {
+                        lvalue_dest = expr.dest(&mut self.arch, &scope_clone)?;
+                    }
+                    Expr::Unary(expr) => {
+                        lvalue_dest = expr.dest(&mut self.arch, &scope_clone)?;
                     }
                     expr => {
                         return Err(CodeGenError::Assign(expr));
@@ -340,8 +343,8 @@ impl CodeGen {
             }
             UnOp::Address => {
                 let dest2 = match unary_expr.expr.as_ref() {
-                    Expr::Ident(expr) => expr.dest(&self.arch, &self.scope)?,
-                    Expr::StructAccess(expr) => expr.dest(&self.arch, &self.scope)?,
+                    Expr::Ident(expr) => expr.dest(&mut self.arch, &self.scope)?,
+                    Expr::StructAccess(expr) => expr.dest(&mut self.arch, &self.scope)?,
                     _ => panic!(),
                 };
                 let r = self.arch.alloc()?;
@@ -362,8 +365,8 @@ impl CodeGen {
             }
             UnOp::Deref => {
                 let dest2 = match unary_expr.expr.as_ref() {
-                    Expr::Ident(expr) => expr.dest(&self.arch, &self.scope)?,
-                    Expr::StructAccess(expr) => expr.dest(&self.arch, &self.scope)?,
+                    Expr::Ident(expr) => expr.dest(&mut self.arch, &self.scope)?,
+                    Expr::StructAccess(expr) => expr.dest(&mut self.arch, &self.scope)?,
                     _ => panic!(),
                 };
                 let r = self.arch.alloc()?;
@@ -445,7 +448,7 @@ impl CodeGen {
             self.expr(
                 expr,
                 Some(MoveDestination::Local(Local {
-                    offset: &dest.local_offset() + &offset,
+                    offset: dest.offset().unwrap() + &offset,
                     size: type_struct
                         .get_field_type(&name)
                         .unwrap()
@@ -463,7 +466,7 @@ impl CodeGen {
         dest: MoveDestination,
     ) -> Result<(), CodeGenError> {
         let src = expr
-            .dest(&self.arch, &self.scope)?
+            .dest(&mut self.arch, &self.scope)?
             .to_source(expr.type_(&self.scope)?.signed());
 
         self.arch.mov(src, dest, &self.scope)?;

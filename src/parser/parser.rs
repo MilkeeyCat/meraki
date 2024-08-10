@@ -554,6 +554,30 @@ impl Parser {
                 },
                 _ => panic!("sdasdasd"),
             },
+            Expr::Unary(expr) => match self.expr(Precedence::from(&token))? {
+                Expr::Ident(field) => match expr.type_(&self.scope)? {
+                    Type::Struct(struct_type) => {
+                        match self
+                            .scope
+                            .find_type(&struct_type)
+                            .ok_or(TypeError::Nonexistent(struct_type))?
+                        {
+                            type_table::Type::Struct(s) => {
+                                if s.contains(&field.0) {
+                                    Ok(Expr::StructAccess(ExprStructAccess {
+                                        expr: Box::new(Expr::Unary(expr)),
+                                        field: field.0,
+                                    }))
+                                } else {
+                                    panic!("no such field bitch");
+                                }
+                            }
+                        }
+                    }
+                    _ => panic!(),
+                },
+                _ => panic!("sdasdasd"),
+            },
             _ => panic!("sdasdasd"),
         }
     }
@@ -603,7 +627,7 @@ impl Parser {
     fn addr_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect(&Token::Ampersand)?;
 
-        let expr = self.expr(Precedence::default())?;
+        let expr = self.expr(Precedence::Prefix)?;
         if !expr.lvalue() {
             panic!("Can't get address of {expr:?}");
         }
@@ -614,10 +638,10 @@ impl Parser {
     fn deref_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect(&Token::Asterisk)?;
 
-        let expr = self.expr(Precedence::default())?;
+        let expr = self.expr(Precedence::Prefix)?;
         match expr.type_(&self.scope)? {
             Type::Ptr(_) => {}
-            _ => panic!("Can't dereference an expression of type not pointer"),
+            type_ => panic!("Can't dereference an expression of type {type_}"),
         };
 
         Ok(Expr::Unary(ExprUnary::new(UnOp::Deref, Box::new(expr))))

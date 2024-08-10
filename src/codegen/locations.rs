@@ -110,10 +110,11 @@ impl<'a> MoveDestination<'a> {
         }
     }
 
-    pub fn local_offset(&self) -> Offset {
+    pub fn offset(&self) -> Option<&Offset> {
         match self {
-            Self::Local(local) => local.offset.clone(),
-            _ => unreachable!(),
+            Self::Local(local) => Some(&local.offset),
+            Self::Register(register) => register.offset.as_ref(),
+            Self::Global(global) => global.offset.as_ref(),
         }
     }
 

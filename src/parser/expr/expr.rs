@@ -1,7 +1,7 @@
 use super::{int_repr::UIntLitRepr, ExprError, IntLitRepr};
 use crate::{
     archs::Arch,
-    codegen::locations::MoveDestination,
+    codegen::locations::{self, MoveDestination, Offset},
     parser::op::{BinOp, UnOp},
     scope::Scope,
     symbol_table::{Symbol, SymbolTableError},
@@ -14,7 +14,8 @@ pub trait Expression {
 }
 
 pub trait LValue {
-    fn dest<'a>(&self, arch: &Arch, scope: &'a Scope) -> Result<MoveDestination<'a>, ExprError>;
+    fn dest<'a>(&self, arch: &mut Arch, scope: &'a Scope)
+        -> Result<MoveDestination<'a>, ExprError>;
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -165,7 +166,11 @@ impl Expression for ExprIdent {
 }
 
 impl LValue for ExprIdent {
-    fn dest<'a>(&self, arch: &Arch, scope: &'a Scope) -> Result<MoveDestination<'a>, ExprError> {
+    fn dest<'a>(
+        &self,
+        arch: &mut Arch,
+        scope: &'a Scope,
+    ) -> Result<MoveDestination<'a>, ExprError> {
         Ok(scope
             .find_symbol(&self.0)
             .ok_or(SymbolTableError::NotFound(self.0.clone()))?
@@ -220,16 +225,35 @@ impl Expression for ExprStructAccess {
                 }
                 _ => todo!(),
             },
+            Expr::Unary(expr) => match expr.type_(&scope)? {
+                Type::Struct(struct_name) => {
+                    match scope
+                        .find_type(&struct_name)
+                        .ok_or(TypeError::Nonexistent(struct_name.to_owned()))?
+                    {
+                        type_table::Type::Struct(type_struct) => {
+                            Ok(type_struct.get_field_type(&self.field).unwrap().to_owned())
+                        }
+                    }
+                }
+                _ => todo!(),
+            },
+
             expr => panic!("Expression {expr:?} can't be used to access struct field value"),
         }
     }
 }
 
 impl LValue for ExprStructAccess {
-    fn dest<'a>(&self, arch: &Arch, scope: &'a Scope) -> Result<MoveDestination<'a>, ExprError> {
+    fn dest<'a>(
+        &self,
+        arch: &mut Arch,
+        scope: &'a Scope,
+    ) -> Result<MoveDestination<'a>, ExprError> {
         let mut dest = match self.expr.as_ref() {
             Expr::Ident(expr) => expr.dest(arch, scope)?,
             Expr::StructAccess(expr) => expr.dest(arch, scope)?,
+            Expr::Unary(expr) => expr.dest(arch, scope)?,
             _ => panic!(),
         };
         let (field_offset, field_size) = match self.expr.type_(scope)? {
@@ -245,7 +269,7 @@ impl LValue for ExprStructAccess {
             type_ => panic!("{type_:?}"),
         };
 
-        let new_offset = &dest.local_offset() + &field_offset;
+        let new_offset = dest.offset().unwrap_or(&Offset(0)) + &field_offset;
 
         match &mut dest {
             MoveDestination::Local(local) => {
@@ -259,7 +283,13 @@ impl LValue for ExprStructAccess {
                     None => global.offset = Some(new_offset),
                 }
             }
-            _ => unreachable!(),
+            MoveDestination::Register(register) => {
+                register.size = field_size;
+                match &mut register.offset {
+                    Some(offset) => *offset = &*offset + &new_offset,
+                    None => register.offset = Some(new_offset),
+                }
+            }
         };
 
         Ok(dest)
@@ -288,6 +318,38 @@ impl Expression for ExprStruct {
 pub struct ExprUnary {
     pub op: UnOp,
     pub expr: Box<Expr>,
+}
+
+impl LValue for ExprUnary {
+    fn dest<'a>(
+        &self,
+        arch: &mut Arch,
+        scope: &'a Scope,
+    ) -> Result<MoveDestination<'a>, ExprError> {
+        let expr_dest = match self.expr.as_ref() {
+            Expr::Ident(expr) => expr.dest(arch, scope)?,
+            Expr::StructAccess(expr) => expr.dest(arch, scope)?,
+            _ => panic!(),
+        };
+        let r = arch.alloc().unwrap();
+
+        arch.mov(
+            expr_dest.to_source(self.type_(scope)?.signed()),
+            MoveDestination::Register(locations::Register {
+                register: r,
+                offset: None,
+                size: 8,
+            }),
+            scope,
+        )
+        .unwrap();
+
+        Ok(MoveDestination::Register(locations::Register {
+            register: r,
+            offset: Some(Offset(0)),
+            size: self.expr.type_(scope)?.pointed_type()?.size(arch, scope)?,
+        }))
+    }
 }
 
 impl ExprUnary {

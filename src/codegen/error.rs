@@ -23,7 +23,7 @@ impl std::fmt::Display for CodeGenError {
             Self::OpParse(e) => write!(f, "{e}"),
             Self::Type(e) => write!(f, "{e}"),
             Self::Allocator(e) => write!(f, "{e}"),
-            Self::Assign(e) => write!(f, "Can't assign to non ident {:?}", e),
+            Self::Assign(e) => write!(f, "Can't assign to rvalue expression {:?}", e),
             Self::SymbolTable(e) => write!(f, "{e}"),
         }
     }
