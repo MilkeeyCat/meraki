@@ -22,6 +22,12 @@ impl From<AllocatorError> for ArchError {
     }
 }
 
+impl From<SymbolTableError> for ArchError {
+    fn from(value: SymbolTableError) -> Self {
+        Self::SymbolTable(value)
+    }
+}
+
 impl From<ExprError> for ArchError {
     fn from(value: ExprError) -> Self {
         match value {

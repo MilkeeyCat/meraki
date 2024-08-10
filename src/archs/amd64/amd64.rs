@@ -536,6 +536,7 @@ impl std::fmt::Display for MoveSource<'_> {
     }
 }
 
+#[cfg(test)]
 mod test {
     use super::Amd64;
     use crate::{

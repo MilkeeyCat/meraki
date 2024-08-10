@@ -438,7 +438,6 @@ impl CodeGen {
             .ok_or(TypeError::Nonexistent(expr.name))?
         {
             type_table::Type::Struct(type_) => type_,
-            _ => panic!("Expected type to be struct"),
         }
         .clone();
         //NOTE: clone bad ^

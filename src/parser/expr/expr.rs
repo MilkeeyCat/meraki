@@ -1,6 +1,6 @@
 use super::{int_repr::UIntLitRepr, ExprError, IntLitRepr};
 use crate::{
-    archs::Arch,
+    archs::{Arch, ArchError},
     codegen::locations::{self, MoveDestination, Offset},
     parser::op::{BinOp, UnOp},
     scope::Scope,
@@ -15,7 +15,7 @@ pub trait Expression {
 
 pub trait LValue {
     fn dest<'a>(&self, arch: &mut Arch, scope: &'a Scope)
-        -> Result<MoveDestination<'a>, ExprError>;
+        -> Result<MoveDestination<'a>, ArchError>;
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -170,7 +170,7 @@ impl LValue for ExprIdent {
         &self,
         arch: &mut Arch,
         scope: &'a Scope,
-    ) -> Result<MoveDestination<'a>, ExprError> {
+    ) -> Result<MoveDestination<'a>, ArchError> {
         Ok(scope
             .find_symbol(&self.0)
             .ok_or(SymbolTableError::NotFound(self.0.clone()))?
@@ -249,7 +249,7 @@ impl LValue for ExprStructAccess {
         &self,
         arch: &mut Arch,
         scope: &'a Scope,
-    ) -> Result<MoveDestination<'a>, ExprError> {
+    ) -> Result<MoveDestination<'a>, ArchError> {
         let mut dest = match self.expr.as_ref() {
             Expr::Ident(expr) => expr.dest(arch, scope)?,
             Expr::StructAccess(expr) => expr.dest(arch, scope)?,
@@ -325,7 +325,7 @@ impl LValue for ExprUnary {
         &self,
         arch: &mut Arch,
         scope: &'a Scope,
-    ) -> Result<MoveDestination<'a>, ExprError> {
+    ) -> Result<MoveDestination<'a>, ArchError> {
         let expr_dest = match self.expr.as_ref() {
             Expr::Ident(expr) => expr.dest(arch, scope)?,
             Expr::StructAccess(expr) => expr.dest(arch, scope)?,

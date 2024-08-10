@@ -82,7 +82,7 @@ impl<'a> MoveSource<'a> {
             Self::Global(global, _) => global.size,
             Self::Local(local, _) => local.size,
             Self::Register(register, _) => register.size,
-            Self::Lit(lit) => todo!(),
+            Self::Lit(_lit) => todo!(),
         }
     }
 }

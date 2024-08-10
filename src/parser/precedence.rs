@@ -13,7 +13,6 @@ pub enum Precedence {
     Cast,
     Access,
     Call,
-    Highest,
 }
 
 impl From<&Token> for Precedence {
@@ -46,7 +45,6 @@ impl Precedence {
             Self::Cast => Self::Prefix,
             Self::Access => Self::Cast,
             Self::Call => Self::Access,
-            Self::Highest => Self::Call,
         }
     }
 }
