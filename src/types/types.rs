@@ -98,7 +98,8 @@ impl Type {
         }
 
         if self.int() && type_.int() {
-            if (self.signed() && !type_.signed()) || (!self.signed() && type_.signed()) {
+            // Not possible to assign signed int to unsigned but possible to assigned unsigned to signed
+            if !self.signed() && type_.signed() {
                 return Err(TypeError::Assignment(type_, self));
             }
 
@@ -107,7 +108,7 @@ impl Type {
             }
         }
 
-        return Err(TypeError::Assignment(type_, self));
+        Err(TypeError::Assignment(type_, self))
     }
 
     pub fn cast(self, type_: Self) -> Result<Self, TypeError> {
@@ -123,7 +124,7 @@ impl Type {
             return Ok(type_);
         }
 
-        return Err(TypeError::Cast(self, type_));
+        Err(TypeError::Cast(self, type_))
     }
 
     pub fn size(&self, arch: &Arch, scope: &Scope) -> Result<usize, TypeError> {
