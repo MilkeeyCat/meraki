@@ -436,7 +436,9 @@ impl Parser {
                     let expr = self.expr(Precedence::Lowest)?;
                     type_.assign(expr.type_(&self.scope)?)?;
 
-                    self.expect(&Token::Comma)?;
+                    if !self.cur_token_is(&Token::RBrace) {
+                        self.expect(&Token::Comma)?;
+                    }
                     fields.push((field, expr));
                 }
                 _ => todo!("Don't know what error to return yet"),
