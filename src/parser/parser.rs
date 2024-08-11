@@ -222,8 +222,14 @@ impl Parser {
         let mut base = match self.next_token()? {
             Token::U8 => Ok(Type::U8),
             Token::U16 => Ok(Type::U16),
+            Token::U32 => Ok(Type::U32),
+            Token::U64 => Ok(Type::U64),
             Token::I8 => Ok(Type::I8),
             Token::I16 => Ok(Type::I16),
+            Token::I32 => Ok(Type::I32),
+            Token::I64 => Ok(Type::I64),
+            Token::Usize => Ok(Type::Usize),
+            Token::Isize => Ok(Type::Isize),
             Token::Bool => Ok(Type::Bool),
             Token::Void => Ok(Type::Void),
             Token::Ident(ident) => Ok(

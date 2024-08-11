@@ -43,10 +43,16 @@ pub enum Token {
     Else,
     Return,
 
-    I8,
-    I16,
     U8,
     U16,
+    U32,
+    U64,
+    I8,
+    I16,
+    I32,
+    I64,
+    Usize,
+    Isize,
     Bool,
     Void,
 }
@@ -54,7 +60,18 @@ pub enum Token {
 impl Token {
     pub fn is_type(&self, scope: &Scope) -> bool {
         match &self {
-            Token::U8 | Token::U16 | Token::I8 | Token::I16 | Token::Bool | Token::Void => true,
+            Token::U8
+            | Token::U16
+            | Token::U32
+            | Token::U64
+            | Token::I8
+            | Token::I16
+            | Token::I32
+            | Token::I64
+            | Token::Usize
+            | Token::Isize
+            | Token::Bool
+            | Token::Void => true,
             Token::Ident(ident) => scope.find_type(ident).is_some(),
             _ => false,
         }
@@ -104,8 +121,14 @@ impl Display for Token {
             Return => write!(f, "return"),
             U8 => write!(f, "u8"),
             U16 => write!(f, "u16"),
+            U32 => write!(f, "u32"),
+            U64 => write!(f, "u64"),
             I8 => write!(f, "i8"),
             I16 => write!(f, "i16"),
+            I32 => write!(f, "i32"),
+            I64 => write!(f, "i64"),
+            Usize => write!(f, "usize"),
+            Isize => write!(f, "isize"),
             Bool => write!(f, "bool"),
             Void => write!(f, "void"),
         }

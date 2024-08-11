@@ -57,7 +57,7 @@ impl Architecture for Amd64 {
 
     fn size(&self, type_: &Type) -> usize {
         match type_ {
-            Type::Ptr(_) => MAX_REGISTER_SIZE,
+            Type::Ptr(_) | Type::Usize | Type::Isize => MAX_REGISTER_SIZE,
             _ => unreachable!(),
         }
     }

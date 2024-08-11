@@ -5,8 +5,14 @@ use crate::{archs::Arch, scope::Scope};
 pub enum Type {
     U8,
     U16,
+    U32,
+    U64,
     I8,
     I16,
+    I32,
+    I64,
+    Usize,
+    Isize,
     Bool,
     Void,
     Struct(String),
@@ -18,8 +24,14 @@ impl std::fmt::Display for Type {
         match self {
             Self::U8 => write!(f, "u8"),
             Self::U16 => write!(f, "u16"),
+            Self::U32 => write!(f, "u32"),
+            Self::U64 => write!(f, "u64"),
             Self::I8 => write!(f, "i8"),
             Self::I16 => write!(f, "i16"),
+            Self::I32 => write!(f, "i32"),
+            Self::I64 => write!(f, "i64"),
+            Self::Usize => write!(f, "usize"),
+            Self::Isize => write!(f, "isize"),
             Self::Bool => write!(f, "bool"),
             Self::Void => write!(f, "void"),
             Self::Ptr(type_) => write!(f, "{type_}*"),
@@ -31,7 +43,16 @@ impl std::fmt::Display for Type {
 impl Type {
     fn int(&self) -> bool {
         match self {
-            Self::U8 | Self::U16 | Self::I8 | Self::I16 => true,
+            Self::U8
+            | Self::U16
+            | Self::U32
+            | Self::U64
+            | Self::I8
+            | Self::I16
+            | Self::I32
+            | Self::I64
+            | Self::Usize
+            | Self::Isize => true,
             _ => false,
         }
     }
@@ -50,7 +71,7 @@ impl Type {
 
     pub fn signed(&self) -> bool {
         match self {
-            Self::I8 | Self::I16 => true,
+            Self::I8 | Self::I16 | Self::I32 | Self::I64 | Self::Isize => true,
             _ => false,
         }
     }
@@ -62,6 +83,15 @@ impl Type {
             }
             Self::U16 => {
                 *self = Self::I16;
+            }
+            Self::U32 => {
+                *self = Self::I32;
+            }
+            Self::U64 => {
+                *self = Self::I64;
+            }
+            Self::Usize => {
+                *self = Self::Isize;
             }
             _ => {}
         }
@@ -132,6 +162,8 @@ impl Type {
             Type::Void => 0,
             Type::I8 | Type::U8 | Type::Bool => 1,
             Type::I16 | Type::U16 => 2,
+            Type::I32 | Type::U32 => 4,
+            Type::I64 | Type::U64 => 8,
             Type::Struct(structure) => match scope
                 .find_type(structure)
                 .ok_or(TypeError::Nonexistent(structure.to_string()))?
