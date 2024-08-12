@@ -10,6 +10,32 @@ use crate::{
     types::{Type, TypeError},
 };
 use indoc::formatdoc;
+use std::collections::HashMap;
+
+#[derive(Eq, PartialEq, Hash)]
+enum ParamClass {
+    Integer,
+}
+
+impl From<&Type> for ParamClass {
+    fn from(value: &Type) -> Self {
+        match value {
+            Type::U8
+            | Type::I8
+            | Type::U16
+            | Type::I16
+            | Type::U32
+            | Type::I32
+            | Type::U64
+            | Type::I64
+            | Type::Usize
+            | Type::Isize
+            | Type::Bool
+            | Type::Ptr(_) => Self::Integer,
+            _ => unreachable!("Unsupported parameter type"),
+        }
+    }
+}
 
 const MAX_REGISTER_SIZE: usize = 8;
 
@@ -271,10 +297,6 @@ impl Architecture for Amd64 {
         ));
     }
 
-    fn param_dest(&self) -> MoveDestination {
-        todo!();
-    }
-
     fn lea(&mut self, dest: &Register, dest2: &MoveDestination) {
         match dest2 {
             MoveDestination::Local(local) => {
@@ -306,6 +328,28 @@ impl Architecture for Amd64 {
                     (&register.offset).as_ref().unwrap_or(&Offset::default()),
                 ));
             }
+        }
+    }
+
+    fn param_dest(&self, _: &Scope, type_: &Type, preceding: &[Type]) -> MoveDestination {
+        let mut occurences: HashMap<ParamClass, usize> = HashMap::new();
+        let class = ParamClass::from(type_);
+        preceding
+            .iter()
+            .for_each(|param| *occurences.entry(ParamClass::from(param)).or_insert(0) += 1);
+
+        match class {
+            ParamClass::Integer => match occurences.get(&class).unwrap_or(&0) {
+                n if n <= &6 => MoveDestination::Register(locations::Register {
+                    size: 8,
+                    register: self.registers.get(self.registers.len() - n).unwrap(),
+                    offset: None,
+                }),
+                n => MoveDestination::Local(locations::Local {
+                    size: 8,
+                    offset: Offset(((n - 6) * MAX_REGISTER_SIZE) as isize),
+                }),
+            },
         }
     }
 

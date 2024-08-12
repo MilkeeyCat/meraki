@@ -334,7 +334,10 @@ impl Parser {
                 .symbol_table_mut()
                 .push(Symbol::Param(SymbolParam {
                     name: name.to_owned(),
-                    n: i,
+                    preceding: params[..i]
+                        .iter()
+                        .map(|(_, type_)| type_.to_owned())
+                        .collect(),
                     type_: type_.to_owned(),
                 }))?;
         }
@@ -343,7 +346,7 @@ impl Parser {
             has_body = true;
             self.compound_statement()?
         } else {
-            vec![]
+            Vec::new()
         };
         let scope_impl = self.scope.leave();
         self.scope

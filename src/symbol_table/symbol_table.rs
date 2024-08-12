@@ -58,7 +58,9 @@ impl Symbol {
                 },
                 symbol.type_.signed(),
             ),
-            Self::Param(symbol) => arch.param_dest().to_source(symbol.type_.signed()),
+            Self::Param(symbol) => arch
+                .param_dest(scope, &symbol.type_, &symbol.preceding)
+                .to_source(symbol.type_.signed()),
             Self::Function(_) => unreachable!(),
         })
     }
@@ -96,7 +98,7 @@ pub struct SymbolLocal {
 #[derive(Debug, Clone, PartialEq)]
 pub struct SymbolParam {
     pub name: String,
-    pub n: usize,
+    pub preceding: Vec<Type>,
     pub type_: Type,
 }
 
