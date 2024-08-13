@@ -284,17 +284,36 @@ impl Architecture for Amd64 {
         }
     }
 
-    fn move_function_argument(&mut self, r: Register, i: usize) {
-        self.buf.push_str(&formatdoc!(
-            "
-            \tmov {}, {}
-            ",
-            self.registers
-                .get(self.registers.len() - i - 1)
-                .unwrap()
-                .qword(),
-            r.qword(),
-        ));
+    fn push_arg(&mut self, src: MoveSource, scope: &Scope, type_: &Type, preceding: &[Type]) {
+        let mut occurences: HashMap<ParamClass, usize> = HashMap::new();
+        let class = ParamClass::from(type_);
+
+        preceding
+            .iter()
+            .for_each(|param| *occurences.entry(ParamClass::from(param)).or_insert(0) += 1);
+
+        match class {
+            ParamClass::Integer => match occurences.get(&class).unwrap_or(&0) {
+                n if n <= &6 => self
+                    .mov(
+                        src,
+                        MoveDestination::Register(locations::Register {
+                            size: MAX_REGISTER_SIZE,
+                            register: self.registers.get(self.registers.len() - n - 1).unwrap(),
+                            offset: None,
+                        }),
+                        scope,
+                    )
+                    .unwrap(),
+                _ => {
+                    self.buf.push_str(&formatdoc!(
+                        "
+                        \tpush {src}
+                        ",
+                    ));
+                }
+            },
+        }
     }
 
     fn lea(&mut self, dest: &Register, dest2: &MoveDestination) {

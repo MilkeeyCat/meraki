@@ -405,28 +405,32 @@ impl CodeGen {
         call: ExprFunctionCall,
         dest: Option<MoveDestination>,
     ) -> Result<(), CodeGenError> {
-        if call.arguments.len() > 6 {
-            panic!("Can't call function with more than 6 arguments");
-        }
+        let mut preceding = Vec::new();
 
-        for (i, argument) in call.arguments.into_iter().enumerate() {
-            let type_ = argument.type_(&self.scope)?;
+        for expr in call.arguments.into_iter() {
+            let type_ = expr.type_(&self.scope)?;
             let r = self.arch.alloc()?;
 
-            self.expr(
-                argument,
-                Some(r.to_dest(type_.size(&self.arch, &self.scope)?)),
-            )?;
+            self.expr(expr, Some(r.to_dest(type_.size(&self.arch, &self.scope)?)))?;
+            self.arch.push_arg(
+                MoveSource::Register(
+                    locations::Register {
+                        register: r,
+                        size: 8,
+                        offset: None,
+                    },
+                    type_.signed(),
+                ),
+                &self.scope,
+                &type_,
+                &preceding,
+            );
 
-            //NOTE: should the register be freed?
-            self.arch.move_function_argument(r, i);
+            self.arch.free(r)?;
+            preceding.push(type_);
         }
 
-        if let Some(dest) = dest {
-            self.arch.call_fn(&call.name, Some(&dest));
-        } else {
-            self.arch.call_fn(&call.name, None);
-        }
+        self.arch.call_fn(&call.name, dest.as_ref());
 
         Ok(())
     }
