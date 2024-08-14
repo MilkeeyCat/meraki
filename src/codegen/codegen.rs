@@ -11,7 +11,7 @@ use crate::{
     scope::Scope,
     symbol_table::{Symbol, SymbolTableError},
     type_table,
-    types::TypeError,
+    types::{Type, TypeError},
 };
 
 pub struct CodeGen {
@@ -38,7 +38,16 @@ impl CodeGen {
     fn function(&mut self, func: StmtFunction) -> Result<(), CodeGenError> {
         self.scope.enter(*func.scope);
         let offset = self.populate_offsets(&func.body)?;
-        self.arch.fn_preamble(&func.name, offset);
+        self.arch.fn_preamble(
+            &func.name,
+            &func
+                .params
+                .iter()
+                .map(|(_, type_)| type_.to_owned())
+                .collect::<Vec<Type>>(),
+            offset,
+            &self.scope,
+        );
 
         for stmt in func.body {
             self.stmt(stmt)?;

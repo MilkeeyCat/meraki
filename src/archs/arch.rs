@@ -37,7 +37,7 @@ pub trait Architecture: ArchitectureClone {
     fn mul(&mut self, dest: &MoveDestination, src: &MoveSource);
     fn div(&mut self, dest: &MoveDestination, src: &MoveSource);
     fn cmp(&mut self, dest: &MoveDestination, src: &MoveSource, cmp: CmpOp);
-    fn fn_preamble(&mut self, name: &str, stackframe: usize);
+    fn fn_preamble(&mut self, name: &str, params: &[Type], stackframe: usize, scope: &Scope);
     fn fn_postamble(&mut self, name: &str, stackframe: usize);
     fn ret(&mut self, src: MoveSource) -> Result<(), TypeError>;
     fn jmp(&mut self, label: &str);

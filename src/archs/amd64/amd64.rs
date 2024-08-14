@@ -224,7 +224,7 @@ impl Architecture for Amd64 {
         ));
     }
 
-    fn fn_preamble(&mut self, name: &str, stackframe: usize) {
+    fn fn_preamble(&mut self, name: &str, params: &[Type], stackframe: usize, scope: &Scope) {
         self.buf.push_str(&formatdoc!(
             "
             .global {name}
@@ -234,6 +234,36 @@ impl Architecture for Amd64 {
                 sub rsp, {stackframe}
             ",
         ));
+
+        let mut occurences: HashMap<ParamClass, usize> = HashMap::new();
+        let mut offset = Offset(0);
+
+        for type_ in params {
+            let n = occurences.entry(ParamClass::from(type_)).or_insert(0);
+            *n += 1;
+
+            if n <= &mut 6 {
+                let n = *n;
+                offset = &offset - (MAX_REGISTER_SIZE as isize);
+
+                self.mov(
+                    MoveSource::Register(
+                        locations::Register {
+                            offset: None,
+                            size: MAX_REGISTER_SIZE,
+                            register: self.registers.get(self.registers.len() - n).unwrap(),
+                        },
+                        type_.signed(),
+                    ),
+                    MoveDestination::Local(Local {
+                        size: MAX_REGISTER_SIZE,
+                        offset: offset.clone(),
+                    }),
+                    scope,
+                )
+                .unwrap();
+            }
+        }
     }
 
     fn fn_postamble(&mut self, name: &str, stackframe: usize) {
