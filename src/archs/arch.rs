@@ -4,6 +4,7 @@ use crate::{
     parser::CmpOp,
     register::{allocator::AllocatorError, Register},
     scope::Scope,
+    symbol_table::SymbolTable,
     types::{Type, TypeError},
 };
 
@@ -43,7 +44,11 @@ pub trait Architecture: ArchitectureClone {
     fn jmp(&mut self, label: &str);
     fn call_fn(&mut self, name: &str, r: Option<&MoveDestination>);
     fn push_arg(&mut self, src: MoveSource, scope: &Scope, type_: &Type, preceding: &[Type]);
-    fn param_dest(&self, scope: &Scope, type_: &Type, preceding: &[Type]) -> MoveDestination;
+    fn populate_offsets(
+        &mut self,
+        symbol_table: &mut SymbolTable,
+        scope: &Scope,
+    ) -> Result<usize, ArchError>;
     fn lea(&mut self, dest: &Register, dest2: &MoveDestination);
     fn finish(&mut self) -> Vec<u8>;
 }

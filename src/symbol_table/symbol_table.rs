@@ -58,9 +58,13 @@ impl Symbol {
                 },
                 symbol.type_.signed(),
             ),
-            Self::Param(symbol) => arch
-                .param_dest(scope, &symbol.type_, &symbol.preceding)
-                .to_source(symbol.type_.signed()),
+            Self::Param(symbol) => MoveSource::Local(
+                Local {
+                    size: symbol.type_.size(arch, scope)?,
+                    offset: symbol.offset.clone(),
+                },
+                symbol.type_.signed(),
+            ),
             Self::Function(_) => unreachable!(),
         })
     }
@@ -76,7 +80,10 @@ impl Symbol {
                 size: symbol.type_.size(&arch, scope)?,
                 offset: None,
             }),
-            Symbol::Param(_symbol) => todo!(),
+            Symbol::Param(symbol) => MoveDestination::Local(Local {
+                offset: symbol.offset.clone(),
+                size: symbol.type_.size(&arch, scope)?,
+            }),
             Symbol::Function(_) => unreachable!(),
         })
     }
@@ -100,6 +107,7 @@ pub struct SymbolParam {
     pub name: String,
     pub preceding: Vec<Type>,
     pub type_: Type,
+    pub offset: Offset,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -110,7 +118,7 @@ pub struct SymbolFunction {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct SymbolTable(Vec<Symbol>);
+pub struct SymbolTable(pub Vec<Symbol>);
 
 impl SymbolTable {
     pub fn new() -> Self {

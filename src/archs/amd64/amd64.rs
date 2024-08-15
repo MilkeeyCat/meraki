@@ -1,5 +1,5 @@
 use crate::{
-    archs::{ArchError, Architecture},
+    archs::{Arch, ArchError, Architecture},
     codegen::locations::{self, Global, Local, MoveDestination, MoveSource, Offset},
     parser::{CmpOp, ExprLit, Expression},
     register::{
@@ -7,10 +7,14 @@ use crate::{
         Register,
     },
     scope::Scope,
+    symbol_table::{Symbol, SymbolTable},
     types::{Type, TypeError},
 };
 use indoc::formatdoc;
 use std::collections::HashMap;
+
+const WORD_SIZE: usize = 8;
+const STACK_ALIGNMENT: usize = 16;
 
 #[derive(Eq, PartialEq, Hash)]
 enum ParamClass {
@@ -36,8 +40,6 @@ impl From<&Type> for ParamClass {
         }
     }
 }
-
-const MAX_REGISTER_SIZE: usize = 8;
 
 #[derive(Clone)]
 pub struct Amd64 {
@@ -83,7 +85,7 @@ impl Architecture for Amd64 {
 
     fn size(&self, type_: &Type) -> usize {
         match type_ {
-            Type::Ptr(_) | Type::Usize | Type::Isize => MAX_REGISTER_SIZE,
+            Type::Ptr(_) | Type::Usize | Type::Isize => WORD_SIZE,
             _ => unreachable!(),
         }
     }
@@ -244,19 +246,22 @@ impl Architecture for Amd64 {
 
             if n <= &mut 6 {
                 let n = *n;
-                offset = &offset - (MAX_REGISTER_SIZE as isize);
+                let size = type_
+                    .size(&(Box::new(self.clone()) as Arch), scope)
+                    .unwrap();
+                offset = &offset - (size as isize);
 
                 self.mov(
                     MoveSource::Register(
                         locations::Register {
                             offset: None,
-                            size: MAX_REGISTER_SIZE,
+                            size,
                             register: self.registers.get(self.registers.len() - n).unwrap(),
                         },
                         type_.signed(),
                     ),
                     MoveDestination::Local(Local {
-                        size: MAX_REGISTER_SIZE,
+                        size,
                         offset: offset.clone(),
                     }),
                     scope,
@@ -328,7 +333,7 @@ impl Architecture for Amd64 {
                     .mov(
                         src,
                         MoveDestination::Register(locations::Register {
-                            size: MAX_REGISTER_SIZE,
+                            size: WORD_SIZE,
                             register: self.registers.get(self.registers.len() - n - 1).unwrap(),
                             offset: None,
                         }),
@@ -380,26 +385,40 @@ impl Architecture for Amd64 {
         }
     }
 
-    fn param_dest(&self, _: &Scope, type_: &Type, preceding: &[Type]) -> MoveDestination {
-        let mut occurences: HashMap<ParamClass, usize> = HashMap::new();
-        let class = ParamClass::from(type_);
-        preceding
-            .iter()
-            .for_each(|param| *occurences.entry(ParamClass::from(param)).or_insert(0) += 1);
+    fn populate_offsets(
+        &mut self,
+        symbol_table: &mut SymbolTable,
+        scope: &Scope,
+    ) -> Result<usize, ArchError> {
+        let mut offset = 0;
 
-        match class {
-            ParamClass::Integer => match occurences.get(&class).unwrap_or(&0) {
-                n if n <= &6 => MoveDestination::Register(locations::Register {
-                    size: 8,
-                    register: self.registers.get(self.registers.len() - n).unwrap(),
-                    offset: None,
-                }),
-                n => MoveDestination::Local(locations::Local {
-                    size: 8,
-                    offset: Offset(((n - 6) * MAX_REGISTER_SIZE) as isize),
-                }),
-            },
+        for symbol in &mut symbol_table.0 {
+            offset -= symbol
+                .type_()
+                .size(&(Box::new(self.clone()) as Arch), &scope)? as isize;
+
+            match symbol {
+                Symbol::Local(local) => {
+                    local.offset = Offset(offset);
+                }
+                Symbol::Param(param) => {
+                    param.offset = Offset(offset);
+                }
+                // Global variale in a scope, wot
+                Symbol::Global(_) => unreachable!(),
+                Symbol::Function(_) => unreachable!(),
+            }
         }
+
+        let offset = offset.unsigned_abs();
+
+        Ok(if offset < STACK_ALIGNMENT {
+            STACK_ALIGNMENT
+        } else if offset % STACK_ALIGNMENT == 0 {
+            offset
+        } else {
+            ((offset / STACK_ALIGNMENT) + 1) * STACK_ALIGNMENT
+        })
     }
 
     fn finish(&mut self) -> Vec<u8> {

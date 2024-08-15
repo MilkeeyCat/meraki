@@ -9,7 +9,7 @@ use crate::{
         ExprUnary, Expression, LValue, Stmt, StmtFunction, StmtReturn, StmtVarDecl, UnOp,
     },
     scope::Scope,
-    symbol_table::{Symbol, SymbolTableError},
+    symbol_table::SymbolTableError,
     type_table,
     types::{Type, TypeError},
 };
@@ -35,9 +35,11 @@ impl CodeGen {
         Ok(())
     }
 
-    fn function(&mut self, func: StmtFunction) -> Result<(), CodeGenError> {
+    fn function(&mut self, mut func: StmtFunction) -> Result<(), CodeGenError> {
+        let offset = self
+            .arch
+            .populate_offsets(&mut func.scope.symbol_table, &self.scope)?;
         self.scope.enter(*func.scope);
-        let offset = self.populate_offsets(&func.body)?;
         self.arch.fn_preamble(
             &func.name,
             &func
@@ -492,34 +494,5 @@ impl CodeGen {
         }
 
         Ok(self.arch.finish())
-    }
-
-    fn populate_offsets(&mut self, stmts: &Vec<Stmt>) -> Result<usize, CodeGenError> {
-        let mut offset = 0;
-
-        for stmt in stmts {
-            if let Stmt::VarDecl(var_decl) = stmt {
-                let size = var_decl.type_.size(&self.arch, &self.scope)? as isize;
-                if let Symbol::Local(local) = self
-                    .scope
-                    .find_symbol_mut(&var_decl.name)
-                    .ok_or(SymbolTableError::NotFound(var_decl.name.clone()))?
-                {
-                    offset -= size;
-                    local.offset = Offset(offset);
-                }
-            }
-        }
-
-        let offset = offset.unsigned_abs();
-        let alignment = self.arch.alignment();
-
-        Ok(if offset < alignment {
-            alignment
-        } else if offset % alignment == 0 {
-            offset
-        } else {
-            ((offset / alignment) + 1) * alignment
-        })
     }
 }

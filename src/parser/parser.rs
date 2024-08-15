@@ -339,6 +339,7 @@ impl Parser {
                         .map(|(_, type_)| type_.to_owned())
                         .collect(),
                     type_: type_.to_owned(),
+                    offset: Offset::default(),
                 }))?;
         }
         let mut has_body = false;

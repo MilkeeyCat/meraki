@@ -6,9 +6,9 @@ use crate::{
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScopeImpl {
-    type_table: TypeTable,
-    symbol_table: SymbolTable,
-    context: Option<(String, Type)>,
+    pub type_table: TypeTable,
+    pub symbol_table: SymbolTable,
+    pub context: Option<(String, Type)>,
 }
 
 impl ScopeImpl {
