@@ -244,29 +244,33 @@ impl Architecture for Amd64 {
             let n = occurences.entry(ParamClass::from(type_)).or_insert(0);
             *n += 1;
 
-            if n <= &mut 6 {
-                let n = *n;
-                let size = type_
-                    .size(&(Box::new(self.clone()) as Arch), scope)
-                    .unwrap();
-                offset = &offset - (size as isize);
+            match ParamClass::from(type_) {
+                ParamClass::Integer => {
+                    if *n <= 6 {
+                        let n = *n;
+                        let size = type_
+                            .size(&(Box::new(self.clone()) as Arch), scope)
+                            .unwrap();
+                        offset = &offset - (size as isize);
 
-                self.mov(
-                    MoveSource::Register(
-                        locations::Register {
-                            offset: None,
-                            size,
-                            register: self.registers.get(self.registers.len() - n).unwrap(),
-                        },
-                        type_.signed(),
-                    ),
-                    MoveDestination::Local(Local {
-                        size,
-                        offset: offset.clone(),
-                    }),
-                    scope,
-                )
-                .unwrap();
+                        self.mov(
+                            MoveSource::Register(
+                                locations::Register {
+                                    offset: None,
+                                    size,
+                                    register: self.registers.get(self.registers.len() - n).unwrap(),
+                                },
+                                type_.signed(),
+                            ),
+                            MoveDestination::Local(Local {
+                                size,
+                                offset: offset.clone(),
+                            }),
+                            scope,
+                        )
+                        .unwrap();
+                    }
+                }
             }
         }
     }
@@ -319,7 +323,13 @@ impl Architecture for Amd64 {
         }
     }
 
-    fn push_arg(&mut self, src: MoveSource, scope: &Scope, type_: &Type, preceding: &[Type]) {
+    fn push_arg(
+        &mut self,
+        src: MoveSource,
+        scope: &Scope,
+        type_: &Type,
+        preceding: &[Type],
+    ) -> usize {
         let mut occurences: HashMap<ParamClass, usize> = HashMap::new();
         let class = ParamClass::from(type_);
 
@@ -328,24 +338,29 @@ impl Architecture for Amd64 {
             .for_each(|param| *occurences.entry(ParamClass::from(param)).or_insert(0) += 1);
 
         match class {
-            ParamClass::Integer => match occurences.get(&class).unwrap_or(&0) {
-                n if n <= &6 => self
-                    .mov(
+            ParamClass::Integer => match occurences.get(&class).unwrap_or(&0) + 1 {
+                n if n <= 6 => {
+                    self.mov(
                         src,
                         MoveDestination::Register(locations::Register {
                             size: WORD_SIZE,
-                            register: self.registers.get(self.registers.len() - n - 1).unwrap(),
+                            register: self.registers.get(self.registers.len() - n).unwrap(),
                             offset: None,
                         }),
                         scope,
                     )
-                    .unwrap(),
+                    .unwrap();
+
+                    0
+                }
                 _ => {
                     self.buf.push_str(&formatdoc!(
                         "
                         \tpush {src}
                         ",
                     ));
+
+                    WORD_SIZE
                 }
             },
         }
@@ -391,18 +406,27 @@ impl Architecture for Amd64 {
         scope: &Scope,
     ) -> Result<usize, ArchError> {
         let mut offset = 0;
+        let mut occurences: HashMap<ParamClass, usize> = HashMap::new();
 
         for symbol in &mut symbol_table.0 {
-            offset -= symbol
-                .type_()
-                .size(&(Box::new(self.clone()) as Arch), &scope)? as isize;
+            let type_ = symbol.type_();
 
             match symbol {
                 Symbol::Local(local) => {
+                    offset -= type_.size(&(Box::new(self.clone()) as Arch), &scope)? as isize;
                     local.offset = Offset(offset);
                 }
                 Symbol::Param(param) => {
-                    param.offset = Offset(offset);
+                    let n = occurences.entry(ParamClass::from(&type_)).or_insert(0);
+                    *n += 1;
+
+                    if *n <= 6 {
+                        offset -= type_.size(&(Box::new(self.clone()) as Arch), &scope)? as isize;
+                        param.offset = Offset(offset);
+                    } else {
+                        // When call instruction is called it pushes return address on da stack
+                        param.offset = Offset(((*n - 6) * WORD_SIZE + 8) as isize);
+                    }
                 }
                 // Global variale in a scope, wot
                 Symbol::Global(_) => unreachable!(),
@@ -410,15 +434,15 @@ impl Architecture for Amd64 {
             }
         }
 
-        let offset = offset.unsigned_abs();
+        Ok(offset.unsigned_abs().next_multiple_of(STACK_ALIGNMENT))
+    }
 
-        Ok(if offset < STACK_ALIGNMENT {
-            STACK_ALIGNMENT
-        } else if offset % STACK_ALIGNMENT == 0 {
-            offset
-        } else {
-            ((offset / STACK_ALIGNMENT) + 1) * STACK_ALIGNMENT
-        })
+    fn shrink_stack(&mut self, size: usize) {
+        self.buf.push_str(&formatdoc!(
+            "
+            \tsub rsp, {size}
+            "
+        ));
     }
 
     fn finish(&mut self) -> Vec<u8> {

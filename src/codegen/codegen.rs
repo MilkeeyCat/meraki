@@ -417,17 +417,18 @@ impl CodeGen {
         dest: Option<MoveDestination>,
     ) -> Result<(), CodeGenError> {
         let mut preceding = Vec::new();
+        let mut stack_size = 0;
 
         for expr in call.arguments.into_iter() {
             let type_ = expr.type_(&self.scope)?;
             let r = self.arch.alloc()?;
 
             self.expr(expr, Some(r.to_dest(type_.size(&self.arch, &self.scope)?)))?;
-            self.arch.push_arg(
+            stack_size += self.arch.push_arg(
                 MoveSource::Register(
                     locations::Register {
                         register: r,
-                        size: 8,
+                        size: type_.size(&self.arch, &self.scope)?,
                         offset: None,
                     },
                     type_.signed(),
@@ -442,6 +443,9 @@ impl CodeGen {
         }
 
         self.arch.call_fn(&call.name, dest.as_ref());
+        if stack_size > 0 {
+            self.arch.shrink_stack(stack_size);
+        }
 
         Ok(())
     }

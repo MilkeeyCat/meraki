@@ -43,13 +43,20 @@ pub trait Architecture: ArchitectureClone {
     fn ret(&mut self, src: MoveSource) -> Result<(), TypeError>;
     fn jmp(&mut self, label: &str);
     fn call_fn(&mut self, name: &str, r: Option<&MoveDestination>);
-    fn push_arg(&mut self, src: MoveSource, scope: &Scope, type_: &Type, preceding: &[Type]);
+    fn push_arg(
+        &mut self,
+        src: MoveSource,
+        scope: &Scope,
+        type_: &Type,
+        preceding: &[Type],
+    ) -> usize;
     fn populate_offsets(
         &mut self,
         symbol_table: &mut SymbolTable,
         scope: &Scope,
     ) -> Result<usize, ArchError>;
     fn lea(&mut self, dest: &Register, dest2: &MoveDestination);
+    fn shrink_stack(&mut self, size: usize);
     fn finish(&mut self) -> Vec<u8>;
 }
 
