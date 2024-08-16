@@ -88,7 +88,33 @@ impl CodeGen {
             Expr::Binary(bin_expr) => self.bin_expr(bin_expr, dest)?,
             Expr::Lit(lit) => {
                 if let Some(dest) = dest {
-                    self.arch.mov(MoveSource::Lit(lit), dest, &self.scope)?
+                    if let ExprLit::String(literal) = &lit {
+                        let label = self.arch.define_literal(literal.to_owned());
+                        let r = self.arch.alloc()?;
+
+                        self.arch.lea(
+                            &r,
+                            &MoveDestination::Global(locations::Global {
+                                label: &label,
+                                size: 8,
+                                offset: None,
+                            }),
+                        );
+                        self.arch.mov(
+                            MoveSource::Register(
+                                locations::Register {
+                                    register: r,
+                                    size: 8,
+                                    offset: None,
+                                },
+                                false,
+                            ),
+                            dest,
+                            &self.scope,
+                        )?
+                    } else {
+                        self.arch.mov(MoveSource::Lit(lit), dest, &self.scope)?
+                    }
                 }
             }
             Expr::Unary(unary_expr) => {

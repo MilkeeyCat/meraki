@@ -57,6 +57,7 @@ pub trait Architecture: ArchitectureClone {
     ) -> Result<usize, ArchError>;
     fn lea(&mut self, dest: &Register, dest2: &MoveDestination);
     fn shrink_stack(&mut self, size: usize);
+    fn define_literal(&mut self, literal: String) -> String;
     fn finish(&mut self) -> Vec<u8>;
 }
 

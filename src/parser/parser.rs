@@ -37,6 +37,10 @@ impl Parser {
             scope: Scope::new(),
             prefix_fns: HashMap::from([
                 (Token::Ident(Default::default()), Self::ident as PrefixFn),
+                (
+                    Token::String(Default::default()),
+                    Self::string_lit as PrefixFn,
+                ),
                 (Token::Integer(Default::default()), Self::int_lit),
                 (Token::True, Self::bool),
                 (Token::False, Self::bool),
@@ -140,6 +144,7 @@ impl Parser {
         let token = match &self.cur_token {
             Token::Ident(_) => Token::Ident(Default::default()),
             Token::Integer(_) => Token::Integer(Default::default()),
+            Token::String(_) => Token::String(Default::default()),
             token => token.clone(),
         };
 
@@ -452,6 +457,13 @@ impl Parser {
         self.expect(&Token::RBrace)?;
 
         Ok(Expr::Struct(ExprStruct::new(name, fields)))
+    }
+
+    fn string_lit(&mut self) -> Result<Expr, ParserError> {
+        match self.next_token()? {
+            Token::String(literal) => Ok(Expr::Lit(ExprLit::String(literal))),
+            token => Err(ParserError::ParseType(token)),
+        }
     }
 
     fn int_lit(&mut self) -> Result<Expr, ParserError> {

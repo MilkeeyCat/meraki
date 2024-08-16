@@ -109,6 +109,7 @@ pub enum ExprLit {
     Int(IntLitRepr),
     UInt(UIntLitRepr),
     Bool(bool),
+    String(String),
 }
 
 impl Expression for ExprLit {
@@ -117,6 +118,7 @@ impl Expression for ExprLit {
             ExprLit::Int(int) => Ok(int.type_()),
             ExprLit::UInt(uint) => Ok(uint.type_()),
             ExprLit::Bool(_) => Ok(Type::Bool),
+            ExprLit::String(_) => Ok(Type::Ptr(Box::new(Type::U8))),
         }
     }
 }
@@ -124,11 +126,9 @@ impl Expression for ExprLit {
 impl ExprLit {
     pub fn signed(&self) -> bool {
         match self {
-            ExprLit::Int(int) => int.type_(),
-            ExprLit::UInt(uint) => uint.type_(),
-            ExprLit::Bool(_) => Type::Bool,
+            ExprLit::Int(_) => true,
+            ExprLit::UInt(_) | ExprLit::Bool(_) | ExprLit::String(_) => false,
         }
-        .signed()
     }
 }
 
@@ -144,6 +144,7 @@ impl std::fmt::Display for ExprLit {
                     write!(f, "0")
                 }
             }
+            Self::String(literal) => write!(f, "{literal}"),
         }
     }
 }

@@ -46,6 +46,8 @@ pub struct Amd64 {
     buf: String,
     registers: RegisterAllocator,
     rax: Register,
+    literals: Vec<(String, String)>,
+    label_counter: usize,
 }
 
 impl Architecture for Amd64 {
@@ -67,6 +69,8 @@ impl Architecture for Amd64 {
                 Register::new("sil", "si", "esi", "rsi"),
                 Register::new("dil", "di", "edi", "rdi"),
             ]),
+            literals: Vec::new(),
+            label_counter: 0,
         }
     }
 
@@ -445,7 +449,27 @@ impl Architecture for Amd64 {
         ));
     }
 
+    fn define_literal(&mut self, literal: String) -> String {
+        let label = format!(".L{}", self.label_counter);
+
+        self.literals.push((label.clone(), literal));
+        self.label_counter += 1;
+
+        label
+    }
+
     fn finish(&mut self) -> Vec<u8> {
+        self.literals.iter().for_each(|(label, value)| {
+            self.buf.insert_str(
+                0,
+                &formatdoc!(
+                    "
+                    {label}:
+                        .string \"{value}\"
+                    "
+                ),
+            );
+        });
         self.buf.insert_str(0, ".section .text\n");
         self.buf.as_bytes().to_vec()
     }
@@ -550,13 +574,15 @@ impl Amd64 {
     }
 
     fn mov_global(
-        &self,
-        _src: Global,
-        _dest: MoveDestination,
-        _signed: bool,
-        _scope: &Scope,
+        &mut self,
+        src: Global,
+        dest: MoveDestination,
+        signed: bool,
+        scope: &Scope,
     ) -> Result<(), ArchError> {
-        todo!();
+        self.mov_impl((&src, src.size), (&dest, dest.size()), signed);
+
+        Ok(())
     }
 
     fn mov_register(
