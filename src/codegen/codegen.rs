@@ -5,8 +5,9 @@ use super::{
 use crate::{
     archs::Arch,
     parser::{
-        BinOp, CmpOp, Expr, ExprBinary, ExprFunctionCall, ExprLit, ExprStruct, ExprStructAccess,
-        ExprUnary, Expression, LValue, Stmt, StmtFunction, StmtReturn, StmtVarDecl, UnOp,
+        BinOp, CmpOp, Expr, ExprBinary, ExprFunctionCall, ExprIdent, ExprLit, ExprStruct,
+        ExprStructAccess, ExprUnary, Expression, LValue, Stmt, StmtFunction, StmtReturn,
+        StmtVarDecl, UnOp,
     },
     scope::Scope,
     symbol_table::SymbolTableError,
@@ -29,7 +30,18 @@ impl CodeGen {
             self.arch.declare(
                 &variable.name,
                 variable.type_.size(&self.arch, &self.scope)?,
-            )
+            );
+        }
+
+        if let Some(expr) = variable.value {
+            self.expr(
+                Expr::Binary(ExprBinary::new(
+                    BinOp::Assign,
+                    Box::new(Expr::Ident(ExprIdent(variable.name))),
+                    Box::new(expr),
+                )),
+                None,
+            )?;
         }
 
         Ok(())
@@ -184,20 +196,12 @@ impl CodeGen {
     ) -> Result<(), CodeGenError> {
         match &expr.op {
             BinOp::Assign => {
-                let lvalue_dest: MoveDestination;
-                //TODO: I dunno how to make it compile without this clone but feature me please fix it
+                //TODO: I dunno how to make it compile without this clone but future me please fix it
                 let scope_clone = self.scope.clone();
-
-                match *expr.left {
-                    Expr::Ident(expr) => {
-                        lvalue_dest = expr.dest(&mut self.arch, &scope_clone)?;
-                    }
-                    Expr::StructAccess(expr) => {
-                        lvalue_dest = expr.dest(&mut self.arch, &scope_clone)?;
-                    }
-                    Expr::Unary(expr) => {
-                        lvalue_dest = expr.dest(&mut self.arch, &scope_clone)?;
-                    }
+                let lvalue_dest = match *expr.left {
+                    Expr::Ident(expr) => expr.dest(&mut self.arch, &scope_clone)?,
+                    Expr::StructAccess(expr) => expr.dest(&mut self.arch, &scope_clone)?,
+                    Expr::Unary(expr) => expr.dest(&mut self.arch, &scope_clone)?,
                     expr => {
                         return Err(CodeGenError::Assign(expr));
                     }

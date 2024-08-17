@@ -123,7 +123,7 @@ impl Parser {
                 _ => {
                     let type_ = self.parse_type()?;
 
-                    if let Some(stmt) = self.parse_symbol(type_)? {
+                    if let Some(stmt) = self.parse_symbol(type_, true)? {
                         stmts.push(stmt);
                     }
                 }
@@ -133,10 +133,15 @@ impl Parser {
         Ok(stmts)
     }
 
-    fn parse_symbol(&mut self, type_: Type) -> Result<Option<Stmt>, ParserError> {
-        match self.peek_token {
-            Token::Semicolon => Ok(Some(self.var_decl(type_)?)),
-            _ => self.function(type_, true),
+    fn parse_symbol(
+        &mut self,
+        type_: Type,
+        func_definition: bool,
+    ) -> Result<Option<Stmt>, ParserError> {
+        match &self.peek_token {
+            Token::Semicolon | Token::Assign => Ok(Some(self.var_decl(type_)?)),
+            Token::LParen => self.function(type_, func_definition),
+            _ => unreachable!(),
         }
     }
 
@@ -197,10 +202,8 @@ impl Parser {
             if self.cur_token.is_type(&self.scope) && !self.peek_token_is(&Token::LBrace) {
                 let type_ = self.parse_type()?;
 
-                if self.peek_token_is(&Token::Semicolon) {
-                    stmts.push(self.var_decl(type_)?);
-                } else {
-                    self.function(type_, false)?;
+                if let Some(stmt) = self.parse_symbol(type_, false)? {
+                    stmts.push(stmt);
                 }
             } else {
                 match &self.cur_token {
@@ -314,9 +317,17 @@ impl Parser {
                 }))?;
         }
 
+        let expr = if self.cur_token_is(&Token::Assign) {
+            self.expect(&Token::Assign)?;
+
+            Some(self.expr(Precedence::default())?)
+        } else {
+            None
+        };
+
         self.expect(&Token::Semicolon)?;
 
-        Ok(Stmt::VarDecl(StmtVarDecl::new(type_, name, None)))
+        Ok(Stmt::VarDecl(StmtVarDecl::new(type_, name, expr)))
     }
 
     fn function(
