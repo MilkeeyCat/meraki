@@ -13,8 +13,7 @@ struct Baz {
 }
 
 u8 main() {
-	Baz baz;
-	baz = Baz {
+	Baz baz = Baz {
 		bar: Bar {
 			foo: Foo {
 				value: 6,
@@ -23,7 +22,6 @@ u8 main() {
 		},
 		value: 256,
 	};
-
 	baz.value = 42;
 
 	return (u8)baz.value + baz.bar.value + baz.bar.foo.value;
