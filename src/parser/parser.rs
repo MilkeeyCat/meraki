@@ -319,8 +319,15 @@ impl Parser {
 
         let expr = if self.cur_token_is(&Token::Assign) {
             self.expect(&Token::Assign)?;
+            let expr = self.expr(Precedence::default())?;
 
-            Some(self.expr(Precedence::default())?)
+            self.scope
+                .find_symbol(&name)
+                .unwrap()
+                .type_()
+                .assign(expr.type_(&self.scope)?)?;
+
+            Some(expr)
         } else {
             None
         };
