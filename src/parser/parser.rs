@@ -674,20 +674,17 @@ impl Parser {
     fn grouped_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect(&Token::LParen)?;
 
-        match &self.cur_token {
-            Token::U8 | Token::I8 | Token::U16 | Token::I16 | Token::Bool | Token::Void => {
-                let type_ = self.parse_type()?;
-                self.expect(&Token::RParen)?;
-                let expr = self.expr(Precedence::Cast)?;
+        if self.cur_token.is_type(&self.scope) {
+            let type_ = self.parse_type()?;
+            self.expect(&Token::RParen)?;
+            let expr = self.expr(Precedence::Cast)?;
 
-                Ok(Expr::Cast(ExprCast::new(type_, Box::new(expr))))
-            }
-            _ => {
-                let expr = self.expr(Precedence::default());
-                self.expect(&Token::RParen)?;
+            Ok(Expr::Cast(ExprCast::new(type_, Box::new(expr))))
+        } else {
+            let expr = self.expr(Precedence::default())?;
+            self.expect(&Token::RParen)?;
 
-                expr
-            }
+            Ok(expr)
         }
     }
 
