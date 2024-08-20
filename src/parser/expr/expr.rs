@@ -14,8 +14,7 @@ pub trait Expression {
 }
 
 pub trait LValue {
-    fn dest<'a>(&self, arch: &mut Arch, scope: &'a Scope)
-        -> Result<MoveDestination<'a>, ArchError>;
+    fn dest<'a>(&self, arch: &mut Arch, scope: &Scope) -> Result<MoveDestination, ArchError>;
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -27,6 +26,7 @@ pub enum Expr {
     Ident(ExprIdent),
     Struct(ExprStruct),
     StructAccess(ExprStructAccess),
+    ArrayAccess(ExprArrayAccess),
     FunctionCall(ExprFunctionCall),
 }
 
@@ -40,6 +40,7 @@ impl Expression for Expr {
             Self::Cast(cast) => cast.type_(scope),
             Self::Struct(expr_struct) => expr_struct.type_(scope),
             Self::StructAccess(expr_struct_access) => expr_struct_access.type_(scope),
+            Self::ArrayAccess(expr) => expr.type_(scope),
             Self::FunctionCall(function_call) => {
                 match scope
                     .find_symbol(&function_call.name)
@@ -56,14 +57,8 @@ impl Expression for Expr {
 impl Expr {
     pub fn lvalue(&self) -> bool {
         match self {
-            Self::Binary(_) => false,
-            Self::Unary(_) => false,
-            Self::Lit(_) => false,
-            Self::Ident(_) => true,
-            Self::Cast(_) => false,
-            Self::Struct(_) => false,
-            Self::StructAccess(_) => true,
-            Self::FunctionCall(_) => false,
+            Self::StructAccess(_) | Self::ArrayAccess(_) | Self::Ident(_) => true,
+            _ => false,
         }
     }
 }
@@ -167,11 +162,7 @@ impl Expression for ExprIdent {
 }
 
 impl LValue for ExprIdent {
-    fn dest<'a>(
-        &self,
-        arch: &mut Arch,
-        scope: &'a Scope,
-    ) -> Result<MoveDestination<'a>, ArchError> {
+    fn dest(&self, arch: &mut Arch, scope: &Scope) -> Result<MoveDestination, ArchError> {
         Ok(scope
             .find_symbol(&self.0)
             .ok_or(SymbolTableError::NotFound(self.0.clone()))?
@@ -246,16 +237,12 @@ impl Expression for ExprStructAccess {
 }
 
 impl LValue for ExprStructAccess {
-    fn dest<'a>(
-        &self,
-        arch: &mut Arch,
-        scope: &'a Scope,
-    ) -> Result<MoveDestination<'a>, ArchError> {
+    fn dest(&self, arch: &mut Arch, scope: &Scope) -> Result<MoveDestination, ArchError> {
         let mut dest = match self.expr.as_ref() {
             Expr::Ident(expr) => expr.dest(arch, scope)?,
             Expr::StructAccess(expr) => expr.dest(arch, scope)?,
             Expr::Unary(expr) => expr.dest(arch, scope)?,
-            _ => panic!(),
+            _ => unreachable!(),
         };
         let (field_offset, field_size) = match self.expr.type_(scope)? {
             Type::Struct(s) => match scope.find_type(&s).ok_or(TypeError::Nonexistent(s))? {
@@ -309,6 +296,18 @@ impl ExprFunctionCall {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExprArrayAccess {
+    pub expr: Box<Expr>,
+    pub index: Box<Expr>,
+}
+
+impl Expression for ExprArrayAccess {
+    fn type_(&self, scope: &Scope) -> Result<Type, ExprError> {
+        Ok(self.expr.type_(scope)?.inner()?)
+    }
+}
+
 impl Expression for ExprStruct {
     fn type_(&self, _: &Scope) -> Result<Type, ExprError> {
         Ok(Type::Struct(self.name.clone()))
@@ -322,11 +321,7 @@ pub struct ExprUnary {
 }
 
 impl LValue for ExprUnary {
-    fn dest<'a>(
-        &self,
-        arch: &mut Arch,
-        scope: &'a Scope,
-    ) -> Result<MoveDestination<'a>, ArchError> {
+    fn dest(&self, arch: &mut Arch, scope: &Scope) -> Result<MoveDestination, ArchError> {
         let expr_dest = match self.expr.as_ref() {
             Expr::Ident(expr) => expr.dest(arch, scope)?,
             Expr::StructAccess(expr) => expr.dest(arch, scope)?,
@@ -348,7 +343,7 @@ impl LValue for ExprUnary {
         Ok(MoveDestination::Register(locations::Register {
             register: r,
             offset: Some(Offset(0)),
-            size: self.expr.type_(scope)?.pointed_type()?.size(arch, scope)?,
+            size: self.expr.type_(scope)?.inner()?.size(arch, scope)?,
         }))
     }
 }
@@ -370,7 +365,7 @@ impl Expression for ExprUnary {
             }
             UnOp::Not => Type::Bool,
             UnOp::Address => Type::Ptr(Box::new(self.expr.type_(scope)?)),
-            UnOp::Deref => self.expr.type_(scope)?.pointed_type()?,
+            UnOp::Deref => self.expr.type_(scope)?.inner()?,
         })
     }
 }

@@ -40,8 +40,8 @@ impl std::fmt::Display for Offset {
 }
 
 #[derive(Clone, Debug)]
-pub struct Global<'a> {
-    pub label: &'a str,
+pub struct Global {
+    pub label: String,
     pub size: usize,
     pub offset: Option<Offset>,
 }
@@ -60,14 +60,14 @@ pub struct Register {
 }
 
 #[derive(Clone, Debug)]
-pub enum MoveSource<'a> {
-    Global(Global<'a>, bool),
+pub enum MoveSource {
+    Global(Global, bool),
     Local(Local, bool),
     Register(Register, bool),
     Lit(ExprLit),
 }
 
-impl<'a> MoveSource<'a> {
+impl MoveSource {
     pub fn signed(&self) -> bool {
         match self {
             Self::Global(_, signed) => *signed,
@@ -88,14 +88,14 @@ impl<'a> MoveSource<'a> {
 }
 
 #[derive(Clone, Debug)]
-pub enum MoveDestination<'a> {
-    Global(Global<'a>),
+pub enum MoveDestination {
+    Global(Global),
     Local(Local),
     Register(Register),
 }
 
-impl<'a> MoveDestination<'a> {
-    pub fn to_source(self, signed: bool) -> MoveSource<'a> {
+impl MoveDestination {
+    pub fn to_source(self, signed: bool) -> MoveSource {
         match self {
             MoveDestination::Global(global) => MoveSource::Global(global, signed),
             MoveDestination::Local(local) => MoveSource::Local(local, signed),
@@ -136,6 +136,20 @@ impl<'a> MoveDestination<'a> {
             }
             MoveDestination::Register(register) => {
                 register.size = size;
+            }
+        };
+    }
+
+    pub fn set_offset(&mut self, offset: Offset) {
+        match self {
+            MoveDestination::Global(global) => {
+                global.offset = Some(offset);
+            }
+            MoveDestination::Local(local) => {
+                local.offset = offset;
+            }
+            MoveDestination::Register(register) => {
+                register.offset = Some(offset);
             }
         };
     }

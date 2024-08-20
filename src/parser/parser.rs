@@ -2,8 +2,8 @@ use super::{
     expr::{ExprBinary, ExprLit, ExprUnary},
     precedence::Precedence,
     stmt::StmtReturn,
-    BinOp, Expr, ExprCast, ExprIdent, ExprStruct, Expression, ParserError, Stmt, StmtFunction,
-    StmtVarDecl, UIntLitRepr, UnOp,
+    BinOp, Expr, ExprArrayAccess, ExprCast, ExprIdent, ExprStruct, Expression, ParserError, Stmt,
+    StmtFunction, StmtVarDecl, UIntLitRepr, UnOp,
 };
 use crate::{
     codegen::locations::Offset,
@@ -12,7 +12,7 @@ use crate::{
     scope::Scope,
     symbol_table::{Symbol, SymbolFunction, SymbolGlobal, SymbolLocal, SymbolParam},
     type_table::{self, TypeStruct},
-    types::{Type, TypeError},
+    types::{Type, TypeArray, TypeError},
 };
 use std::collections::HashMap;
 
@@ -64,6 +64,7 @@ impl Parser {
                 (Token::NotEqual, Self::bin_expr),
                 (Token::LParen, Self::bin_expr),
                 (Token::Period, Self::struct_access),
+                (Token::LBracket, Self::array_access),
             ]),
         })
     }
@@ -82,19 +83,6 @@ impl Parser {
 
     fn peek_token_is(&self, token: &Token) -> bool {
         &self.peek_token == token
-    }
-
-    fn expect_peek(&mut self, token: &Token) -> Result<(), ParserError> {
-        if self.peek_token_is(token) {
-            self.next_token()?;
-
-            Ok(())
-        } else {
-            Err(ParserError::UnexpectedToken(
-                token.to_owned(),
-                self.peek_token.clone(),
-            ))
-        }
     }
 
     fn expect(&mut self, token: &Token) -> Result<(), ParserError> {
@@ -139,9 +127,8 @@ impl Parser {
         func_definition: bool,
     ) -> Result<Option<Stmt>, ParserError> {
         match &self.peek_token {
-            Token::Semicolon | Token::Assign => Ok(Some(self.var_decl(type_)?)),
             Token::LParen => self.function(type_, func_definition),
-            _ => unreachable!(),
+            _ => Ok(Some(self.var_decl(type_)?)),
         }
     }
 
@@ -288,17 +275,39 @@ impl Parser {
         }))
     }
 
-    fn var_decl(&mut self, type_: Type) -> Result<Stmt, ParserError> {
+    fn array_type(&mut self, type_: &mut Type) -> Result<(), ParserError> {
+        if self.cur_token_is(&Token::LBracket) {
+            self.expect(&Token::LBracket)?;
+
+            match self.next_token()? {
+                Token::Integer(int) => {
+                    let length: usize = str::parse(&int).unwrap();
+                    self.expect(&Token::RBracket)?;
+
+                    *type_ = Type::Array(TypeArray {
+                        type_: Box::new(type_.clone()),
+                        length,
+                    });
+                }
+                token => panic!("Expected integer, got {token}"),
+            }
+        }
+
+        Ok(())
+    }
+
+    fn var_decl(&mut self, mut type_: Type) -> Result<Stmt, ParserError> {
         if let Type::Void = type_ {
             return Err(ParserError::Type(TypeError::VoidVariable));
         }
-
         let name = match self.next_token()? {
             Token::Ident(ident) => ident,
             _ => {
                 return Err(ParserError::ParseType(self.cur_token.to_owned()));
             }
         };
+
+        self.array_type(&mut type_)?;
 
         if self.scope.local() {
             self.scope
@@ -621,6 +630,22 @@ impl Parser {
                 _ => panic!("sdasdasd"),
             },
             _ => panic!("sdasdasd"),
+        }
+    }
+
+    fn array_access(&mut self, expr: Expr) -> Result<Expr, ParserError> {
+        match expr.type_(&self.scope)? {
+            Type::Array(_) => {
+                self.expect(&Token::LBracket)?;
+                let index = self.expr(Precedence::Access)?;
+                self.expect(&Token::RBracket)?;
+
+                Ok(Expr::ArrayAccess(ExprArrayAccess {
+                    expr: Box::new(expr),
+                    index: Box::new(index),
+                }))
+            }
+            type_ => panic!("Cannot use [] syntax for type {type_}"),
         }
     }
 

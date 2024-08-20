@@ -26,7 +26,7 @@ impl From<&Token> for Precedence {
             Equal | NotEqual => Self::Equality,
             Assign => Self::Assign,
             LParen => Self::Call,
-            Period => Self::Access,
+            Period | LBracket => Self::Access,
             _ => Self::Lowest,
         }
     }

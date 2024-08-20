@@ -2,6 +2,12 @@ use super::TypeError;
 use crate::{archs::Arch, scope::Scope};
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub struct TypeArray {
+    pub type_: Box<Type>,
+    pub length: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Type {
     U8,
     U16,
@@ -17,6 +23,7 @@ pub enum Type {
     Void,
     Struct(String),
     Ptr(Box<Type>),
+    Array(TypeArray),
 }
 
 impl std::fmt::Display for Type {
@@ -36,6 +43,7 @@ impl std::fmt::Display for Type {
             Self::Void => write!(f, "void"),
             Self::Ptr(type_) => write!(f, "{type_}*"),
             Self::Struct(name) => write!(f, "struct '{name}'"),
+            Self::Array(array) => write!(f, "{}[{}]", array.type_, array.length),
         }
     }
 }
@@ -170,13 +178,15 @@ impl Type {
             {
                 crate::type_table::Type::Struct(structure) => structure.size(arch, scope)?,
             },
+            Type::Array(array) => array.type_.size(arch, scope)? * array.length,
             type_ => arch.size(type_),
         })
     }
 
-    pub fn pointed_type(&self) -> Result<Type, TypeError> {
+    pub fn inner(&self) -> Result<Type, TypeError> {
         match self {
             Self::Ptr(type_) => Ok(type_.as_ref().to_owned()),
+            Self::Array(array) => Ok(*array.type_.clone()),
             type_ => Err(TypeError::Deref(type_.clone())),
         }
     }

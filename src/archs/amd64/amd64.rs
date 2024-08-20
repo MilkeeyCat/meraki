@@ -75,8 +75,8 @@ impl Architecture for Amd64 {
     }
 
     #[inline]
-    fn alignment(&self) -> usize {
-        16
+    fn word_size(&self) -> usize {
+        WORD_SIZE
     }
 
     fn align(&self, offset: usize, size: usize) -> usize {
@@ -458,6 +458,26 @@ impl Architecture for Amd64 {
         label
     }
 
+    fn array_offset(
+        &mut self,
+        dest: &MoveDestination,
+        base: &MoveDestination,
+        index: &MoveDestination,
+        size: usize,
+    ) {
+        match base {
+            MoveDestination::Local(local) => {
+                self.buf.push_str(&formatdoc!(
+                    "
+                    \tlea {dest}, [rbp{} + {index} * {size}]
+                    ",
+                    local.offset
+                ));
+            }
+            _ => todo!("Currently can access only local arrays xd"),
+        }
+    }
+
     fn finish(&mut self) -> Vec<u8> {
         self.literals.iter().for_each(|(label, value)| {
             self.buf.insert_str(
@@ -578,7 +598,7 @@ impl Amd64 {
         src: Global,
         dest: MoveDestination,
         signed: bool,
-        scope: &Scope,
+        _scope: &Scope,
     ) -> Result<(), ArchError> {
         self.mov_impl((&src, src.size), (&dest, dest.size()), signed);
 
@@ -658,7 +678,7 @@ impl std::fmt::Display for Local {
     }
 }
 
-impl std::fmt::Display for Global<'_> {
+impl std::fmt::Display for Global {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.offset {
             Some(offset) => {
@@ -677,7 +697,7 @@ impl std::fmt::Display for Global<'_> {
     }
 }
 
-impl std::fmt::Display for MoveDestination<'_> {
+impl std::fmt::Display for MoveDestination {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Global(global) => write!(f, "{global}"),
@@ -687,7 +707,7 @@ impl std::fmt::Display for MoveDestination<'_> {
     }
 }
 
-impl std::fmt::Display for MoveSource<'_> {
+impl std::fmt::Display for MoveSource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Global(global, _) => write!(f, "{global}"),
@@ -719,7 +739,7 @@ mod test {
                     MoveDestination::Global(locations::Global {
                         size: 4,
                         offset: Some(Offset(-5)),
-                        label: "foo",
+                        label: "foo".to_string(),
                     }),
                     ExprLit::UInt(UIntLitRepr::new(15_000)),
                 ),
@@ -730,7 +750,7 @@ mod test {
                     MoveDestination::Global(locations::Global {
                         size: 8,
                         offset: None,
-                        label: "foo",
+                        label: "foo".to_string(),
                     }),
                     ExprLit::Int(IntLitRepr::new(-5)),
                 ),
@@ -800,7 +820,7 @@ mod test {
                     MoveDestination::Global(locations::Global {
                         size: 4,
                         offset: Some(Offset(-5)),
-                        label: "foo",
+                        label: "foo".to_string(),
                     }),
                     locations::Register {
                         offset: None,
@@ -816,7 +836,7 @@ mod test {
                     MoveDestination::Global(locations::Global {
                         size: 8,
                         offset: None,
-                        label: "foo",
+                        label: "foo".to_string(),
                     }),
                     locations::Register {
                         offset: None,
@@ -832,7 +852,7 @@ mod test {
                     MoveDestination::Global(locations::Global {
                         size: 8,
                         offset: None,
-                        label: "foo",
+                        label: "foo".to_string(),
                     }),
                     locations::Register {
                         offset: None,

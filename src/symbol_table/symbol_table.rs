@@ -52,7 +52,7 @@ impl Symbol {
             ),
             Self::Global(symbol) => MoveSource::Global(
                 Global {
-                    label: &symbol.name,
+                    label: symbol.name.clone(),
                     size: symbol.type_.size(arch, scope)?,
                     offset: None,
                 },
@@ -76,7 +76,7 @@ impl Symbol {
                 size: symbol.type_.size(&arch, scope)?,
             }),
             Symbol::Global(symbol) => MoveDestination::Global(Global {
-                label: &symbol.name,
+                label: symbol.name.clone(),
                 size: symbol.type_.size(&arch, scope)?,
                 offset: None,
             }),

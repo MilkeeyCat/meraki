@@ -16,7 +16,7 @@ pub trait Architecture: ArchitectureClone {
     fn new() -> Self
     where
         Self: Sized;
-    fn alignment(&self) -> usize;
+    fn word_size(&self) -> usize;
     fn align(&self, offset: usize, size: usize) -> usize;
     fn size(&self, type_: &Type) -> usize;
     fn alloc(&mut self) -> Result<Register, AllocatorError>;
@@ -58,6 +58,13 @@ pub trait Architecture: ArchitectureClone {
     fn lea(&mut self, dest: &Register, dest2: &MoveDestination);
     fn shrink_stack(&mut self, size: usize);
     fn define_literal(&mut self, literal: String) -> String;
+    fn array_offset(
+        &mut self,
+        dest: &MoveDestination,
+        base: &MoveDestination,
+        index: &MoveDestination,
+        size: usize,
+    );
     fn finish(&mut self) -> Vec<u8>;
 }
 
