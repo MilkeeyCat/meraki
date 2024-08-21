@@ -201,60 +201,25 @@ pub struct ExprStructAccess {
 
 impl Expression for ExprStructAccess {
     fn type_(&self, scope: &Scope) -> Result<Type, ExprError> {
-        match self.expr.as_ref() {
-            Expr::Ident(expr) => match expr.type_(&scope)? {
-                Type::Struct(struct_name) => {
-                    match scope
-                        .find_type(&struct_name)
-                        .ok_or(TypeError::Nonexistent(struct_name.to_owned()))?
-                    {
-                        type_table::Type::Struct(type_struct) => {
-                            Ok(type_struct.get_field_type(&self.field).unwrap().to_owned())
-                        }
+        match self.expr.type_(scope)? {
+            Type::Struct(struct_name) => {
+                match scope
+                    .find_type(&struct_name)
+                    .ok_or(TypeError::Nonexistent(struct_name.to_owned()))?
+                {
+                    type_table::Type::Struct(type_struct) => {
+                        Ok(type_struct.get_field_type(&self.field).unwrap().to_owned())
                     }
                 }
-                _ => todo!(),
-            },
-            Expr::StructAccess(expr) => match expr.type_(&scope)? {
-                Type::Struct(struct_name) => {
-                    match scope
-                        .find_type(&struct_name)
-                        .ok_or(TypeError::Nonexistent(struct_name.to_owned()))?
-                    {
-                        type_table::Type::Struct(type_struct) => {
-                            Ok(type_struct.get_field_type(&self.field).unwrap().to_owned())
-                        }
-                    }
-                }
-                _ => todo!(),
-            },
-            Expr::Unary(expr) => match expr.type_(&scope)? {
-                Type::Struct(struct_name) => {
-                    match scope
-                        .find_type(&struct_name)
-                        .ok_or(TypeError::Nonexistent(struct_name.to_owned()))?
-                    {
-                        type_table::Type::Struct(type_struct) => {
-                            Ok(type_struct.get_field_type(&self.field).unwrap().to_owned())
-                        }
-                    }
-                }
-                _ => todo!(),
-            },
-
-            expr => panic!("Expression {expr:?} can't be used to access struct field value"),
+            }
+            _ => unreachable!(),
         }
     }
 }
 
 impl LValue for ExprStructAccess {
     fn dest(&self, codegen: &mut CodeGen) -> Result<MoveDestination, ArchError> {
-        let mut dest = match self.expr.as_ref() {
-            Expr::Ident(expr) => expr.dest(codegen)?,
-            Expr::StructAccess(expr) => expr.dest(codegen)?,
-            Expr::Unary(expr) => expr.dest(codegen)?,
-            _ => unreachable!(),
-        };
+        let mut dest = self.expr.dest(codegen)?.expect("Uh oh");
         let (field_offset, field_size) = match self.expr.type_(&codegen.scope)? {
             Type::Struct(s) => match codegen
                 .scope
