@@ -522,12 +522,14 @@ impl Parser {
                             .iter()
                             .map(|expr| expr.type_(&self.scope))
                             .collect::<Result<Vec<_>, _>>()?;
-                        if function_params != args_types {
-                            return Err(ParserError::FunctionArguments(
-                                function_name,
-                                function_params,
-                                args_types,
-                            ));
+                        for (param_type, arg_type) in function_params.iter().zip(&args_types) {
+                            if let Err(_) = param_type.to_owned().assign(arg_type.to_owned()) {
+                                return Err(ParserError::FunctionArguments(
+                                    function_name,
+                                    function_params,
+                                    args_types,
+                                ));
+                            }
                         }
 
                         Ok(Expr::FunctionCall(ExprFunctionCall::new(ident.0, args)))

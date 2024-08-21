@@ -135,6 +135,15 @@ impl Type {
             return Ok(self);
         }
 
+        match (&self, &type_) {
+            (Type::Ptr(pointee), Type::Array(array))
+                if pointee.as_ref() == array.type_.as_ref() =>
+            {
+                return Ok(self);
+            }
+            _ => {}
+        }
+
         if self.int() && type_.int() {
             // Not possible to assign signed int to unsigned but possible to assigned unsigned to signed
             if !self.signed() && type_.signed() {

@@ -77,18 +77,15 @@ impl ExprBinary {
 }
 
 impl Expression for ExprBinary {
-    fn type_(&self, symtable: &Scope) -> Result<Type, ExprError> {
+    fn type_(&self, scope: &Scope) -> Result<Type, ExprError> {
         match &self.op {
             BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div => {
-                let left_type = self.left.as_ref().type_(symtable)?;
-                let right_type = self.right.as_ref().type_(symtable)?;
+                let left = self.left.as_ref().type_(scope)?;
+                let right = self.right.as_ref().type_(scope)?;
 
-                Ok(Type::promote(left_type, right_type)?)
+                Ok(Type::promote(left, right)?)
             }
-            BinOp::Assign => Ok(self
-                .left
-                .type_(symtable)?
-                .assign(self.right.type_(symtable)?)?),
+            BinOp::Assign => Ok(self.left.type_(scope)?.assign(self.right.type_(scope)?)?),
             BinOp::LessThan
             | BinOp::GreaterThan
             | BinOp::LessEqual

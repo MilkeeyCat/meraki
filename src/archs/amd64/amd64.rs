@@ -35,7 +35,8 @@ impl From<&Type> for ParamClass {
             | Type::Usize
             | Type::Isize
             | Type::Bool
-            | Type::Ptr(_) => Self::Integer,
+            | Type::Ptr(_)
+            | Type::Array(_) => Self::Integer,
             _ => unreachable!("Unsupported parameter type"),
         }
     }

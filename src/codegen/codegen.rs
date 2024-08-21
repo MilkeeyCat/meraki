@@ -108,7 +108,7 @@ impl CodeGen {
                             &r,
                             &MoveDestination::Global(locations::Global {
                                 label,
-                                size: 8,
+                                size: self.arch.word_size(),
                                 offset: None,
                             }),
                         );
@@ -116,7 +116,7 @@ impl CodeGen {
                             MoveSource::Register(
                                 locations::Register {
                                     register: r,
-                                    size: 8,
+                                    size: self.arch.word_size(),
                                     offset: None,
                                 },
                                 false,
@@ -135,17 +135,34 @@ impl CodeGen {
                 }
             }
             Expr::Ident(ident) => {
-                let symbol = self
-                    .scope
-                    .find_symbol(&ident.0)
-                    .ok_or(SymbolTableError::NotFound(ident.0))?;
-
                 if let Some(dest) = dest {
-                    let arch = self.arch.clone();
-                    //FIXME: dat's baaaaaad ^
-                    let src = symbol.to_source(&arch, &self.scope)?;
+                    let symbol = self
+                        .scope
+                        .find_symbol(&ident.0)
+                        .ok_or(SymbolTableError::NotFound(ident.0.clone()))?;
+                    let dst = symbol.to_dest(&self.arch, &self.scope)?;
 
-                    self.arch.mov(src, dest, &self.scope)?;
+                    // If the ident is of type pointer, the address of variable has to be moved, not the value
+                    if let Type::Array(_) = ident.type_(&self.scope)? {
+                        let r = self.arch.alloc()?;
+
+                        self.arch.lea(&r, &dst);
+                        self.arch.mov(
+                            MoveSource::Register(
+                                locations::Register {
+                                    size: self.arch.word_size(),
+                                    offset: None,
+                                    register: r,
+                                },
+                                false,
+                            ),
+                            dest,
+                            &self.scope,
+                        )?;
+                        self.arch.free(r)?;
+                    } else {
+                        self.arch.mov(dst.to_source(false), dest, &self.scope)?;
+                    }
                 }
             }
             Expr::Cast(cast_expr) => {
@@ -457,12 +474,12 @@ impl CodeGen {
             let type_ = expr.type_(&self.scope)?;
             let r = self.arch.alloc()?;
 
-            self.expr(expr, Some(r.to_dest(type_.size(&self.arch, &self.scope)?)))?;
+            self.expr(expr, Some(r.to_dest(self.arch.word_size())))?;
             stack_size += self.arch.push_arg(
                 MoveSource::Register(
                     locations::Register {
                         register: r,
-                        size: type_.size(&self.arch, &self.scope)?,
+                        size: self.arch.word_size(),
                         offset: None,
                     },
                     type_.signed(),
