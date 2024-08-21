@@ -1,7 +1,7 @@
 use crate::{
     archs::{Arch, ArchError, Architecture},
     codegen::locations::{self, Global, Local, MoveDestination, MoveSource, Offset},
-    parser::{CmpOp, ExprLit, Expression},
+    parser::{CmpOp, ExprLit, Expression, UIntLitRepr},
     register::{
         allocator::{AllocatorError, RegisterAllocator},
         Register,
@@ -192,7 +192,7 @@ impl Architecture for Amd64 {
 
     //NOTE: if mafs doesn't works, prolly because of this
     fn div(&mut self, dest: &MoveDestination, src: &MoveSource) {
-        self.mov_impl((&dest, dest.size()), ("rax", 8), src.signed());
+        self.mov_impl((&dest, dest.size()), ("rax", WORD_SIZE), src.signed());
         self.buf.push_str(&formatdoc!(
             "
             \tcqo
@@ -294,7 +294,7 @@ impl Architecture for Amd64 {
     }
 
     fn ret(&mut self, src: MoveSource) -> Result<(), TypeError> {
-        self.mov_impl((&src, src.size()), ("rax", 8), src.signed());
+        self.mov_impl((&src, src.size()), ("rax", WORD_SIZE), src.signed());
 
         Ok(())
     }
@@ -461,22 +461,23 @@ impl Architecture for Amd64 {
 
     fn array_offset(
         &mut self,
-        dest: &MoveDestination,
         base: &MoveDestination,
         index: &MoveDestination,
         size: usize,
+        scope: &Scope,
     ) {
-        match base {
-            MoveDestination::Local(local) => {
-                self.buf.push_str(&formatdoc!(
-                    "
-                    \tlea {dest}, [rbp{} + {index} * {size}]
-                    ",
-                    local.offset
-                ));
-            }
-            _ => todo!("Currently can access only local arrays xd"),
-        }
+        let r = self.alloc().unwrap();
+
+        self.mov_literal(
+            ExprLit::UInt(UIntLitRepr::new(size as u64)),
+            r.to_dest(WORD_SIZE),
+            scope,
+        )
+        .unwrap();
+        self.mul(&index, &r.to_dest(WORD_SIZE).to_source(false));
+        self.add(base, &index.to_owned().to_source(false));
+
+        self.free(r).unwrap();
     }
 
     fn finish(&mut self) -> Vec<u8> {
@@ -524,7 +525,7 @@ impl Amd64 {
         scope: &Scope,
     ) -> Result<(), ArchError> {
         self.mov_impl(
-            (&literal, 8),
+            (&literal, WORD_SIZE),
             (&dest, dest.size()),
             literal.type_(scope)?.signed(),
         );

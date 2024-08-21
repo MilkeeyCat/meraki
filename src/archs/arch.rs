@@ -60,10 +60,10 @@ pub trait Architecture: ArchitectureClone {
     fn define_literal(&mut self, literal: String) -> String;
     fn array_offset(
         &mut self,
-        dest: &MoveDestination,
         base: &MoveDestination,
         index: &MoveDestination,
         size: usize,
+        scope: &Scope,
     );
     fn finish(&mut self) -> Vec<u8>;
 }

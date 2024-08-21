@@ -325,28 +325,25 @@ impl Expression for ExprArrayAccess {
 
 impl LValue for ExprArrayAccess {
     fn dest(&self, codegen: &mut CodeGen) -> Result<MoveDestination, ArchError> {
-        let pointed_type_size = self
-            .expr
-            .type_(&codegen.scope)?
-            .inner()?
-            .size(&codegen.arch, &codegen.scope)?;
+        let mut base = self.expr.dest(codegen)?.unwrap();
+        let index = codegen.arch.alloc()?;
 
-        let base = self.expr.dest(codegen)?.expect("Everything went tits up");
-        let r = codegen.arch.alloc()?;
-        let r2 = codegen.arch.alloc()?;
-        let index = r.to_dest(codegen.arch.word_size());
-        let mut dest = r2.to_dest(codegen.arch.word_size());
-
+        base.set_size(8);
         codegen
-            .expr(*self.index.clone(), Some(index.clone()))
+            .expr(
+                *self.index.clone(),
+                Some(index.to_dest(codegen.arch.word_size())),
+            )
             .unwrap();
-        codegen
-            .arch
-            .array_offset(&dest, &base, &index, pointed_type_size);
-        dest.set_size(pointed_type_size);
-        dest.set_offset(Offset::default());
+        codegen.arch.array_offset(
+            &base,
+            &index.to_dest(codegen.arch.word_size()),
+            self.type_(&codegen.scope)?
+                .size(&codegen.arch, &codegen.scope)?,
+            &codegen.scope,
+        );
 
-        Ok(dest)
+        Ok(base)
     }
 }
 
