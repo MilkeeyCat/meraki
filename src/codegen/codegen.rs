@@ -16,8 +16,8 @@ use crate::{
 };
 
 pub struct CodeGen {
-    arch: Arch,
-    scope: Scope,
+    pub arch: Arch,
+    pub scope: Scope,
 }
 
 impl CodeGen {
@@ -95,7 +95,11 @@ impl CodeGen {
         Ok(())
     }
 
-    fn expr(&mut self, expr: Expr, mut dest: Option<MoveDestination>) -> Result<(), CodeGenError> {
+    pub fn expr(
+        &mut self,
+        expr: Expr,
+        mut dest: Option<MoveDestination>,
+    ) -> Result<(), CodeGenError> {
         match expr {
             Expr::Binary(bin_expr) => self.bin_expr(bin_expr, dest)?,
             Expr::Lit(lit) => {
@@ -218,15 +222,10 @@ impl CodeGen {
     ) -> Result<(), CodeGenError> {
         match &expr.op {
             BinOp::Assign => {
-                let lvalue_dest = match *expr.left {
-                    Expr::Ident(expr) => expr.dest(&mut self.arch, &self.scope)?,
-                    Expr::StructAccess(expr) => expr.dest(&mut self.arch, &self.scope)?,
-                    Expr::Unary(expr) => expr.dest(&mut self.arch, &self.scope)?,
-                    Expr::ArrayAccess(expr) => self.array_access_dest(expr)?,
-                    expr => {
-                        return Err(CodeGenError::Assign(expr));
-                    }
-                };
+                let lvalue_dest = expr
+                    .left
+                    .dest(self)?
+                    .ok_or(CodeGenError::Assign(*expr.left))?;
 
                 let type_ = expr.right.type_(&self.scope)?;
                 self.expr(*expr.right, Some(lvalue_dest.clone()))?;
@@ -405,8 +404,8 @@ impl CodeGen {
             }
             UnOp::Address => {
                 let dest2 = match unary_expr.expr.as_ref() {
-                    Expr::Ident(expr) => expr.dest(&mut self.arch, &self.scope)?,
-                    Expr::StructAccess(expr) => expr.dest(&mut self.arch, &self.scope)?,
+                    Expr::Ident(expr) => expr.dest(self)?,
+                    Expr::StructAccess(expr) => expr.dest(self)?,
                     _ => panic!(),
                 };
                 let r = self.arch.alloc()?;
@@ -427,8 +426,8 @@ impl CodeGen {
             }
             UnOp::Deref => {
                 let dest2 = match unary_expr.expr.as_ref() {
-                    Expr::Ident(expr) => expr.dest(&mut self.arch, &self.scope)?,
-                    Expr::StructAccess(expr) => expr.dest(&mut self.arch, &self.scope)?,
+                    Expr::Ident(expr) => expr.dest(self)?,
+                    Expr::StructAccess(expr) => expr.dest(self)?,
                     _ => panic!(),
                 };
                 let r = self.arch.alloc()?;
@@ -535,7 +534,7 @@ impl CodeGen {
         dest: MoveDestination,
     ) -> Result<(), CodeGenError> {
         let src = expr
-            .dest(&mut self.arch, &self.scope)?
+            .dest(self)?
             .to_source(expr.type_(&self.scope)?.signed());
 
         self.arch.mov(src, dest, &self.scope)?;
@@ -543,44 +542,14 @@ impl CodeGen {
         Ok(())
     }
 
-    fn array_access_dest(
-        &mut self,
-        expr: ExprArrayAccess,
-    ) -> Result<MoveDestination, CodeGenError> {
-        let pointed_type_size = expr
-            .expr
-            .type_(&self.scope)?
-            .inner()?
-            .size(&self.arch, &self.scope)?;
-        let base = match *expr.expr {
-            Expr::Ident(expr) => expr.dest(&mut self.arch, &self.scope)?,
-            Expr::StructAccess(expr) => expr.dest(&mut self.arch, &self.scope)?,
-            Expr::Unary(expr) => expr.dest(&mut self.arch, &self.scope)?,
-            expr => {
-                return Err(CodeGenError::Assign(expr));
-            }
-        };
-        let r = self.arch.alloc()?;
-        let r2 = self.arch.alloc()?;
-        let index = r.to_dest(self.arch.word_size());
-        let mut dest = r2.to_dest(self.arch.word_size());
-
-        self.expr(*expr.index, Some(index.clone()))?;
-        self.arch
-            .array_offset(&dest, &base, &index, pointed_type_size);
-        dest.set_size(pointed_type_size);
-        dest.set_offset(Offset::default());
-
-        Ok(dest)
-    }
-
     fn array_access(
         &mut self,
         expr: ExprArrayAccess,
         dest: MoveDestination,
     ) -> Result<(), CodeGenError> {
-        let signed = expr.type_(&self.scope)?.signed();
-        let src = self.array_access_dest(expr)?.to_source(signed);
+        let src = expr
+            .dest(self)?
+            .to_source(expr.type_(&self.scope)?.signed());
 
         self.arch.mov(src, dest, &self.scope)?;
 

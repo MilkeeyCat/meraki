@@ -1,7 +1,10 @@
 use super::{int_repr::UIntLitRepr, ExprError, IntLitRepr};
 use crate::{
-    archs::{Arch, ArchError},
-    codegen::locations::{self, MoveDestination, Offset},
+    archs::ArchError,
+    codegen::{
+        locations::{self, MoveDestination, Offset},
+        CodeGen,
+    },
     parser::op::{BinOp, UnOp},
     scope::Scope,
     symbol_table::{Symbol, SymbolTableError},
@@ -14,7 +17,7 @@ pub trait Expression {
 }
 
 pub trait LValue {
-    fn dest<'a>(&self, arch: &mut Arch, scope: &Scope) -> Result<MoveDestination, ArchError>;
+    fn dest(&self, codegen: &mut CodeGen) -> Result<MoveDestination, ArchError>;
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -59,6 +62,16 @@ impl Expr {
         match self {
             Self::StructAccess(_) | Self::ArrayAccess(_) | Self::Ident(_) => true,
             _ => false,
+        }
+    }
+
+    pub fn dest(&self, codegen: &mut CodeGen) -> Result<Option<MoveDestination>, ArchError> {
+        match self {
+            Expr::Ident(expr) => expr.dest(codegen).map(|d| Some(d)),
+            Expr::StructAccess(expr) => expr.dest(codegen).map(|d| Some(d)),
+            Expr::Unary(expr) => expr.dest(codegen).map(|d| Some(d)),
+            Expr::ArrayAccess(expr) => expr.dest(codegen).map(|d| Some(d)),
+            _ => Ok(None),
         }
     }
 }
@@ -159,11 +172,12 @@ impl Expression for ExprIdent {
 }
 
 impl LValue for ExprIdent {
-    fn dest(&self, arch: &mut Arch, scope: &Scope) -> Result<MoveDestination, ArchError> {
-        Ok(scope
+    fn dest(&self, codegen: &mut CodeGen) -> Result<MoveDestination, ArchError> {
+        Ok(codegen
+            .scope
             .find_symbol(&self.0)
             .ok_or(SymbolTableError::NotFound(self.0.clone()))?
-            .to_dest(arch, scope)?)
+            .to_dest(&codegen.arch, &codegen.scope)?)
     }
 }
 
@@ -234,21 +248,25 @@ impl Expression for ExprStructAccess {
 }
 
 impl LValue for ExprStructAccess {
-    fn dest(&self, arch: &mut Arch, scope: &Scope) -> Result<MoveDestination, ArchError> {
+    fn dest(&self, codegen: &mut CodeGen) -> Result<MoveDestination, ArchError> {
         let mut dest = match self.expr.as_ref() {
-            Expr::Ident(expr) => expr.dest(arch, scope)?,
-            Expr::StructAccess(expr) => expr.dest(arch, scope)?,
-            Expr::Unary(expr) => expr.dest(arch, scope)?,
+            Expr::Ident(expr) => expr.dest(codegen)?,
+            Expr::StructAccess(expr) => expr.dest(codegen)?,
+            Expr::Unary(expr) => expr.dest(codegen)?,
             _ => unreachable!(),
         };
-        let (field_offset, field_size) = match self.expr.type_(scope)? {
-            Type::Struct(s) => match scope.find_type(&s).ok_or(TypeError::Nonexistent(s))? {
+        let (field_offset, field_size) = match self.expr.type_(&codegen.scope)? {
+            Type::Struct(s) => match codegen
+                .scope
+                .find_type(&s)
+                .ok_or(TypeError::Nonexistent(s))?
+            {
                 type_table::Type::Struct(type_struct) => (
-                    type_struct.offset(&arch, &self.field, scope)?,
+                    type_struct.offset(&codegen.arch, &self.field, &codegen.scope)?,
                     type_struct
                         .get_field_type(&self.field)
                         .unwrap()
-                        .size(&arch, scope)?,
+                        .size(&codegen.arch, &codegen.scope)?,
                 ),
             },
             type_ => panic!("{type_:?}"),
@@ -305,6 +323,33 @@ impl Expression for ExprArrayAccess {
     }
 }
 
+impl LValue for ExprArrayAccess {
+    fn dest(&self, codegen: &mut CodeGen) -> Result<MoveDestination, ArchError> {
+        let pointed_type_size = self
+            .expr
+            .type_(&codegen.scope)?
+            .inner()?
+            .size(&codegen.arch, &codegen.scope)?;
+
+        let base = self.expr.dest(codegen)?.expect("Everything went tits up");
+        let r = codegen.arch.alloc()?;
+        let r2 = codegen.arch.alloc()?;
+        let index = r.to_dest(codegen.arch.word_size());
+        let mut dest = r2.to_dest(codegen.arch.word_size());
+
+        codegen
+            .expr(*self.index.clone(), Some(index.clone()))
+            .unwrap();
+        codegen
+            .arch
+            .array_offset(&dest, &base, &index, pointed_type_size);
+        dest.set_size(pointed_type_size);
+        dest.set_offset(Offset::default());
+
+        Ok(dest)
+    }
+}
+
 impl Expression for ExprStruct {
     fn type_(&self, _: &Scope) -> Result<Type, ExprError> {
         Ok(Type::Struct(self.name.clone()))
@@ -318,29 +363,35 @@ pub struct ExprUnary {
 }
 
 impl LValue for ExprUnary {
-    fn dest(&self, arch: &mut Arch, scope: &Scope) -> Result<MoveDestination, ArchError> {
+    fn dest(&self, codegen: &mut CodeGen) -> Result<MoveDestination, ArchError> {
         let expr_dest = match self.expr.as_ref() {
-            Expr::Ident(expr) => expr.dest(arch, scope)?,
-            Expr::StructAccess(expr) => expr.dest(arch, scope)?,
+            Expr::Ident(expr) => expr.dest(codegen)?,
+            Expr::StructAccess(expr) => expr.dest(codegen)?,
             _ => panic!(),
         };
-        let r = arch.alloc().unwrap();
+        let r = codegen.arch.alloc().unwrap();
 
-        arch.mov(
-            expr_dest.to_source(self.type_(scope)?.signed()),
-            MoveDestination::Register(locations::Register {
-                register: r,
-                offset: None,
-                size: 8,
-            }),
-            scope,
-        )
-        .unwrap();
+        codegen
+            .arch
+            .mov(
+                expr_dest.to_source(self.type_(&codegen.scope)?.signed()),
+                MoveDestination::Register(locations::Register {
+                    register: r,
+                    offset: None,
+                    size: 8,
+                }),
+                &codegen.scope,
+            )
+            .unwrap();
 
         Ok(MoveDestination::Register(locations::Register {
             register: r,
             offset: Some(Offset(0)),
-            size: self.expr.type_(scope)?.inner()?.size(arch, scope)?,
+            size: self
+                .expr
+                .type_(&codegen.scope)?
+                .inner()?
+                .size(&codegen.arch, &codegen.scope)?,
         }))
     }
 }
