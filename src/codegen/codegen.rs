@@ -513,16 +513,16 @@ impl CodeGen {
 
         for (name, expr) in expr.fields.into_iter() {
             let offset = type_struct.offset(&self.arch, &name, &self.scope)?;
-            self.expr(
-                expr,
-                Some(MoveDestination::Local(Local {
-                    offset: dest.offset().unwrap() + &offset,
-                    size: type_struct
-                        .get_field_type(&name)
-                        .unwrap()
-                        .size(&self.arch, &self.scope)?,
-                })),
-            )?;
+            let mut dest = dest.clone();
+
+            dest.set_offset(dest.offset().unwrap() + &offset);
+            dest.set_size(
+                type_struct
+                    .get_field_type(&name)
+                    .unwrap()
+                    .size(&self.arch, &self.scope)?,
+            );
+            self.expr(expr, Some(dest))?;
         }
 
         Ok(())

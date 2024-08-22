@@ -290,10 +290,12 @@ impl Expression for ExprArrayAccess {
 
 impl LValue for ExprArrayAccess {
     fn dest(&self, codegen: &mut CodeGen) -> Result<MoveDestination, ArchError> {
-        let mut base = self.expr.dest(codegen)?.unwrap();
+        let base = self.expr.dest(codegen)?.unwrap();
         let index = codegen.arch.alloc()?;
+        let r = codegen.arch.alloc()?;
+        let mut r_loc = r.to_dest(codegen.arch.word_size());
 
-        base.set_size(8);
+        codegen.arch.lea(&r, &base);
         codegen
             .expr(
                 *self.index.clone(),
@@ -301,14 +303,15 @@ impl LValue for ExprArrayAccess {
             )
             .unwrap();
         codegen.arch.array_offset(
-            &base,
+            &r_loc,
             &index.to_dest(codegen.arch.word_size()),
             self.type_(&codegen.scope)?
                 .size(&codegen.arch, &codegen.scope)?,
             &codegen.scope,
         );
+        r_loc.set_offset(Offset::default());
 
-        Ok(base)
+        Ok(r_loc)
     }
 }
 
