@@ -1,10 +1,9 @@
+use operands::{Base, EffectiveAddress};
+
 use super::{int_repr::UIntLitRepr, ExprError, IntLitRepr};
 use crate::{
     archs::ArchError,
-    codegen::{
-        locations::{self, MoveDestination, Offset},
-        CodeGen,
-    },
+    codegen::{operands, CodeGen, Destination},
     parser::op::{BinOp, UnOp},
     scope::Scope,
     symbol_table::{Symbol, SymbolTableError},
@@ -17,7 +16,7 @@ pub trait Expression {
 }
 
 pub trait LValue {
-    fn dest(&self, codegen: &mut CodeGen) -> Result<MoveDestination, ArchError>;
+    fn dest(&self, codegen: &mut CodeGen) -> Result<Destination, ArchError>;
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -65,7 +64,7 @@ impl Expr {
         }
     }
 
-    pub fn dest(&self, codegen: &mut CodeGen) -> Result<Option<MoveDestination>, ArchError> {
+    pub fn dest(&self, codegen: &mut CodeGen) -> Result<Option<Destination>, ArchError> {
         match self {
             Expr::Ident(expr) => expr.dest(codegen).map(|d| Some(d)),
             Expr::StructAccess(expr) => expr.dest(codegen).map(|d| Some(d)),
@@ -172,12 +171,12 @@ impl Expression for ExprIdent {
 }
 
 impl LValue for ExprIdent {
-    fn dest(&self, codegen: &mut CodeGen) -> Result<MoveDestination, ArchError> {
+    fn dest(&self, codegen: &mut CodeGen) -> Result<Destination, ArchError> {
         Ok(codegen
             .scope
             .find_symbol(&self.0)
             .ok_or(SymbolTableError::NotFound(self.0.clone()))?
-            .to_dest(&codegen.arch, &codegen.scope)?)
+            .dest(&codegen.arch, &codegen.scope)?)
     }
 }
 
@@ -218,8 +217,7 @@ impl Expression for ExprStructAccess {
 }
 
 impl LValue for ExprStructAccess {
-    fn dest(&self, codegen: &mut CodeGen) -> Result<MoveDestination, ArchError> {
-        let mut dest = self.expr.dest(codegen)?.expect("Uh oh");
+    fn dest(&self, codegen: &mut CodeGen) -> Result<Destination, ArchError> {
         let (field_offset, field_size) = match self.expr.type_(&codegen.scope)? {
             Type::Struct(s) => match codegen
                 .scope
@@ -237,30 +235,24 @@ impl LValue for ExprStructAccess {
             type_ => panic!("{type_:?}"),
         };
 
-        let new_offset = dest.offset().unwrap_or(&Offset(0)) + &field_offset;
+        Ok(match self.expr.dest(codegen)?.expect("Uh oh") {
+            Destination::Memory(mut memory) => {
+                memory.displacement = if let Some(displacement) = memory.displacement {
+                    Some(&displacement + &field_offset)
+                } else {
+                    Some(field_offset)
+                };
 
-        match &mut dest {
-            MoveDestination::Local(local) => {
-                local.offset = new_offset;
-                local.size = field_size;
+                Destination::Memory(memory)
             }
-            MoveDestination::Global(global) => {
-                global.size = field_size;
-                match &mut global.offset {
-                    Some(offset) => *offset = &*offset + &new_offset,
-                    None => global.offset = Some(new_offset),
-                }
-            }
-            MoveDestination::Register(register) => {
-                register.size = field_size;
-                match &mut register.offset {
-                    Some(offset) => *offset = &*offset + &new_offset,
-                    None => register.offset = Some(new_offset),
-                }
-            }
-        };
-
-        Ok(dest)
+            Destination::Register(register) => Destination::Memory(EffectiveAddress {
+                base: Base::Register(register),
+                index: None,
+                scale: None,
+                displacement: Some(field_offset),
+                size: field_size,
+            }),
+        })
     }
 }
 
@@ -289,27 +281,40 @@ impl Expression for ExprArrayAccess {
 }
 
 impl LValue for ExprArrayAccess {
-    fn dest(&self, codegen: &mut CodeGen) -> Result<MoveDestination, ArchError> {
+    fn dest(&self, codegen: &mut CodeGen) -> Result<Destination, ArchError> {
         let base = self.expr.dest(codegen)?.unwrap();
         let index = codegen.arch.alloc()?;
         let r = codegen.arch.alloc()?;
-        let mut r_loc = r.to_dest(codegen.arch.word_size());
+        let r_loc = r.dest(codegen.arch.word_size());
 
-        codegen.arch.lea(&r, &base);
+        codegen.arch.lea(
+            &Destination::Register(operands::Register {
+                register: r,
+                size: codegen.arch.word_size(),
+            }),
+            &EffectiveAddress {
+                base: base.into(),
+                index: Some(operands::Register {
+                    register: index,
+                    size: codegen.arch.word_size(),
+                }),
+                scale: None,
+                displacement: None,
+                size: codegen.arch.word_size(),
+            },
+        );
         codegen
             .expr(
                 *self.index.clone(),
-                Some(index.to_dest(codegen.arch.word_size())),
+                Some(index.dest(codegen.arch.word_size())),
             )
             .unwrap();
         codegen.arch.array_offset(
             &r_loc,
-            &index.to_dest(codegen.arch.word_size()),
+            &index.dest(codegen.arch.word_size()),
             self.type_(&codegen.scope)?
                 .size(&codegen.arch, &codegen.scope)?,
-            &codegen.scope,
-        );
-        r_loc.set_offset(Offset::default());
+        )?;
 
         Ok(r_loc)
     }
@@ -328,30 +333,34 @@ pub struct ExprUnary {
 }
 
 impl LValue for ExprUnary {
-    fn dest(&self, codegen: &mut CodeGen) -> Result<MoveDestination, ArchError> {
-        let expr_dest = match self.expr.as_ref() {
-            Expr::Ident(expr) => expr.dest(codegen)?,
-            Expr::StructAccess(expr) => expr.dest(codegen)?,
-            _ => panic!(),
-        };
+    fn dest(&self, codegen: &mut CodeGen) -> Result<Destination, ArchError> {
+        let expr_dest = self.expr.dest(codegen)?.unwrap();
         let r = codegen.arch.alloc().unwrap();
 
         codegen
             .arch
             .mov(
-                expr_dest.to_source(self.type_(&codegen.scope)?.signed()),
-                MoveDestination::Register(locations::Register {
+                &expr_dest.into(),
+                &Destination::Register(operands::Register {
                     register: r,
-                    offset: None,
                     size: 8,
                 }),
-                &codegen.scope,
+                self.type_(&codegen.scope)?.signed(),
             )
             .unwrap();
 
-        Ok(MoveDestination::Register(locations::Register {
-            register: r,
-            offset: Some(Offset(0)),
+        Ok(Destination::Memory(EffectiveAddress {
+            base: Base::Register(operands::Register {
+                register: r,
+                size: self
+                    .expr
+                    .type_(&codegen.scope)?
+                    .inner()?
+                    .size(&codegen.arch, &codegen.scope)?,
+            }),
+            index: None,
+            scale: None,
+            displacement: None,
             size: self
                 .expr
                 .type_(&codegen.scope)?

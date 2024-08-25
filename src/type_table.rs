@@ -1,6 +1,6 @@
 use crate::{
     archs::Arch,
-    codegen::locations::Offset,
+    codegen::Offset,
     scope::Scope,
     types::{self, TypeError},
 };

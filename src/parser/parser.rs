@@ -6,7 +6,7 @@ use super::{
     StmtFunction, StmtVarDecl, UIntLitRepr, UnOp,
 };
 use crate::{
-    codegen::locations::Offset,
+    codegen::Offset,
     lexer::{Lexer, Token},
     parser::{ExprFunctionCall, ExprStructAccess},
     scope::Scope,

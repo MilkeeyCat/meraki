@@ -1,7 +1,4 @@
-use super::{
-    locations::{self, Local, MoveDestination, MoveSource, Offset},
-    CodeGenError,
-};
+use super::{operands, CodeGenError, Destination, EffectiveAddress, Immediate, Offset, Source};
 use crate::{
     archs::Arch,
     parser::{
@@ -51,6 +48,7 @@ impl CodeGen {
         let offset = self
             .arch
             .populate_offsets(&mut func.scope.symbol_table, &self.scope)?;
+
         self.scope.enter(*func.scope);
         self.arch.fn_preamble(
             &func.name,
@@ -61,7 +59,7 @@ impl CodeGen {
                 .collect::<Vec<Type>>(),
             offset,
             &self.scope,
-        );
+        )?;
 
         for stmt in func.body {
             self.stmt(stmt)?;
@@ -79,15 +77,14 @@ impl CodeGen {
             let type_ = expr.type_(&self.scope)?;
             let r = self.arch.alloc()?;
 
-            self.expr(expr, Some(r.to_dest(type_.size(&self.arch, &self.scope)?)))?;
-            self.arch.ret(MoveSource::Register(
-                locations::Register {
+            self.expr(expr, Some(r.dest(type_.size(&self.arch, &self.scope)?)))?;
+            self.arch.ret(
+                &Source::Register(operands::Register {
                     register: r,
                     size: type_.size(&self.arch, &self.scope)?,
-                    offset: None,
-                },
+                }),
                 type_.signed(),
-            ))?;
+            )?;
         }
 
         self.arch.jmp(label);
@@ -95,41 +92,22 @@ impl CodeGen {
         Ok(())
     }
 
-    pub fn expr(
-        &mut self,
-        expr: Expr,
-        mut dest: Option<MoveDestination>,
-    ) -> Result<(), CodeGenError> {
+    pub fn expr(&mut self, expr: Expr, mut dest: Option<Destination>) -> Result<(), CodeGenError> {
         match expr {
             Expr::Binary(bin_expr) => self.bin_expr(bin_expr, dest)?,
             Expr::Lit(lit) => {
                 if let Some(dest) = dest {
                     if let ExprLit::String(literal) = &lit {
                         let label = self.arch.define_literal(literal.to_owned());
-                        let r = self.arch.alloc()?;
 
-                        self.arch.lea(
-                            &r,
-                            &MoveDestination::Global(locations::Global {
-                                label,
-                                size: self.arch.word_size(),
-                                offset: None,
-                            }),
-                        );
-                        self.arch.mov(
-                            MoveSource::Register(
-                                locations::Register {
-                                    register: r,
-                                    size: self.arch.word_size(),
-                                    offset: None,
-                                },
-                                false,
-                            ),
-                            dest,
-                            &self.scope,
-                        )?
+                        self.arch
+                            .mov(&Source::Immediate(Immediate::Label(label)), &dest, false)?;
                     } else {
-                        self.arch.mov(MoveSource::Lit(lit), dest, &self.scope)?
+                        self.arch.mov(
+                            &Source::Immediate(lit.clone().into()),
+                            &dest,
+                            lit.signed(),
+                        )?
                     }
                 }
             }
@@ -144,28 +122,36 @@ impl CodeGen {
                         .scope
                         .find_symbol(&ident.0)
                         .ok_or(SymbolTableError::NotFound(ident.0.clone()))?;
-                    let dst = symbol.to_dest(&self.arch, &self.scope)?;
+                    let dst = symbol.dest(&self.arch, &self.scope)?;
 
                     // If the ident is of type pointer, the address of variable has to be moved, not the value
                     if let Type::Array(_) = ident.type_(&self.scope)? {
                         let r = self.arch.alloc()?;
 
-                        self.arch.lea(&r, &dst);
+                        self.arch.lea(
+                            &Destination::Register(operands::Register {
+                                register: r,
+                                size: self.arch.word_size(),
+                            }),
+                            &EffectiveAddress {
+                                base: dst.into(),
+                                index: None,
+                                scale: None,
+                                displacement: None,
+                                size: self.arch.word_size(),
+                            },
+                        );
                         self.arch.mov(
-                            MoveSource::Register(
-                                locations::Register {
-                                    size: self.arch.word_size(),
-                                    offset: None,
-                                    register: r,
-                                },
-                                false,
-                            ),
-                            dest,
-                            &self.scope,
+                            &Source::Register(operands::Register {
+                                register: r,
+                                size: self.arch.word_size(),
+                            }),
+                            &dest,
+                            false,
                         )?;
                         self.arch.free(r)?;
                     } else {
-                        self.arch.mov(dst.to_source(false), dest, &self.scope)?;
+                        self.arch.mov(&dst.into(), &dest, false)?;
                     }
                 }
             }
@@ -189,7 +175,16 @@ impl CodeGen {
                 };
 
                 if let Some(dest) = &mut dest {
-                    dest.set_size(expr.type_(&self.scope)?.size(&self.arch, &self.scope)?);
+                    let size = expr.type_(&self.scope)?.size(&self.arch, &self.scope)?;
+
+                    match dest {
+                        Destination::Memory(memory) => {
+                            memory.size = size;
+                        }
+                        Destination::Register(register) => {
+                            register.size = size;
+                        }
+                    };
                 }
 
                 self.expr(expr, dest)?;
@@ -218,7 +213,7 @@ impl CodeGen {
     fn bin_expr(
         &mut self,
         expr: ExprBinary,
-        dest: Option<MoveDestination>,
+        dest: Option<Destination>,
     ) -> Result<(), CodeGenError> {
         match &expr.op {
             BinOp::Assign => {
@@ -226,13 +221,12 @@ impl CodeGen {
                     .left
                     .dest(self)?
                     .ok_or(CodeGenError::Assign(*expr.left))?;
-
                 let type_ = expr.right.type_(&self.scope)?;
+
                 self.expr(*expr.right, Some(lvalue_dest.clone()))?;
 
                 if let Some(dest) = dest {
-                    self.arch
-                        .mov(lvalue_dest.to_source(type_.signed()), dest, &self.scope)?;
+                    self.arch.mov(&lvalue_dest.into(), &dest, type_.signed())?;
                 }
             }
             BinOp::Add => {
@@ -241,21 +235,17 @@ impl CodeGen {
 
                     let type_ = expr.right.type_(&self.scope)?;
                     let r = self.arch.alloc()?;
+
                     self.expr(
                         *expr.right,
-                        Some(r.to_dest(type_.size(&self.arch, &self.scope)?)),
+                        Some(r.dest(type_.size(&self.arch, &self.scope)?)),
                     )?;
-
                     self.arch.add(
                         &dest,
-                        &MoveSource::Register(
-                            locations::Register {
-                                register: r,
-                                size: type_.size(&self.arch, &self.scope)?,
-                                offset: None,
-                            },
-                            false,
-                        ),
+                        &Source::Register(operands::Register {
+                            register: r,
+                            size: type_.size(&self.arch, &self.scope)?,
+                        }),
                     );
                     self.arch.free(r)?;
                 }
@@ -266,21 +256,17 @@ impl CodeGen {
 
                     let r = self.arch.alloc()?;
                     let type_ = expr.right.type_(&self.scope)?;
+
                     self.expr(
                         *expr.right,
-                        Some(r.to_dest(type_.size(&self.arch, &self.scope)?)),
+                        Some(r.dest(type_.size(&self.arch, &self.scope)?)),
                     )?;
-
                     self.arch.sub(
                         &dest,
-                        &MoveSource::Register(
-                            locations::Register {
-                                register: r,
-                                size: type_.size(&self.arch, &self.scope)?,
-                                offset: None,
-                            },
-                            type_.signed(),
-                        ),
+                        &Source::Register(operands::Register {
+                            register: r,
+                            size: type_.size(&self.arch, &self.scope)?,
+                        }),
                     );
                     self.arch.free(r)?;
                 }
@@ -291,22 +277,19 @@ impl CodeGen {
 
                     let r = self.arch.alloc()?;
                     let type_ = expr.right.type_(&self.scope)?;
+
                     self.expr(
                         *expr.right,
-                        Some(r.to_dest(type_.size(&self.arch, &self.scope)?)),
+                        Some(r.dest(type_.size(&self.arch, &self.scope)?)),
                     )?;
-
                     self.arch.mul(
                         &dest,
-                        &MoveSource::Register(
-                            locations::Register {
-                                register: r,
-                                size: type_.size(&self.arch, &self.scope)?,
-                                offset: None,
-                            },
-                            type_.signed(),
-                        ),
-                    );
+                        &Source::Register(operands::Register {
+                            register: r,
+                            size: type_.size(&self.arch, &self.scope)?,
+                        }),
+                        type_.signed(),
+                    )?;
                     self.arch.free(r)?;
                 }
             }
@@ -316,22 +299,19 @@ impl CodeGen {
 
                     let r = self.arch.alloc()?;
                     let type_ = expr.right.type_(&self.scope)?;
+
                     self.expr(
                         *expr.right,
-                        Some(r.to_dest(type_.size(&self.arch, &self.scope)?)),
+                        Some(r.dest(type_.size(&self.arch, &self.scope)?)),
                     )?;
-
                     self.arch.div(
                         &dest,
-                        &MoveSource::Register(
-                            locations::Register {
-                                register: r,
-                                size: type_.size(&self.arch, &self.scope)?,
-                                offset: None,
-                            },
-                            type_.signed(),
-                        ),
-                    );
+                        &Source::Register(operands::Register {
+                            register: r,
+                            size: type_.size(&self.arch, &self.scope)?,
+                        }),
+                        type_.signed(),
+                    )?;
                     self.arch.free(r)?;
                 }
             }
@@ -346,21 +326,17 @@ impl CodeGen {
 
                     let r = self.arch.alloc()?;
                     let type_ = expr.right.type_(&self.scope)?;
+
                     self.expr(
                         *expr.right,
-                        Some(r.to_dest(type_.size(&self.arch, &self.scope)?)),
+                        Some(r.dest(type_.size(&self.arch, &self.scope)?)),
                     )?;
-
                     self.arch.cmp(
                         &dest,
-                        &MoveSource::Register(
-                            locations::Register {
-                                register: r,
-                                size: type_.size(&self.arch, &self.scope)?,
-                                offset: None,
-                            },
-                            type_.signed(),
-                        ),
+                        &Source::Register(operands::Register {
+                            register: r,
+                            size: type_.size(&self.arch, &self.scope)?,
+                        }),
                         CmpOp::try_from(&expr.op)?,
                     );
                     self.arch.free(r)?;
@@ -380,11 +356,7 @@ impl CodeGen {
         }
     }
 
-    fn unary_expr(
-        &mut self,
-        unary_expr: ExprUnary,
-        dest: MoveDestination,
-    ) -> Result<(), CodeGenError> {
+    fn unary_expr(&mut self, unary_expr: ExprUnary, dest: Destination) -> Result<(), CodeGenError> {
         match unary_expr.op {
             UnOp::Negative => {
                 self.expr(*unary_expr.expr, Some(dest.clone()))?;
@@ -396,64 +368,53 @@ impl CodeGen {
 
                 self.expr(
                     *unary_expr.expr,
-                    Some(r.to_dest(type_.size(&self.arch, &self.scope)?)),
+                    Some(r.dest(type_.size(&self.arch, &self.scope)?)),
                 )?;
                 self.arch
-                    .not(&r.to_dest(type_.size(&self.arch, &self.scope)?), &dest);
+                    .not(&r.dest(type_.size(&self.arch, &self.scope)?), &dest);
                 self.arch.free(r)?;
             }
             UnOp::Address => {
-                let dest2 = match unary_expr.expr.as_ref() {
-                    Expr::Ident(expr) => expr.dest(self)?,
-                    Expr::StructAccess(expr) => expr.dest(self)?,
-                    _ => panic!(),
-                };
+                let expr_dest = unary_expr.expr.dest(self)?.unwrap();
                 let r = self.arch.alloc()?;
 
-                self.arch.lea(&r, &dest2);
+                self.arch.lea(
+                    &Destination::Register(operands::Register {
+                        register: r,
+                        size: self.arch.word_size(),
+                    }),
+                    &expr_dest.into(),
+                );
                 self.arch.mov(
-                    MoveSource::Register(
-                        locations::Register {
-                            register: r,
-                            size: 8, //FIXME: how do I get the size for a pointer type?
-                            offset: None,
-                        },
-                        unary_expr.expr.type_(&self.scope)?.signed(),
-                    ),
-                    dest,
-                    &self.scope,
+                    &Source::Register(operands::Register {
+                        register: r,
+                        size: self.arch.word_size(),
+                    }),
+                    &dest,
+                    unary_expr.expr.type_(&self.scope)?.signed(),
                 )?;
             }
             UnOp::Deref => {
-                let dest2 = match unary_expr.expr.as_ref() {
-                    Expr::Ident(expr) => expr.dest(self)?,
-                    Expr::StructAccess(expr) => expr.dest(self)?,
-                    _ => panic!(),
-                };
+                let dest2 = unary_expr.expr.dest(self)?.unwrap();
                 let r = self.arch.alloc()?;
 
                 self.arch.mov(
-                    dest2.to_source(unary_expr.type_(&self.scope)?.signed()),
-                    MoveDestination::Register(locations::Register {
+                    &dest2.into(),
+                    &Destination::Register(operands::Register {
                         register: r,
-                        offset: None,
-                        size: 8,
+                        size: self.arch.word_size(),
                     }),
-                    &self.scope,
+                    false,
                 )?;
                 self.arch.mov(
-                    MoveSource::Register(
-                        locations::Register {
-                            register: r,
-                            size: unary_expr
-                                .type_(&self.scope)?
-                                .size(&self.arch, &self.scope)?,
-                            offset: Some(Offset(0)),
-                        },
-                        unary_expr.expr.type_(&self.scope)?.signed(),
-                    ),
-                    dest,
-                    &self.scope,
+                    &Source::Register(operands::Register {
+                        register: r,
+                        size: unary_expr
+                            .type_(&self.scope)?
+                            .size(&self.arch, &self.scope)?,
+                    }),
+                    &dest,
+                    unary_expr.expr.type_(&self.scope)?.signed(),
                 )?;
             }
         };
@@ -464,7 +425,7 @@ impl CodeGen {
     fn call_function(
         &mut self,
         call: ExprFunctionCall,
-        dest: Option<MoveDestination>,
+        dest: Option<Destination>,
     ) -> Result<(), CodeGenError> {
         let mut preceding = Vec::new();
         let mut stack_size = 0;
@@ -473,21 +434,15 @@ impl CodeGen {
             let type_ = expr.type_(&self.scope)?;
             let r = self.arch.alloc()?;
 
-            self.expr(expr, Some(r.to_dest(self.arch.word_size())))?;
+            self.expr(expr, Some(r.dest(self.arch.word_size())))?;
             stack_size += self.arch.push_arg(
-                MoveSource::Register(
-                    locations::Register {
-                        register: r,
-                        size: self.arch.word_size(),
-                        offset: None,
-                    },
-                    type_.signed(),
-                ),
-                &self.scope,
+                Source::Register(operands::Register {
+                    register: r,
+                    size: self.arch.word_size(),
+                }),
                 &type_,
                 &preceding,
             );
-
             self.arch.free(r)?;
             preceding.push(type_);
         }
@@ -500,7 +455,7 @@ impl CodeGen {
         Ok(())
     }
 
-    fn struct_expr(&mut self, expr: ExprStruct, dest: MoveDestination) -> Result<(), CodeGenError> {
+    fn struct_expr(&mut self, expr: ExprStruct, dest: Destination) -> Result<(), CodeGenError> {
         let type_struct = match self
             .scope
             .find_type(&expr.name)
@@ -513,16 +468,24 @@ impl CodeGen {
 
         for (name, expr) in expr.fields.into_iter() {
             let offset = type_struct.offset(&self.arch, &name, &self.scope)?;
-            let mut dest = dest.clone();
+            let field_size = type_struct
+                .get_field_type(&name)
+                .unwrap()
+                .size(&self.arch, &self.scope)?;
 
-            dest.set_offset(dest.offset().unwrap() + &offset);
-            dest.set_size(
-                type_struct
-                    .get_field_type(&name)
-                    .unwrap()
-                    .size(&self.arch, &self.scope)?,
-            );
-            self.expr(expr, Some(dest))?;
+            self.expr(
+                expr,
+                Some(match dest.clone() {
+                    Destination::Memory(mut memory) => {
+                        memory.displacement =
+                            Some(&memory.displacement.unwrap_or(Offset::default()) + &offset);
+                        memory.size = field_size;
+
+                        Destination::Memory(memory)
+                    }
+                    _ => todo!(),
+                }),
+            )?;
         }
 
         Ok(())
@@ -531,29 +494,25 @@ impl CodeGen {
     fn struct_access(
         &mut self,
         expr: ExprStructAccess,
-        dest: MoveDestination,
+        dest: Destination,
     ) -> Result<(), CodeGenError> {
-        let src = expr
-            .dest(self)?
-            .to_source(expr.type_(&self.scope)?.signed());
+        let expr_dest = expr.dest(self)?;
 
-        self.arch.mov(src, dest, &self.scope)?;
-
-        Ok(())
+        Ok(self
+            .arch
+            .mov(&expr_dest.into(), &dest, expr.type_(&self.scope)?.signed())?)
     }
 
     fn array_access(
         &mut self,
         expr: ExprArrayAccess,
-        dest: MoveDestination,
+        dest: Destination,
     ) -> Result<(), CodeGenError> {
-        let src = expr
-            .dest(self)?
-            .to_source(expr.type_(&self.scope)?.signed());
+        let expr_dest = expr.dest(self)?;
 
-        self.arch.mov(src, dest, &self.scope)?;
-
-        Ok(())
+        Ok(self
+            .arch
+            .mov(&expr_dest.into(), &dest, expr.type_(&self.scope)?.signed())?)
     }
 
     pub fn compile(&mut self, program: Vec<Stmt>) -> Result<Vec<u8>, CodeGenError> {

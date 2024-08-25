@@ -1,12 +1,17 @@
+use operands::Base;
+
 use super::SymbolTableError;
 use crate::{
     archs::Arch,
-    codegen::locations::{Global, Local, MoveDestination, MoveSource, Offset},
+    codegen::{operands, Destination, EffectiveAddress, Offset, Source},
+    register::Register,
     scope::Scope,
     types::Type,
 };
 
 const MAX_SYMBOLS: usize = 512;
+//FIXME: arch dependent stuff shouldn't be in symbol table file xd
+const RBP: Register = Register::new("there's no one byte one, hmmmm", "bp", "ebp", "rbp");
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Symbol {
@@ -37,54 +42,40 @@ impl Symbol {
         }
     }
 
-    pub fn to_source<'a>(
-        &'a self,
-        arch: &'a Arch,
-        scope: &Scope,
-    ) -> Result<MoveSource, SymbolTableError> {
-        Ok(match self {
-            Self::Local(symbol) => MoveSource::Local(
-                Local {
-                    size: symbol.type_.size(arch, scope)?,
-                    offset: symbol.offset.clone(),
-                },
-                symbol.type_.signed(),
-            ),
-            Self::Global(symbol) => MoveSource::Global(
-                Global {
-                    label: symbol.name.clone(),
-                    size: symbol.type_.size(arch, scope)?,
-                    offset: None,
-                },
-                symbol.type_.signed(),
-            ),
-            Self::Param(symbol) => MoveSource::Local(
-                Local {
-                    size: symbol.type_.size(arch, scope)?,
-                    offset: symbol.offset.clone(),
-                },
-                symbol.type_.signed(),
-            ),
-            Self::Function(_) => unreachable!(),
-        })
+    pub fn source(&self, arch: &Arch, scope: &Scope) -> Result<Source, SymbolTableError> {
+        Ok(self.dest(arch, scope)?.into())
     }
 
-    pub fn to_dest(&self, arch: &Arch, scope: &Scope) -> Result<MoveDestination, SymbolTableError> {
+    pub fn dest(&self, arch: &Arch, scope: &Scope) -> Result<Destination, SymbolTableError> {
         Ok(match self {
-            Symbol::Local(symbol) => MoveDestination::Local(Local {
-                offset: symbol.offset.clone(),
-                size: symbol.type_.size(&arch, scope)?,
+            Self::Local(symbol) => Destination::Memory(EffectiveAddress {
+                base: Base::Register(operands::Register {
+                    register: RBP,
+                    size: symbol.type_.size(arch, scope)?,
+                }),
+                index: None,
+                scale: None,
+                displacement: Some(symbol.offset.clone()),
+                size: 1,
             }),
-            Symbol::Global(symbol) => MoveDestination::Global(Global {
-                label: symbol.name.clone(),
-                size: symbol.type_.size(&arch, scope)?,
-                offset: None,
+            Self::Global(symbol) => Destination::Memory(EffectiveAddress {
+                base: Base::Label(symbol.name.clone()),
+                index: None,
+                scale: None,
+                displacement: None,
+                size: 1,
             }),
-            Symbol::Param(symbol) => MoveDestination::Local(Local {
-                offset: symbol.offset.clone(),
-                size: symbol.type_.size(&arch, scope)?,
+            Self::Param(symbol) => Destination::Memory(EffectiveAddress {
+                base: Base::Register(operands::Register {
+                    register: RBP,
+                    size: symbol.type_.size(arch, scope)?,
+                }),
+                index: None,
+                scale: None,
+                displacement: Some(symbol.offset.clone()),
+                size: 1,
             }),
-            Symbol::Function(_) => unreachable!(),
+            Self::Function(_) => unreachable!(),
         })
     }
 }

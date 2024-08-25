@@ -21,7 +21,7 @@ const U64_MAX: u64 = u64::MAX as u64;
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct IntLitRepr {
-    inner: i64,
+    pub inner: i64,
 }
 
 impl IntLitRepr {
@@ -65,7 +65,7 @@ impl TryFrom<UIntLitRepr> for IntLitRepr {
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct UIntLitRepr {
-    inner: u64,
+    pub inner: u64,
 }
 
 impl UIntLitRepr {

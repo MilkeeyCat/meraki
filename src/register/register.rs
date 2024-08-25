@@ -1,4 +1,4 @@
-use crate::codegen::locations::{self, MoveDestination};
+use crate::codegen::{operands, Destination};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Register {
@@ -9,7 +9,7 @@ pub struct Register {
 }
 
 impl Register {
-    pub fn new(
+    pub const fn new(
         byte: &'static str,
         word: &'static str,
         dword: &'static str,
@@ -49,10 +49,9 @@ impl Register {
         }
     }
 
-    pub fn to_dest(&self, size: usize) -> MoveDestination {
-        MoveDestination::Register(locations::Register {
-            register: self.to_owned(),
-            offset: None,
+    pub fn dest(&self, size: usize) -> Destination {
+        Destination::Register(operands::Register {
+            register: *self,
             size,
         })
     }
