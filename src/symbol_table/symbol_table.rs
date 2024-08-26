@@ -1,4 +1,4 @@
-use operands::Base;
+use operands::{Base, Memory};
 
 use super::SymbolTableError;
 use crate::{
@@ -48,31 +48,37 @@ impl Symbol {
 
     pub fn dest(&self, arch: &Arch, scope: &Scope) -> Result<Destination, SymbolTableError> {
         Ok(match self {
-            Self::Local(symbol) => Destination::Memory(EffectiveAddress {
-                base: Base::Register(operands::Register {
-                    register: RBP,
-                    size: symbol.type_.size(arch, scope)?,
-                }),
-                index: None,
-                scale: None,
-                displacement: Some(symbol.offset.clone()),
+            Self::Local(symbol) => Destination::Memory(Memory {
+                effective_address: EffectiveAddress {
+                    base: Base::Register(operands::Register {
+                        register: RBP,
+                        size: symbol.type_.size(arch, scope)?,
+                    }),
+                    index: None,
+                    scale: None,
+                    displacement: Some(symbol.offset.clone()),
+                },
                 size: 1,
             }),
-            Self::Global(symbol) => Destination::Memory(EffectiveAddress {
-                base: Base::Label(symbol.name.clone()),
-                index: None,
-                scale: None,
-                displacement: None,
+            Self::Global(symbol) => Destination::Memory(Memory {
+                effective_address: EffectiveAddress {
+                    base: Base::Label(symbol.name.clone()),
+                    index: None,
+                    scale: None,
+                    displacement: None,
+                },
                 size: 1,
             }),
-            Self::Param(symbol) => Destination::Memory(EffectiveAddress {
-                base: Base::Register(operands::Register {
-                    register: RBP,
-                    size: symbol.type_.size(arch, scope)?,
-                }),
-                index: None,
-                scale: None,
-                displacement: Some(symbol.offset.clone()),
+            Self::Param(symbol) => Destination::Memory(Memory {
+                effective_address: EffectiveAddress {
+                    base: Base::Register(operands::Register {
+                        register: RBP,
+                        size: symbol.type_.size(arch, scope)?,
+                    }),
+                    index: None,
+                    scale: None,
+                    displacement: Some(symbol.offset.clone()),
+                },
                 size: 1,
             }),
             Self::Function(_) => unreachable!(),

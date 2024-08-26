@@ -1,7 +1,7 @@
 use crate::{
     archs::{Arch, ArchError, Architecture},
     codegen::{
-        operands::{self, Base, EffectiveAddress, Immediate, Offset},
+        operands::{self, Base, EffectiveAddress, Immediate, Memory, Offset},
         Destination, Source,
     },
     parser::CmpOp,
@@ -129,21 +129,23 @@ impl Architecture for Amd64 {
                         register: r,
                         size: WORD_SIZE,
                     }),
-                    &src,
+                    &src.effective_address,
                 );
 
                 for chunk_size in Self::size_iter(size) {
                     let r_tmp = self.alloc()?;
 
                     self.mov(
-                        &Source::Memory(EffectiveAddress {
-                            base: Base::Register(operands::Register {
-                                register: r,
-                                size: chunk_size,
-                            }),
-                            index: None,
-                            scale: None,
-                            displacement: Some(Offset((size - chunk_size).try_into().unwrap())),
+                        &Source::Memory(Memory {
+                            effective_address: EffectiveAddress {
+                                base: Base::Register(operands::Register {
+                                    register: r,
+                                    size: chunk_size,
+                                }),
+                                index: None,
+                                scale: None,
+                                displacement: Some(Offset((size - chunk_size).try_into().unwrap())),
+                            },
                             size: chunk_size,
                         }),
                         &Destination::Register(operands::Register {
@@ -157,11 +159,13 @@ impl Architecture for Amd64 {
                             register: r_tmp,
                             size: chunk_size,
                         }),
-                        &Destination::Memory(EffectiveAddress {
-                            base: dest.base.clone(),
-                            index: None,
-                            scale: None,
-                            displacement: None,
+                        &Destination::Memory(Memory {
+                            effective_address: EffectiveAddress {
+                                base: dest.effective_address.base.clone(),
+                                index: None,
+                                scale: None,
+                                displacement: None,
+                            },
                             size: chunk_size,
                         }),
                         false,
@@ -323,14 +327,16 @@ impl Architecture for Amd64 {
                                 register: self.registers.get(self.registers.len() - n).unwrap(),
                                 size,
                             }),
-                            &Destination::Memory(EffectiveAddress {
-                                base: Base::Register(operands::Register {
-                                    register: self.rbp,
-                                    size,
-                                }),
-                                index: None,
-                                scale: None,
-                                displacement: Some(offset.clone()),
+                            &Destination::Memory(Memory {
+                                effective_address: EffectiveAddress {
+                                    base: Base::Register(operands::Register {
+                                        register: self.rbp,
+                                        size,
+                                    }),
+                                    index: None,
+                                    scale: None,
+                                    displacement: Some(offset.clone()),
+                                },
                                 size,
                             }),
                             type_.signed(),
@@ -572,6 +578,17 @@ impl std::fmt::Display for operands::Immediate {
     }
 }
 
+impl std::fmt::Display for operands::Memory {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} {}",
+            Amd64::size_name(self.size),
+            self.effective_address
+        )
+    }
+}
+
 impl std::fmt::Display for operands::Base {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -583,7 +600,7 @@ impl std::fmt::Display for operands::Base {
 
 impl std::fmt::Display for operands::EffectiveAddress {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut str = self.base.to_string();
+        let mut str = format!("[{}", self.base);
 
         if let Some(index) = &self.index {
             str.push_str(&format!(" + {}", index.register.from_size(index.size)));
@@ -597,14 +614,14 @@ impl std::fmt::Display for operands::EffectiveAddress {
             str.push_str(&format!("{displacement}"));
         }
 
-        write!(f, "{}", str)
+        write!(f, "{}]", str)
     }
 }
 
 impl std::fmt::Display for operands::Source {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Memory(effective_address) => write!(f, "{effective_address}"),
+            Self::Memory(memory) => write!(f, "{memory}"),
             Self::Register(register) => write!(f, "{register}"),
             Self::Immediate(immediate) => write!(f, "{immediate}"),
         }

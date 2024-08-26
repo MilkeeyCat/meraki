@@ -65,13 +65,18 @@ pub struct EffectiveAddress {
     pub index: Option<Register>,
     pub scale: Option<usize>,
     pub displacement: Option<Offset>,
-    pub size: usize,
 }
 
 pub enum Immediate {
     Int(i64),
     UInt(u64),
     Label(String),
+}
+
+#[derive(Clone)]
+pub struct Memory {
+    pub effective_address: EffectiveAddress,
+    pub size: usize,
 }
 
 impl From<ExprLit> for Immediate {
@@ -86,7 +91,7 @@ impl From<ExprLit> for Immediate {
 }
 
 pub enum Source {
-    Memory(EffectiveAddress),
+    Memory(Memory),
     Register(Register),
     Immediate(Immediate),
 }
@@ -103,7 +108,7 @@ impl Source {
 
 #[derive(Clone)]
 pub enum Destination {
-    Memory(EffectiveAddress),
+    Memory(Memory),
     Register(Register),
 }
 
@@ -129,13 +134,12 @@ impl Into<EffectiveAddress> for Destination {
     fn into(self) -> EffectiveAddress {
         match self {
             Destination::Register(register) => EffectiveAddress {
-                size: register.size,
                 base: Base::Register(register),
                 index: None,
                 scale: None,
                 displacement: None,
             },
-            Destination::Memory(effective_address) => effective_address,
+            Destination::Memory(memory) => memory.effective_address,
         }
     }
 }
@@ -144,7 +148,7 @@ impl Into<Base> for Destination {
     fn into(self) -> Base {
         match self {
             Destination::Register(register) => Base::Register(register),
-            Destination::Memory(memory) => memory.base,
+            Destination::Memory(memory) => memory.effective_address.base,
         }
     }
 }

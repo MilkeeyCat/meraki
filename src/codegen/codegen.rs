@@ -138,7 +138,6 @@ impl CodeGen {
                                 index: None,
                                 scale: None,
                                 displacement: None,
-                                size: self.arch.word_size(),
                             },
                         );
                         self.arch.mov(
@@ -477,8 +476,13 @@ impl CodeGen {
                 expr,
                 Some(match dest.clone() {
                     Destination::Memory(mut memory) => {
-                        memory.displacement =
-                            Some(&memory.displacement.unwrap_or(Offset::default()) + &offset);
+                        memory.effective_address.displacement = Some(
+                            &memory
+                                .effective_address
+                                .displacement
+                                .unwrap_or(Offset::default())
+                                + &offset,
+                        );
                         memory.size = field_size;
 
                         Destination::Memory(memory)

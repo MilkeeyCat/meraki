@@ -1,4 +1,4 @@
-use operands::{Base, EffectiveAddress};
+use operands::{Base, EffectiveAddress, Memory};
 
 use super::{int_repr::UIntLitRepr, ExprError, IntLitRepr};
 use crate::{
@@ -237,19 +237,22 @@ impl LValue for ExprStructAccess {
 
         Ok(match self.expr.dest(codegen)?.expect("Uh oh") {
             Destination::Memory(mut memory) => {
-                memory.displacement = if let Some(displacement) = memory.displacement {
-                    Some(&displacement + &field_offset)
-                } else {
-                    Some(field_offset)
-                };
+                memory.effective_address.displacement =
+                    if let Some(displacement) = memory.effective_address.displacement {
+                        Some(&displacement + &field_offset)
+                    } else {
+                        Some(field_offset)
+                    };
 
                 Destination::Memory(memory)
             }
-            Destination::Register(register) => Destination::Memory(EffectiveAddress {
-                base: Base::Register(register),
-                index: None,
-                scale: None,
-                displacement: Some(field_offset),
+            Destination::Register(register) => Destination::Memory(Memory {
+                effective_address: EffectiveAddress {
+                    base: Base::Register(register),
+                    index: None,
+                    scale: None,
+                    displacement: Some(field_offset),
+                },
                 size: field_size,
             }),
         })
@@ -300,7 +303,6 @@ impl LValue for ExprArrayAccess {
                 }),
                 scale: None,
                 displacement: None,
-                size: codegen.arch.word_size(),
             },
         );
         codegen
@@ -349,18 +351,20 @@ impl LValue for ExprUnary {
             )
             .unwrap();
 
-        Ok(Destination::Memory(EffectiveAddress {
-            base: Base::Register(operands::Register {
-                register: r,
-                size: self
-                    .expr
-                    .type_(&codegen.scope)?
-                    .inner()?
-                    .size(&codegen.arch, &codegen.scope)?,
-            }),
-            index: None,
-            scale: None,
-            displacement: None,
+        Ok(Destination::Memory(Memory {
+            effective_address: EffectiveAddress {
+                base: Base::Register(operands::Register {
+                    register: r,
+                    size: self
+                        .expr
+                        .type_(&codegen.scope)?
+                        .inner()?
+                        .size(&codegen.arch, &codegen.scope)?,
+                }),
+                index: None,
+                scale: None,
+                displacement: None,
+            },
             size: self
                 .expr
                 .type_(&codegen.scope)?
