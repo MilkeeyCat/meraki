@@ -243,6 +243,7 @@ impl LValue for ExprStructAccess {
                     } else {
                         Some(field_offset)
                     };
+                memory.size = field_size;
 
                 Destination::Memory(memory)
             }

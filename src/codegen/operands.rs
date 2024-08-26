@@ -67,6 +67,7 @@ pub struct EffectiveAddress {
     pub displacement: Option<Offset>,
 }
 
+#[derive(Debug)]
 pub enum Immediate {
     Int(i64),
     UInt(u64),
@@ -90,6 +91,7 @@ impl From<ExprLit> for Immediate {
     }
 }
 
+#[derive(Debug)]
 pub enum Source {
     Memory(Memory),
     Register(Register),
