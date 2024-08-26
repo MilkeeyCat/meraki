@@ -154,6 +154,7 @@ impl Architecture for Amd64 {
                         }),
                         false,
                     )?;
+                    dbg!(&dest);
                     self.mov(
                         &Source::Register(operands::Register {
                             register: r_tmp,
@@ -164,7 +165,13 @@ impl Architecture for Amd64 {
                                 base: dest.effective_address.base.clone(),
                                 index: None,
                                 scale: None,
-                                displacement: None,
+                                displacement: Some(
+                                    dest.effective_address
+                                        .displacement
+                                        .as_ref()
+                                        .unwrap_or(&Offset(0))
+                                        - &Offset((size - chunk_size).try_into().unwrap()),
+                                ),
                             },
                             size: chunk_size,
                         }),
@@ -243,7 +250,11 @@ impl Architecture for Amd64 {
             size: src.size().unwrap(),
         };
 
-        self.mov(src, &Destination::Register(register.clone()), signed)?;
+        self.mov(
+            &dest.to_owned().into(),
+            &Destination::Register(register.clone()),
+            signed,
+        )?;
         self.buf.push_str(&formatdoc!(
             "
             \timul {src}
@@ -257,7 +268,7 @@ impl Architecture for Amd64 {
     //NOTE: if mafs doesn't works, probably because of this xd
     fn div(&mut self, dest: &Destination, src: &Source, signed: bool) -> Result<(), ArchError> {
         self.mov(
-            src,
+            &dest.to_owned().into(),
             &Destination::Register(operands::Register {
                 register: self.rax,
                 size: WORD_SIZE,
