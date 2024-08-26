@@ -256,19 +256,28 @@ impl Architecture for Amd64 {
 
     //NOTE: if mafs doesn't works, probably because of this xd
     fn div(&mut self, dest: &Destination, src: &Source, signed: bool) -> Result<(), ArchError> {
-        let register = operands::Register {
-            register: self.rax,
-            size: WORD_SIZE,
-        };
-
-        self.mov(src, &Destination::Register(register.clone()), signed)?;
+        self.mov(
+            src,
+            &Destination::Register(operands::Register {
+                register: self.rax,
+                size: WORD_SIZE,
+            }),
+            signed,
+        )?;
         self.buf.push_str(&formatdoc!(
             "
             \tcqo
             \tidiv {src}
             ",
         ));
-        self.mov(&Source::Register(register.clone()), dest, signed)?;
+        self.mov(
+            &Source::Register(operands::Register {
+                register: self.rax,
+                size: src.size().unwrap_or(WORD_SIZE),
+            }),
+            dest,
+            signed,
+        )?;
 
         Ok(())
     }

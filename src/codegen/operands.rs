@@ -47,19 +47,19 @@ impl std::fmt::Display for Offset {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Base {
     Register(Register),
     Label(String),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Register {
     pub register: register::Register,
     pub size: usize,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct EffectiveAddress {
     pub base: Base,
     pub index: Option<Register>,
@@ -73,7 +73,7 @@ pub enum Immediate {
     Label(String),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Memory {
     pub effective_address: EffectiveAddress,
     pub size: usize,
@@ -106,7 +106,7 @@ impl Source {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Destination {
     Memory(Memory),
     Register(Register),
