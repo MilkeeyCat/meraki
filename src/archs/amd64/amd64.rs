@@ -637,221 +637,268 @@ impl std::fmt::Display for operands::Destination {
     }
 }
 
-//#[cfg(test)]
-//mod test {
-//    use super::Amd64;
-//    use crate::{
-//        archs::Architecture,
-//        codegen::locations::{self, MoveDestination, Offset},
-//        parser::{ExprLit, IntLitRepr, UIntLitRepr},
-//        register::Register,
-//        scope::Scope,
-//    };
-//
-//    #[test]
-//    fn mov_literal() {
-//        let r = Register::new("r15b", "r15w", "r15d", "r15");
-//        let scope = Scope::new();
-//        let tests = vec![
-//            (
-//                (
-//                    MoveDestination::Global(locations::Global {
-//                        size: 4,
-//                        offset: Some(Offset(-5)),
-//                        label: "foo".to_string(),
-//                    }),
-//                    ExprLit::UInt(UIntLitRepr::new(15_000)),
-//                ),
-//                "\tmov dword ptr [foo - 5], 15000\n",
-//            ),
-//            (
-//                (
-//                    MoveDestination::Global(locations::Global {
-//                        size: 8,
-//                        offset: None,
-//                        label: "foo".to_string(),
-//                    }),
-//                    ExprLit::Int(IntLitRepr::new(-5)),
-//                ),
-//                "\tmov qword ptr [foo], -5\n",
-//            ),
-//            (
-//                (
-//                    MoveDestination::Local(locations::Local {
-//                        size: 4,
-//                        offset: Offset(-1),
-//                    }),
-//                    ExprLit::UInt(UIntLitRepr::new(5)),
-//                ),
-//                "\tmov dword ptr [rbp - 1], 5\n",
-//            ),
-//            (
-//                (
-//                    MoveDestination::Register(locations::Register {
-//                        size: 8,
-//                        offset: None,
-//                        register: r,
-//                    }),
-//                    ExprLit::UInt(UIntLitRepr::new(5)),
-//                ),
-//                "\tmov r15, 5\n",
-//            ),
-//            (
-//                (
-//                    MoveDestination::Register(locations::Register {
-//                        size: 8,
-//                        offset: Some(Offset(-15)),
-//                        register: r,
-//                    }),
-//                    ExprLit::UInt(UIntLitRepr::new(5)),
-//                ),
-//                "\tmov qword ptr [r15 - 15], 5\n",
-//            ),
-//            (
-//                (
-//                    MoveDestination::Register(locations::Register {
-//                        size: 2,
-//                        offset: Some(Offset(8)),
-//                        register: r,
-//                    }),
-//                    ExprLit::Int(IntLitRepr::new(-7)),
-//                ),
-//                "\tmov word ptr [r15 + 8], -7\n",
-//            ),
-//        ];
-//
-//        for ((dest, lit), expected) in tests {
-//            let mut arch = Amd64::new();
-//            arch.mov_literal(lit, dest, &scope).unwrap();
-//
-//            assert_eq!(arch.buf, expected);
-//        }
-//    }
-//
-//    #[test]
-//    fn mov_register() {
-//        let r = Register::new("r15b", "r15w", "r15d", "r15");
-//        let r2 = Register::new("r14b", "r14w", "r14d", "r14");
-//        let scope = Scope::new();
-//        let tests = vec![
-//            (
-//                (
-//                    MoveDestination::Global(locations::Global {
-//                        size: 4,
-//                        offset: Some(Offset(-5)),
-//                        label: "foo".to_string(),
-//                    }),
-//                    locations::Register {
-//                        offset: None,
-//                        size: 4,
-//                        register: r,
-//                    },
-//                    false,
-//                ),
-//                "\tmov dword ptr [foo - 5], r15d\n",
-//            ),
-//            (
-//                (
-//                    MoveDestination::Global(locations::Global {
-//                        size: 8,
-//                        offset: None,
-//                        label: "foo".to_string(),
-//                    }),
-//                    locations::Register {
-//                        offset: None,
-//                        size: 4,
-//                        register: r,
-//                    },
-//                    false,
-//                ),
-//                "\tmovzx qword ptr [foo], r15d\n",
-//            ),
-//            (
-//                (
-//                    MoveDestination::Global(locations::Global {
-//                        size: 8,
-//                        offset: None,
-//                        label: "foo".to_string(),
-//                    }),
-//                    locations::Register {
-//                        offset: None,
-//                        size: 4,
-//                        register: r,
-//                    },
-//                    true,
-//                ),
-//                "\tmovsx qword ptr [foo], r15d\n",
-//            ),
-//            (
-//                (
-//                    MoveDestination::Local(locations::Local {
-//                        size: 1,
-//                        offset: Offset(-10),
-//                    }),
-//                    locations::Register {
-//                        offset: None,
-//                        size: 1,
-//                        register: r,
-//                    },
-//                    true,
-//                ),
-//                "\tmov byte ptr [rbp - 10], r15b\n",
-//            ),
-//            (
-//                (
-//                    MoveDestination::Register(locations::Register {
-//                        size: 2,
-//                        offset: Some(Offset(10)),
-//                        register: r2,
-//                    }),
-//                    locations::Register {
-//                        offset: None,
-//                        size: 1,
-//                        register: r,
-//                    },
-//                    true,
-//                ),
-//                "\tmovsx word ptr [r14 + 10], r15b\n",
-//            ),
-//            (
-//                (
-//                    MoveDestination::Register(locations::Register {
-//                        size: 8,
-//                        offset: None,
-//                        register: r2,
-//                    }),
-//                    locations::Register {
-//                        offset: None,
-//                        size: 4,
-//                        register: r,
-//                    },
-//                    false,
-//                ),
-//                "\tmovzx r14, r15d\n",
-//            ),
-//            (
-//                (
-//                    MoveDestination::Register(locations::Register {
-//                        size: 1,
-//                        offset: None,
-//                        register: r2,
-//                    }),
-//                    locations::Register {
-//                        offset: None,
-//                        size: 1,
-//                        register: r,
-//                    },
-//                    false,
-//                ),
-//                "\tmov r14b, r15b\n",
-//            ),
-//        ];
-//
-//        for ((dest, r, signed), expected) in tests {
-//            let mut arch = Amd64::new();
-//            arch.mov_register(r, dest, signed, &scope).unwrap();
-//
-//            assert_eq!(arch.buf, expected);
-//        }
-//    }
-//}
+#[cfg(test)]
+mod test {
+    pub const RBP: Register = Register::new("there's no one byte one, hmmmm", "bp", "ebp", "rbp");
+    use super::Amd64;
+    use crate::{
+        archs::Architecture,
+        codegen::operands::{
+            self, Base, Destination, EffectiveAddress, Immediate, Memory, Offset, Source,
+        },
+        register::Register,
+    };
+
+    #[test]
+    fn mov_literal() {
+        let r = Register::new("r15b", "r15w", "r15d", "r15");
+        let tests = vec![
+            (
+                (
+                    Destination::Memory(Memory {
+                        effective_address: EffectiveAddress {
+                            base: Base::Label("foo".to_string()),
+                            index: None,
+                            scale: None,
+                            displacement: Some(Offset(-5)),
+                        },
+                        size: 4,
+                    }),
+                    Immediate::UInt(15_000),
+                ),
+                "\tmov dword ptr [foo - 5], 15000\n",
+            ),
+            (
+                (
+                    Destination::Memory(Memory {
+                        effective_address: EffectiveAddress {
+                            base: Base::Label("foo".to_string()),
+                            index: None,
+                            scale: None,
+                            displacement: None,
+                        },
+                        size: 8,
+                    }),
+                    Immediate::Int(-5),
+                ),
+                "\tmov qword ptr [foo], -5\n",
+            ),
+            (
+                (
+                    Destination::Memory(Memory {
+                        effective_address: EffectiveAddress {
+                            base: Base::Register(operands::Register {
+                                register: RBP,
+                                size: 8,
+                            }),
+                            index: None,
+                            scale: None,
+                            displacement: Some(Offset(-1)),
+                        },
+                        size: 4,
+                    }),
+                    Immediate::UInt(5),
+                ),
+                "\tmov dword ptr [rbp - 1], 5\n",
+            ),
+            (
+                (
+                    Destination::Register(operands::Register {
+                        register: r,
+                        size: 8,
+                    }),
+                    Immediate::UInt(5),
+                ),
+                "\tmov r15, 5\n",
+            ),
+            (
+                (
+                    Destination::Memory(Memory {
+                        effective_address: EffectiveAddress {
+                            base: Base::Register(operands::Register {
+                                register: r,
+                                size: 8,
+                            }),
+                            index: None,
+                            scale: None,
+                            displacement: Some(Offset(-15)),
+                        },
+                        size: 8,
+                    }),
+                    Immediate::UInt(5),
+                ),
+                "\tmov qword ptr [r15 - 15], 5\n",
+            ),
+            (
+                (
+                    Destination::Memory(Memory {
+                        effective_address: EffectiveAddress {
+                            base: Base::Register(operands::Register {
+                                register: r,
+                                size: 8,
+                            }),
+                            index: None,
+                            scale: None,
+                            displacement: Some(Offset(8)),
+                        },
+                        size: 2,
+                    }),
+                    Immediate::Int(-7),
+                ),
+                "\tmov word ptr [r15 + 8], -7\n",
+            ),
+        ];
+
+        for ((dest, immidiate), expected) in tests {
+            let mut arch = Amd64::new();
+            arch.mov(&Source::Immediate(immidiate), &dest, false)
+                .unwrap();
+
+            assert_eq!(arch.buf, expected);
+        }
+    }
+
+    #[test]
+    fn mov_register() {
+        let r = Register::new("r15b", "r15w", "r15d", "r15");
+        let r2 = Register::new("r14b", "r14w", "r14d", "r14");
+        let tests = vec![
+            (
+                (
+                    Destination::Memory(Memory {
+                        effective_address: EffectiveAddress {
+                            base: Base::Label("foo".to_string()),
+                            index: None,
+                            scale: None,
+                            displacement: Some(Offset(-5)),
+                        },
+                        size: 4,
+                    }),
+                    operands::Register {
+                        register: r,
+                        size: 4,
+                    },
+                    false,
+                ),
+                "\tmov dword ptr [foo - 5], r15d\n",
+            ),
+            (
+                (
+                    Destination::Memory(Memory {
+                        effective_address: EffectiveAddress {
+                            base: Base::Label("foo".to_string()),
+                            index: None,
+                            scale: None,
+                            displacement: None,
+                        },
+                        size: 8,
+                    }),
+                    operands::Register {
+                        register: r,
+                        size: 4,
+                    },
+                    false,
+                ),
+                "\tmovzx qword ptr [foo], r15d\n",
+            ),
+            (
+                (
+                    Destination::Memory(Memory {
+                        effective_address: EffectiveAddress {
+                            base: Base::Label("foo".to_string()),
+                            index: None,
+                            scale: None,
+                            displacement: None,
+                        },
+                        size: 8,
+                    }),
+                    operands::Register {
+                        register: r,
+                        size: 4,
+                    },
+                    true,
+                ),
+                "\tmovsx qword ptr [foo], r15d\n",
+            ),
+            (
+                (
+                    Destination::Memory(Memory {
+                        effective_address: EffectiveAddress {
+                            base: Base::Register(operands::Register {
+                                register: RBP,
+                                size: 8,
+                            }),
+                            index: None,
+                            scale: None,
+                            displacement: Some(Offset(-10)),
+                        },
+                        size: 1,
+                    }),
+                    operands::Register {
+                        register: r,
+                        size: 1,
+                    },
+                    true,
+                ),
+                "\tmov byte ptr [rbp - 10], r15b\n",
+            ),
+            (
+                (
+                    Destination::Memory(Memory {
+                        effective_address: EffectiveAddress {
+                            base: Base::Register(operands::Register {
+                                register: r2,
+                                size: 8,
+                            }),
+                            index: None,
+                            scale: None,
+                            displacement: Some(Offset(10)),
+                        },
+                        size: 2,
+                    }),
+                    operands::Register {
+                        register: r,
+                        size: 1,
+                    },
+                    true,
+                ),
+                "\tmovsx word ptr [r14 + 10], r15b\n",
+            ),
+            (
+                (
+                    Destination::Register(operands::Register {
+                        register: r2,
+                        size: 8,
+                    }),
+                    operands::Register {
+                        register: r,
+                        size: 4,
+                    },
+                    false,
+                ),
+                "\tmovzx r14, r15d\n",
+            ),
+            (
+                (
+                    Destination::Register(operands::Register {
+                        size: 1,
+                        register: r2,
+                    }),
+                    operands::Register {
+                        register: r,
+                        size: 1,
+                    },
+                    false,
+                ),
+                "\tmov r14b, r15b\n",
+            ),
+        ];
+
+        for ((dest, r, signed), expected) in tests {
+            let mut arch = Amd64::new();
+            arch.mov(&Source::Register(r), &dest, signed).unwrap();
+
+            assert_eq!(arch.buf, expected);
+        }
+    }
+}
