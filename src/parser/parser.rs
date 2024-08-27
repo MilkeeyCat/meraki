@@ -2,8 +2,8 @@ use super::{
     expr::{ExprBinary, ExprLit, ExprUnary},
     precedence::Precedence,
     stmt::StmtReturn,
-    BinOp, Expr, ExprArrayAccess, ExprCast, ExprIdent, ExprStruct, Expression, ParserError, Stmt,
-    StmtFunction, StmtVarDecl, UIntLitRepr, UnOp,
+    BinOp, Block, Expr, ExprArrayAccess, ExprCast, ExprIdent, ExprStruct, Expression, ParserError,
+    Stmt, StmtFunction, StmtVarDecl, UIntLitRepr, UnOp,
 };
 use crate::{
     codegen::Offset,
@@ -180,9 +180,14 @@ impl Parser {
         Ok(())
     }
 
-    fn compound_statement(&mut self) -> Result<Vec<Stmt>, ParserError> {
+    fn compound_statement(
+        &mut self,
+        context: Option<(String, Type)>,
+    ) -> Result<Block, ParserError> {
         let mut stmts = Vec::new();
 
+        self.scope
+            .enter_new(context.unwrap_or_else(|| self.scope.context().unwrap().clone()));
         self.expect(&Token::LBrace)?;
 
         while !self.cur_token_is(&Token::RBrace) {
@@ -209,8 +214,12 @@ impl Parser {
         }
 
         self.expect(&Token::RBrace)?;
+        let scope_impl = self.scope.leave();
 
-        Ok(stmts)
+        Ok(Block {
+            statements: stmts,
+            scope: scope_impl,
+        })
     }
 
     fn parse_type(&mut self) -> Result<Type, ParserError> {
@@ -357,31 +366,15 @@ impl Parser {
                 return Err(ParserError::ParseType(self.cur_token.to_owned()));
             }
         };
+
         self.expect(&Token::LParen)?;
-        self.scope.enter_new((name.clone(), type_.clone()));
 
         let params = self.params(Token::Comma, Token::RParen)?;
-        for (i, (name, type_)) in params.iter().enumerate() {
-            self.scope
-                .symbol_table_mut()
-                .push(Symbol::Param(SymbolParam {
-                    name: name.to_owned(),
-                    preceding: params[..i]
-                        .iter()
-                        .map(|(_, type_)| type_.to_owned())
-                        .collect(),
-                    type_: type_.to_owned(),
-                    offset: Offset::default(),
-                }))?;
-        }
-        let mut has_body = false;
-        let body = if self.cur_token_is(&Token::LBrace) {
-            has_body = true;
-            self.compound_statement()?
+        let block = if self.cur_token_is(&Token::LBrace) {
+            Some(self.compound_statement(Some((name.clone(), type_.clone())))?)
         } else {
-            Vec::new()
+            None
         };
-        let scope_impl = self.scope.leave();
         self.scope
             .symbol_table_mut()
             .push(Symbol::Function(SymbolFunction {
@@ -390,21 +383,32 @@ impl Parser {
                 parameters: params.clone().into_iter().map(|(_, type_)| type_).collect(),
             }))?;
 
-        if has_body & !func_definition {
+        if block.is_some() & !func_definition {
             panic!("Function definition is not supported here");
         }
 
-        if !has_body {
-            self.expect(&Token::Semicolon)?;
-            Ok(None)
-        } else {
+        if let Some(mut block) = block {
+            for (i, (name, type_)) in params.iter().enumerate() {
+                block.scope.symbol_table.push(Symbol::Param(SymbolParam {
+                    name: name.to_owned(),
+                    preceding: params[..i]
+                        .iter()
+                        .map(|(_, type_)| type_.to_owned())
+                        .collect(),
+                    type_: type_.to_owned(),
+                    offset: Offset::default(),
+                }))?;
+            }
+
             Ok(Some(Stmt::Function(StmtFunction {
                 return_type: type_,
                 name,
                 params,
-                body,
-                scope: Box::new(scope_impl),
+                block,
             })))
+        } else {
+            self.expect(&Token::Semicolon)?;
+            Ok(None)
         }
     }
 
@@ -806,8 +810,15 @@ mod test {
 
         for (input, expected) in tests {
             let mut parser = Parser::new(Lexer::new(input.to_string())).unwrap();
-            let ast = parser.compound_statement().unwrap();
-            assert_eq!(&ast, &expected, "expected: {:?}, got: {:?}", expected, ast);
+            let ast = parser
+                .compound_statement(Some(("".to_string(), Type::Void)))
+                .unwrap();
+
+            assert_eq!(
+                &ast.statements, &expected,
+                "expected: {:?}, got: {:?}",
+                expected, ast
+            );
         }
 
         Ok(())

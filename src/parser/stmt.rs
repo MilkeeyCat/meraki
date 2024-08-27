@@ -10,6 +10,12 @@ pub enum Stmt {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct Block {
+    pub statements: Vec<Stmt>,
+    pub scope: ScopeImpl,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct StmtVarDecl {
     pub type_: Type,
     pub name: String,
@@ -33,6 +39,5 @@ pub struct StmtFunction {
     pub return_type: Type,
     pub name: String,
     pub params: Vec<(String, Type)>,
-    pub body: Vec<Stmt>,
-    pub scope: Box<ScopeImpl>,
+    pub block: Block,
 }

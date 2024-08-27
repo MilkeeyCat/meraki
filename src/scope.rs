@@ -89,7 +89,7 @@ impl Scope {
         &mut self.0.last_mut().unwrap().type_table
     }
 
-    pub fn context(&mut self) -> Option<&(String, Type)> {
+    pub fn context(&self) -> Option<&(String, Type)> {
         self.0.last().unwrap().context.as_ref()
     }
 
