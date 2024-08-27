@@ -393,6 +393,54 @@ impl CodeGen {
                     self.arch.free(r)?;
                 }
             }
+            BinOp::LogicarAnd | BinOp::LogicarOr => {
+                if let Some(dest) = dest {
+                    let false_label = self.arch.generate_label();
+                    let end_label = self.arch.generate_label();
+
+                    self.expr(*expr.left, Some(dest.clone()))?;
+                    self.arch
+                        .cmp(&dest, &Source::Immediate(Immediate::Int(0)), CmpOp::Equal);
+                    self.arch.jmp(
+                        &false_label,
+                        if expr.op == BinOp::LogicarAnd {
+                            Jump::Equal
+                        } else {
+                            Jump::NotEqual
+                        },
+                    );
+
+                    self.expr(*expr.right, Some(dest.clone()))?;
+                    self.arch
+                        .cmp(&dest, &Source::Immediate(Immediate::Int(0)), CmpOp::Equal);
+                    self.arch.jmp(
+                        &false_label,
+                        if expr.op == BinOp::LogicarAnd {
+                            Jump::Equal
+                        } else {
+                            Jump::NotEqual
+                        },
+                    );
+
+                    if expr.op == BinOp::LogicarAnd {
+                        self.arch
+                            .mov(&Source::Immediate(Immediate::Int(1)), &dest, false)?;
+                        self.arch.jmp(&end_label, Jump::Unconditional);
+                        self.arch.write_label(&false_label);
+                        self.arch
+                            .mov(&Source::Immediate(Immediate::Int(0)), &dest, false)?;
+                    } else {
+                        self.arch
+                            .mov(&Source::Immediate(Immediate::Int(0)), &dest, false)?;
+                        self.arch.jmp(&end_label, Jump::Unconditional);
+                        self.arch.write_label(&false_label);
+                        self.arch
+                            .mov(&Source::Immediate(Immediate::Int(1)), &dest, false)?;
+                    }
+
+                    self.arch.write_label(&end_label);
+                }
+            }
         };
 
         Ok(())

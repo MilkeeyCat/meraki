@@ -63,7 +63,22 @@ impl Lexer {
                 }
             }
             b'.' => Token::Period,
-            b'&' => Token::Ampersand,
+            b'&' => {
+                if self.peek() == b'&' {
+                    self.read_char();
+                    Token::And
+                } else {
+                    Token::Ampersand
+                }
+            }
+            b'|' => {
+                if self.peek() == b'|' {
+                    self.read_char();
+                    Token::Or
+                } else {
+                    todo!("Add bitwise or owo");
+                }
+            }
             b'!' => {
                 if self.peek() == b'=' {
                     self.read_char();

@@ -5,6 +5,8 @@ pub enum Precedence {
     #[default]
     Lowest,
     Assign,
+    LogicalOr,
+    LogicalAnd,
     Comparison,
     Equality,
     Sum,
@@ -17,16 +19,18 @@ pub enum Precedence {
 
 impl From<&Token> for Precedence {
     fn from(value: &Token) -> Self {
-        use Token::*;
-
         match value {
-            Plus | Minus => Self::Sum,
-            Asterisk | Slash => Self::Product,
-            LessThan | LessEqual | GreaterThan | GreaterEqual => Self::Comparison,
-            Equal | NotEqual => Self::Equality,
-            Assign => Self::Assign,
-            LParen => Self::Call,
-            Period | LBracket => Self::Access,
+            Token::Plus | Token::Minus => Self::Sum,
+            Token::Asterisk | Token::Slash => Self::Product,
+            Token::LessThan | Token::LessEqual | Token::GreaterThan | Token::GreaterEqual => {
+                Self::Comparison
+            }
+            Token::Equal | Token::NotEqual => Self::Equality,
+            Token::Assign => Self::Assign,
+            Token::LParen => Self::Call,
+            Token::Period | Token::LBracket => Self::Access,
+            Token::And => Self::LogicalAnd,
+            Token::Or => Self::LogicalOr,
             _ => Self::Lowest,
         }
     }
@@ -37,7 +41,9 @@ impl Precedence {
         match self {
             Self::Lowest => panic!(),
             Self::Assign => Self::Lowest,
-            Self::Comparison => Self::Assign,
+            Self::LogicalOr => Self::Assign,
+            Self::LogicalAnd => Self::LogicalOr,
+            Self::Comparison => Self::LogicalAnd,
             Self::Equality => Self::Comparison,
             Self::Sum => Self::Equality,
             Self::Product => Self::Sum,

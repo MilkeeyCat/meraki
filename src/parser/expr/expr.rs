@@ -103,7 +103,9 @@ impl Expression for ExprBinary {
             | BinOp::LessEqual
             | BinOp::GreaterEqual
             | BinOp::Equal
-            | BinOp::NotEqual => Ok(Type::Bool),
+            | BinOp::NotEqual
+            | BinOp::LogicarAnd
+            | BinOp::LogicarOr => Ok(Type::Bool),
         }
     }
 }

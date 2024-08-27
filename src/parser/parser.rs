@@ -62,6 +62,8 @@ impl Parser {
                 (Token::GreaterEqual, Self::bin_expr),
                 (Token::Equal, Self::bin_expr),
                 (Token::NotEqual, Self::bin_expr),
+                (Token::And, Self::bin_expr),
+                (Token::Or, Self::bin_expr),
                 (Token::LParen, Self::bin_expr),
                 (Token::Period, Self::struct_access),
                 (Token::LBracket, Self::array_access),

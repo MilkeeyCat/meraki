@@ -40,6 +40,8 @@ pub enum BinOp {
     LessEqual,
     GreaterEqual,
     Assign,
+    LogicarAnd,
+    LogicarOr,
 }
 
 impl TryFrom<&Token> for BinOp {
@@ -58,6 +60,8 @@ impl TryFrom<&Token> for BinOp {
             Token::LessEqual => Ok(Self::LessEqual),
             Token::GreaterEqual => Ok(Self::GreaterEqual),
             Token::Assign => Ok(Self::Assign),
+            Token::And => Ok(Self::LogicarAnd),
+            Token::Or => Ok(Self::LogicarOr),
             token => Err(OpParseError::Bin(token.to_owned())),
         }
     }
