@@ -7,6 +7,7 @@ pub enum Stmt {
     Expr(Expr),
     Function(StmtFunction),
     Return(StmtReturn),
+    If(StmtIf),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -32,6 +33,13 @@ impl StmtVarDecl {
 pub struct StmtReturn {
     pub expr: Option<Expr>,
     pub label: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct StmtIf {
+    pub condition: Expr,
+    pub consequence: Block,
+    pub alternative: Option<Block>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

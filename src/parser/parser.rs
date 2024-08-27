@@ -1,7 +1,7 @@
 use super::{
     expr::{ExprBinary, ExprLit, ExprUnary},
     precedence::Precedence,
-    stmt::StmtReturn,
+    stmt::{StmtIf, StmtReturn},
     BinOp, Block, Expr, ExprArrayAccess, ExprCast, ExprIdent, ExprStruct, Expression, ParserError,
     Stmt, StmtFunction, StmtVarDecl, UIntLitRepr, UnOp,
 };
@@ -200,6 +200,7 @@ impl Parser {
             } else {
                 match &self.cur_token {
                     Token::Return => stmts.push(self.parse_return()?),
+                    Token::If => stmts.push(self.if_stmt()?),
                     _ => {
                         let expr = self.expr(Precedence::default())?;
                         expr.type_(&self.scope)?;
@@ -281,6 +282,26 @@ impl Parser {
             expr,
             //TODO: it's not a good idea
             label: name.to_owned() + "_ret",
+        }))
+    }
+
+    fn if_stmt(&mut self) -> Result<Stmt, ParserError> {
+        self.expect(&Token::If)?;
+
+        let condition = self.expr(Precedence::default())?;
+        let consequence = self.compound_statement(None)?;
+        let alternative = if self.cur_token_is(&Token::Else) {
+            self.expect(&Token::Else)?;
+
+            Some(self.compound_statement(None)?)
+        } else {
+            None
+        };
+
+        Ok(Stmt::If(StmtIf {
+            condition,
+            consequence,
+            alternative,
         }))
     }
 

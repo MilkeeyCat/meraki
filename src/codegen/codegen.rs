@@ -1,9 +1,9 @@
 use super::{operands, CodeGenError, Destination, EffectiveAddress, Immediate, Offset, Source};
 use crate::{
-    archs::Arch,
+    archs::{Arch, Jump},
     parser::{
         BinOp, CmpOp, Expr, ExprArrayAccess, ExprBinary, ExprFunctionCall, ExprIdent, ExprLit,
-        ExprStruct, ExprStructAccess, ExprUnary, Expression, LValue, Stmt, StmtFunction,
+        ExprStruct, ExprStructAccess, ExprUnary, Expression, LValue, Stmt, StmtFunction, StmtIf,
         StmtReturn, StmtVarDecl, UnOp,
     },
     scope::Scope,
@@ -87,7 +87,59 @@ impl CodeGen {
             )?;
         }
 
-        self.arch.jmp(label);
+        self.arch.jmp(label, Jump::Unconditional);
+
+        Ok(())
+    }
+
+    fn if_stmt(&mut self, if_stmt: StmtIf) -> Result<(), CodeGenError> {
+        let r = self.arch.alloc()?;
+        let expr_size = if_stmt
+            .condition
+            .type_(&self.scope)?
+            .size(&self.arch, &self.scope)?;
+
+        self.expr(
+            if_stmt.condition,
+            Some(Destination::Register(operands::Register {
+                register: r,
+                size: expr_size,
+            })),
+        )?;
+        self.arch.cmp(
+            &Destination::Register(operands::Register {
+                register: r,
+                size: expr_size,
+            }),
+            &Source::Immediate(Immediate::UInt(0)),
+            CmpOp::Equal,
+        );
+
+        let consequence_label = self.arch.generate_label();
+        let alternative_label = self.arch.generate_label();
+
+        self.arch.jmp(&alternative_label, Jump::Equal);
+        self.scope.enter(if_stmt.consequence.scope);
+        for stmt in if_stmt.consequence.statements {
+            self.stmt(stmt)?;
+        }
+        self.scope.leave();
+
+        if if_stmt.alternative.is_some() {
+            self.arch.jmp(&consequence_label, Jump::Unconditional);
+        }
+
+        if let Some(block) = if_stmt.alternative {
+            self.arch.write_label(&alternative_label);
+            self.scope.enter(block.scope);
+
+            for stmt in block.statements {
+                self.stmt(stmt)?;
+            }
+
+            self.scope.leave();
+            self.arch.write_label(&consequence_label);
+        }
 
         Ok(())
     }
@@ -352,6 +404,7 @@ impl CodeGen {
             Stmt::VarDecl(var_decl) => self.declare(var_decl),
             Stmt::Function(func) => self.function(func),
             Stmt::Return(ret) => self.ret(ret),
+            Stmt::If(if_stmt) => self.if_stmt(if_stmt),
         }
     }
 

@@ -1,5 +1,5 @@
 use crate::{
-    archs::{Arch, ArchError, Architecture},
+    archs::{Arch, ArchError, Architecture, Jump},
     codegen::{
         operands::{self, Base, EffectiveAddress, Immediate, Memory, Offset},
         Destination, Source,
@@ -387,10 +387,20 @@ impl Architecture for Amd64 {
         )
     }
 
-    fn jmp(&mut self, label: &str) {
+    fn jmp(&mut self, label: &str, kind: Jump) {
+        let ins = match kind {
+            Jump::Unconditional => "jmp",
+            Jump::Equal => "je",
+            Jump::NotEqual => "jne",
+            Jump::GreaterThan => "jg",
+            Jump::GreaterEqual => "jge",
+            Jump::LessThan => "jl",
+            Jump::LessEqual => "jle",
+        };
+
         self.buf.push_str(&formatdoc!(
             "
-            \tjmp {label}
+            \t{ins} {label}
             "
         ));
     }
@@ -504,11 +514,21 @@ impl Architecture for Amd64 {
         ));
     }
 
-    fn define_literal(&mut self, literal: String) -> String {
+    fn generate_label(&mut self) -> String {
         let label = format!(".L{}", self.label_counter);
+        self.label_counter += 1;
+
+        label
+    }
+
+    fn write_label(&mut self, label: &str) {
+        self.buf.push_str(&format!("{label}:\n"));
+    }
+
+    fn define_literal(&mut self, literal: String) -> String {
+        let label = self.generate_label();
 
         self.literals.push((label.clone(), literal));
-        self.label_counter += 1;
 
         label
     }

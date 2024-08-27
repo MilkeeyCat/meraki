@@ -1,7 +1,7 @@
 mod arch;
 mod error;
 
-pub use arch::{Arch, Architecture};
+pub use arch::{Arch, Architecture, Jump};
 pub use error::ArchError;
 
 mod amd64;

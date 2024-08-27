@@ -9,4 +9,4 @@ pub use error::ParserError;
 pub use expr::*;
 pub use op::{BinOp, CmpOp, OpParseError, UnOp};
 pub use parser::Parser;
-pub use stmt::{Block, Stmt, StmtFunction, StmtReturn, StmtVarDecl};
+pub use stmt::{Block, Stmt, StmtFunction, StmtIf, StmtReturn, StmtVarDecl};

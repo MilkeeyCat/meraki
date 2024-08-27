@@ -8,6 +8,16 @@ use crate::{
     types::Type,
 };
 
+pub enum Jump {
+    Unconditional,
+    Equal,
+    NotEqual,
+    GreaterThan,
+    GreaterEqual,
+    LessThan,
+    LessEqual,
+}
+
 pub trait ArchitectureClone {
     fn clone_box(&self) -> Arch;
 }
@@ -42,7 +52,7 @@ pub trait Architecture: ArchitectureClone {
     ) -> Result<(), ArchError>;
     fn fn_postamble(&mut self, name: &str, stackframe: usize);
     fn ret(&mut self, src: &Source, signed: bool) -> Result<(), ArchError>;
-    fn jmp(&mut self, label: &str);
+    fn jmp(&mut self, label: &str, kind: Jump);
     fn call_fn(&mut self, name: &str, r: Option<&Destination>);
     fn push_arg(&mut self, src: Source, type_: &Type, preceding: &[Type]) -> usize;
     fn populate_offsets(
@@ -52,6 +62,8 @@ pub trait Architecture: ArchitectureClone {
     ) -> Result<usize, ArchError>;
     fn lea(&mut self, dest: &Destination, address: &EffectiveAddress);
     fn shrink_stack(&mut self, size: usize);
+    fn generate_label(&mut self) -> String;
+    fn write_label(&mut self, label: &str);
     fn define_literal(&mut self, literal: String) -> String;
     fn array_offset(
         &mut self,
