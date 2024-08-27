@@ -50,10 +50,7 @@ impl Symbol {
         Ok(match self {
             Self::Local(symbol) => Destination::Memory(Memory {
                 effective_address: EffectiveAddress {
-                    base: Base::Register(operands::Register {
-                        register: RBP,
-                        size: symbol.type_.size(arch, scope)?,
-                    }),
+                    base: Base::Register(RBP),
                     index: None,
                     scale: None,
                     displacement: Some(symbol.offset.clone()),
@@ -71,10 +68,7 @@ impl Symbol {
             }),
             Self::Param(symbol) => Destination::Memory(Memory {
                 effective_address: EffectiveAddress {
-                    base: Base::Register(operands::Register {
-                        register: RBP,
-                        size: symbol.type_.size(arch, scope)?,
-                    }),
+                    base: Base::Register(RBP),
                     index: None,
                     scale: None,
                     displacement: Some(symbol.offset.clone()),

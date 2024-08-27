@@ -138,10 +138,7 @@ impl Architecture for Amd64 {
                     self.mov(
                         &Source::Memory(Memory {
                             effective_address: EffectiveAddress {
-                                base: Base::Register(operands::Register {
-                                    register: r,
-                                    size: chunk_size,
-                                }),
+                                base: Base::Register(r),
                                 index: None,
                                 scale: None,
                                 displacement: Some(Offset((size - chunk_size).try_into().unwrap())),
@@ -349,10 +346,7 @@ impl Architecture for Amd64 {
                             }),
                             &Destination::Memory(Memory {
                                 effective_address: EffectiveAddress {
-                                    base: Base::Register(operands::Register {
-                                        register: self.rbp,
-                                        size,
-                                    }),
+                                    base: Base::Register(self.rbp),
                                     index: None,
                                     scale: None,
                                     displacement: Some(offset.clone()),
@@ -612,7 +606,7 @@ impl std::fmt::Display for operands::Memory {
 impl std::fmt::Display for operands::Base {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Register(register) => write!(f, "{}", register.register.from_size(WORD_SIZE)),
+            Self::Register(register) => write!(f, "{}", register.qword()),
             Self::Label(label) => write!(f, "{label}"),
         }
     }
@@ -623,7 +617,7 @@ impl std::fmt::Display for operands::EffectiveAddress {
         let mut str = format!("[{}", self.base);
 
         if let Some(index) = &self.index {
-            str.push_str(&format!(" + {}", index.register.from_size(index.size)));
+            str.push_str(&format!(" + {}", index.qword()));
         }
 
         if let Some(scale) = self.scale {
@@ -707,10 +701,7 @@ mod test {
                 (
                     Destination::Memory(Memory {
                         effective_address: EffectiveAddress {
-                            base: Base::Register(operands::Register {
-                                register: RBP,
-                                size: 8,
-                            }),
+                            base: Base::Register(RBP),
                             index: None,
                             scale: None,
                             displacement: Some(Offset(-1)),
@@ -735,10 +726,7 @@ mod test {
                 (
                     Destination::Memory(Memory {
                         effective_address: EffectiveAddress {
-                            base: Base::Register(operands::Register {
-                                register: r,
-                                size: 8,
-                            }),
+                            base: Base::Register(r),
                             index: None,
                             scale: None,
                             displacement: Some(Offset(-15)),
@@ -753,10 +741,7 @@ mod test {
                 (
                     Destination::Memory(Memory {
                         effective_address: EffectiveAddress {
-                            base: Base::Register(operands::Register {
-                                register: r,
-                                size: 8,
-                            }),
+                            base: Base::Register(r),
                             index: None,
                             scale: None,
                             displacement: Some(Offset(8)),
@@ -844,10 +829,7 @@ mod test {
                 (
                     Destination::Memory(Memory {
                         effective_address: EffectiveAddress {
-                            base: Base::Register(operands::Register {
-                                register: RBP,
-                                size: 8,
-                            }),
+                            base: Base::Register(RBP),
                             index: None,
                             scale: None,
                             displacement: Some(Offset(-10)),
@@ -866,10 +848,7 @@ mod test {
                 (
                     Destination::Memory(Memory {
                         effective_address: EffectiveAddress {
-                            base: Base::Register(operands::Register {
-                                register: r2,
-                                size: 8,
-                            }),
+                            base: Base::Register(r2),
                             index: None,
                             scale: None,
                             displacement: Some(Offset(10)),

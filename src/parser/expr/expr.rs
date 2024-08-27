@@ -249,7 +249,7 @@ impl LValue for ExprStructAccess {
             }
             Destination::Register(register) => Destination::Memory(Memory {
                 effective_address: EffectiveAddress {
-                    base: Base::Register(register),
+                    base: Base::Register(register.register),
                     index: None,
                     scale: None,
                     displacement: Some(field_offset),
@@ -298,10 +298,7 @@ impl LValue for ExprArrayAccess {
             }),
             &EffectiveAddress {
                 base: base.into(),
-                index: Some(operands::Register {
-                    register: index,
-                    size: codegen.arch.word_size(),
-                }),
+                index: Some(index),
                 scale: None,
                 displacement: None,
             },
@@ -354,14 +351,7 @@ impl LValue for ExprUnary {
 
         Ok(Destination::Memory(Memory {
             effective_address: EffectiveAddress {
-                base: Base::Register(operands::Register {
-                    register: r,
-                    size: self
-                        .expr
-                        .type_(&codegen.scope)?
-                        .inner()?
-                        .size(&codegen.arch, &codegen.scope)?,
-                }),
+                base: Base::Register(r),
                 index: None,
                 scale: None,
                 displacement: None,

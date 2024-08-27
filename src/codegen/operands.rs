@@ -49,7 +49,7 @@ impl std::fmt::Display for Offset {
 
 #[derive(Clone, Debug)]
 pub enum Base {
-    Register(Register),
+    Register(register::Register),
     Label(String),
 }
 
@@ -62,7 +62,7 @@ pub struct Register {
 #[derive(Clone, Debug)]
 pub struct EffectiveAddress {
     pub base: Base,
-    pub index: Option<Register>,
+    pub index: Option<register::Register>,
     pub scale: Option<usize>,
     pub displacement: Option<Offset>,
 }
@@ -136,7 +136,7 @@ impl Into<EffectiveAddress> for Destination {
     fn into(self) -> EffectiveAddress {
         match self {
             Destination::Register(register) => EffectiveAddress {
-                base: Base::Register(register),
+                base: Base::Register(register.register),
                 index: None,
                 scale: None,
                 displacement: None,
@@ -149,7 +149,7 @@ impl Into<EffectiveAddress> for Destination {
 impl Into<Base> for Destination {
     fn into(self) -> Base {
         match self {
-            Destination::Register(register) => Base::Register(register),
+            Destination::Register(register) => Base::Register(register.register),
             Destination::Memory(memory) => memory.effective_address.base,
         }
     }
