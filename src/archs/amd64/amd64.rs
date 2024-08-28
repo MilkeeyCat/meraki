@@ -321,9 +321,16 @@ impl Architecture for Amd64 {
             {name}:
                 push rbp
                 mov rbp, rsp
-                sub rsp, {stackframe}
             ",
         ));
+
+        if stackframe > 0 {
+            self.buf.push_str(&formatdoc!(
+                "
+                \tsub rsp, {stackframe}
+                "
+            ));
+        }
 
         let mut occurences: HashMap<ParamClass, usize> = HashMap::new();
         let mut offset = Offset(0);
@@ -366,14 +373,24 @@ impl Architecture for Amd64 {
     fn fn_postamble(&mut self, name: &str, stackframe: usize) {
         self.buf.push_str(&formatdoc!(
             "
-            {}_ret:
-                add rsp, {}
-                leave
-                ret
-            ",
-            name,
-            stackframe,
+            {name}_ret:
+            "
         ));
+
+        if stackframe > 0 {
+            self.buf.push_str(&formatdoc!(
+                "
+                \tadd rsp, {stackframe}
+                "
+            ));
+        }
+
+        self.buf.push_str(&formatdoc!(
+            "
+            \tleave
+            \tret
+            "
+        ))
     }
 
     fn ret(&mut self, src: &Source, signed: bool) -> Result<(), ArchError> {
