@@ -104,8 +104,8 @@ impl Expression for ExprBinary {
             | BinOp::GreaterEqual
             | BinOp::Equal
             | BinOp::NotEqual
-            | BinOp::LogicarAnd
-            | BinOp::LogicarOr => Ok(Type::Bool),
+            | BinOp::LogicalAnd
+            | BinOp::LogicalOr => Ok(Type::Bool),
         }
     }
 }
@@ -309,6 +309,7 @@ impl LValue for ExprArrayAccess {
             .expr(
                 *self.index.clone(),
                 Some(index.dest(codegen.arch.word_size())),
+                None,
             )
             .unwrap();
         codegen.arch.array_offset(
