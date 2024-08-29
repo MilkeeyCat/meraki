@@ -7,7 +7,7 @@ use crate::{
         StmtReturn, StmtVarDecl, UnOp,
     },
     scope::Scope,
-    symbol_table::SymbolTableError,
+    symbol_table::{Symbol, SymbolTableError},
     type_table,
     types::{Type, TypeError},
 };
@@ -141,8 +141,8 @@ impl CodeGen {
             self.arch.jmp(&consequence_label, Jump::Unconditional);
         }
 
+        self.arch.write_label(&alternative_label);
         if let Some(block) = if_stmt.alternative {
-            self.arch.write_label(&alternative_label);
             self.scope.enter(block.scope);
 
             for stmt in block.statements {
@@ -616,7 +616,21 @@ impl CodeGen {
             preceding.push(type_);
         }
 
-        self.arch.call_fn(&call.name, dest.as_ref());
+        let function = match self
+            .scope
+            .find_symbol(&call.name)
+            .ok_or(SymbolTableError::NotFound(call.name.clone()))
+            .unwrap()
+        {
+            Symbol::Function(func) => func,
+            _ => unreachable!(),
+        };
+        self.arch.call_fn(
+            &call.name,
+            dest.as_ref(),
+            function.return_type.signed(),
+            function.return_type.size(&self.arch, &self.scope)?,
+        )?;
         if stack_size > 0 {
             self.arch.shrink_stack(stack_size);
         }

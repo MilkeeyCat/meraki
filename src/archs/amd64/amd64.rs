@@ -151,7 +151,6 @@ impl Architecture for Amd64 {
                         }),
                         false,
                     )?;
-                    dbg!(&dest);
                     self.mov(
                         &Source::Register(operands::Register {
                             register: r_tmp,
@@ -422,24 +421,31 @@ impl Architecture for Amd64 {
         ));
     }
 
-    fn call_fn(&mut self, name: &str, dest: Option<&Destination>) {
-        match dest {
-            Some(dest) => {
-                self.buf.push_str(&formatdoc!(
-                    "
-                    \tcall {name}
-                    \tmov {dest}, rax
-                    ",
-                ));
-            }
-            None => {
-                self.buf.push_str(&formatdoc!(
-                    "
-                    \tcall {name}
-                    ",
-                ));
-            }
+    fn call_fn(
+        &mut self,
+        name: &str,
+        dest: Option<&Destination>,
+        signed: bool,
+        size: usize,
+    ) -> Result<(), ArchError> {
+        self.buf.push_str(&formatdoc!(
+            "
+            \tcall {name}
+            ",
+        ));
+
+        if let Some(dest) = dest {
+            self.mov(
+                &Source::Register(operands::Register {
+                    register: self.rax,
+                    size,
+                }),
+                dest,
+                signed,
+            )?;
         }
+
+        Ok(())
     }
 
     fn push_arg(&mut self, src: Source, type_: &Type, preceding: &[Type]) -> usize {

@@ -53,7 +53,13 @@ pub trait Architecture: ArchitectureClone {
     fn fn_postamble(&mut self, name: &str, stackframe: usize);
     fn ret(&mut self, src: &Source, signed: bool) -> Result<(), ArchError>;
     fn jmp(&mut self, label: &str, kind: Jump);
-    fn call_fn(&mut self, name: &str, r: Option<&Destination>);
+    fn call_fn(
+        &mut self,
+        name: &str,
+        dest: Option<&Destination>,
+        signed: bool,
+        size: usize,
+    ) -> Result<(), ArchError>;
     fn push_arg(&mut self, src: Source, type_: &Type, preceding: &[Type]) -> usize;
     fn populate_offsets(
         &mut self,
