@@ -182,7 +182,30 @@ impl Architecture for Amd64 {
                 let dest_size = dest.size();
                 let src_size = src.size().unwrap_or(WORD_SIZE);
 
-                if dest_size > src_size {
+                if dest_size == 8 && src_size == 4 {
+                    // On x86_64 you can move 32bit value in 32bit register, and upper 32bits of the register will be zeroed
+                    self.mov(
+                        src,
+                        &Destination::Register(operands::Register {
+                            register: self.rax,
+                            size: 4,
+                        }),
+                        false,
+                    )?;
+
+                    if signed {
+                        self.buf.push_str("\tcdqe\n");
+                    }
+
+                    self.mov(
+                        &Source::Register(operands::Register {
+                            register: self.rax,
+                            size: 8,
+                        }),
+                        dest,
+                        false,
+                    )?;
+                } else if dest_size > src_size {
                     if signed {
                         self.buf.push_str(&formatdoc!("\tmovsx {dest}, {src}\n"));
                     } else {
@@ -847,7 +870,7 @@ mod test {
                     },
                     false,
                 ),
-                "\tmovzx qword ptr [foo], r15d\n",
+                "\tmov eax, r15d\n\tmov qword ptr [foo], rax\n",
             ),
             (
                 (
@@ -866,7 +889,7 @@ mod test {
                     },
                     true,
                 ),
-                "\tmovsx qword ptr [foo], r15d\n",
+                "\tmov eax, r15d\n\tcdqe\n\tmov qword ptr [foo], rax\n",
             ),
             (
                 (
@@ -918,7 +941,7 @@ mod test {
                     },
                     false,
                 ),
-                "\tmovzx r14, r15d\n",
+                "\tmov eax, r15d\n\tmov r14, rax\n",
             ),
             (
                 (
