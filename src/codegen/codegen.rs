@@ -223,38 +223,23 @@ impl CodeGen {
                 }
             }
             Expr::Cast(cast_expr) => {
-                //TODO: move this elsewhere
-                let type_size = cast_expr
-                    .type_(&self.scope)?
-                    .size(&self.arch, &self.scope)?;
-                let expr = match *cast_expr.expr {
-                    Expr::Lit(ExprLit::Int(mut int)) => {
-                        int.zero_except_n_bytes(type_size);
+                if let Some(dest) = dest {
+                    let type_ = cast_expr.expr.type_(&self.scope)?;
+                    let size = type_.size(&self.arch, &self.scope)?;
+                    let casted_size = cast_expr.type_.size(&self.arch, &self.scope)?;
 
-                        Expr::Lit(ExprLit::Int(int))
-                    }
-                    Expr::Lit(ExprLit::UInt(mut uint)) => {
-                        uint.zero_except_n_bytes(type_size);
+                    let r = self.arch.alloc()?;
+                    self.expr(*cast_expr.expr, Some(r.dest(size)), state)?;
 
-                        Expr::Lit(ExprLit::UInt(uint))
-                    }
-                    expr => expr,
-                };
-
-                if let Some(dest) = &mut dest {
-                    let size = expr.type_(&self.scope)?.size(&self.arch, &self.scope)?;
-
-                    match dest {
-                        Destination::Memory(memory) => {
-                            memory.size = size;
-                        }
-                        Destination::Register(register) => {
-                            register.size = size;
-                        }
+                    let size = if casted_size < size {
+                        casted_size
+                    } else {
+                        size
                     };
-                }
 
-                self.expr(expr, dest, state)?;
+                    self.arch.mov(&r.source(size), &dest, type_.signed())?;
+                    self.arch.free(r)?;
+                }
             }
             Expr::FunctionCall(func_call) => self.call_function(func_call, dest, state)?,
             Expr::Struct(expr) => {
