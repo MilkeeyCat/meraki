@@ -98,7 +98,7 @@ impl CodeGen {
             )?;
         }
 
-        self.arch.jmp(label, Jump::Unconditional);
+        self.arch.jcc(label, Jump::Unconditional);
 
         Ok(())
     }
@@ -129,7 +129,7 @@ impl CodeGen {
         let consequence_label = self.arch.generate_label();
         let alternative_label = self.arch.generate_label();
 
-        self.arch.jmp(&alternative_label, Jump::Equal);
+        self.arch.jcc(&alternative_label, Jump::Equal);
         self.scope.enter(if_stmt.consequence.scope);
         for stmt in if_stmt.consequence.statements {
             self.stmt(stmt)?;
@@ -137,7 +137,7 @@ impl CodeGen {
         self.scope.leave();
 
         if if_stmt.alternative.is_some() {
-            self.arch.jmp(&consequence_label, Jump::Unconditional);
+            self.arch.jcc(&consequence_label, Jump::Unconditional);
         }
 
         self.arch.write_label(&alternative_label);
@@ -225,19 +225,12 @@ impl CodeGen {
             Expr::Cast(cast_expr) => {
                 if let Some(dest) = dest {
                     let type_ = cast_expr.expr.type_(&self.scope)?;
-                    let size = type_.size(&self.arch, &self.scope)?;
                     let casted_size = cast_expr.type_.size(&self.arch, &self.scope)?;
-
                     let r = self.arch.alloc()?;
-                    self.expr(*cast_expr.expr, Some(r.dest(size)), state)?;
 
-                    let size = if casted_size < size {
-                        casted_size
-                    } else {
-                        size
-                    };
-
-                    self.arch.mov(&r.source(size), &dest, type_.signed())?;
+                    self.expr(*cast_expr.expr, Some(r.dest(self.arch.word_size())), state)?;
+                    self.arch
+                        .mov(&r.source(casted_size), &dest, type_.signed())?;
                     self.arch.free(r)?;
                 }
             }
@@ -447,11 +440,11 @@ impl CodeGen {
                                 if op == &BinOp::LogicalAnd {
                                     codegen
                                         .arch
-                                        .jmp(&state.false_label.as_ref().unwrap(), Jump::Equal);
+                                        .jcc(&state.false_label.as_ref().unwrap(), Jump::Equal);
                                 } else {
                                     codegen
                                         .arch
-                                        .jmp(&state.false_label.as_ref().unwrap(), Jump::NotEqual);
+                                        .jcc(&state.false_label.as_ref().unwrap(), Jump::NotEqual);
                                 }
                             }
 
@@ -466,7 +459,7 @@ impl CodeGen {
                             self.arch
                                 .mov(&Source::Immediate(Immediate::UInt(1)), &dest, false)?;
                             self.arch
-                                .jmp(state.end_label.as_ref().unwrap(), Jump::Unconditional);
+                                .jcc(state.end_label.as_ref().unwrap(), Jump::Unconditional);
                             self.arch.write_label(state.false_label.as_ref().unwrap());
                             self.arch
                                 .mov(&Source::Immediate(Immediate::UInt(0)), &dest, false)?;
@@ -474,7 +467,7 @@ impl CodeGen {
                             self.arch
                                 .mov(&Source::Immediate(Immediate::UInt(0)), &dest, false)?;
                             self.arch
-                                .jmp(state.end_label.as_ref().unwrap(), Jump::Unconditional);
+                                .jcc(state.end_label.as_ref().unwrap(), Jump::Unconditional);
                             self.arch.write_label(state.false_label.as_ref().unwrap());
                             self.arch
                                 .mov(&Source::Immediate(Immediate::UInt(1)), &dest, false)?;

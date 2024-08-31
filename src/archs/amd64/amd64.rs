@@ -433,7 +433,7 @@ impl Architecture for Amd64 {
         )
     }
 
-    fn jmp(&mut self, label: &str, kind: Jump) {
+    fn jcc(&mut self, label: &str, kind: Jump) {
         let ins = match kind {
             Jump::Unconditional => "jmp",
             Jump::Equal => "je",
