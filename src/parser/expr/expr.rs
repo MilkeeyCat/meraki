@@ -138,23 +138,6 @@ impl ExprLit {
     }
 }
 
-impl std::fmt::Display for ExprLit {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Int(int) => write!(f, "{}", int.to_string()),
-            Self::UInt(uint) => write!(f, "{}", uint.to_string()),
-            Self::Bool(boolean) => {
-                if boolean == &true {
-                    write!(f, "1")
-                } else {
-                    write!(f, "0")
-                }
-            }
-            Self::String(literal) => write!(f, "{literal}"),
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprIdent(pub String);
 
