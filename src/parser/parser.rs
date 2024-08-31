@@ -185,12 +185,19 @@ impl Parser {
     fn compound_statement(
         &mut self,
         context: Option<(String, Type)>,
+        predefined_symbols: Option<Vec<Symbol>>,
     ) -> Result<Block, ParserError> {
         let mut stmts = Vec::new();
 
         self.scope
             .enter_new(context.unwrap_or_else(|| self.scope.context().unwrap().clone()));
         self.expect(&Token::LBrace)?;
+
+        if let Some(symbols) = predefined_symbols {
+            for symbol in symbols {
+                self.scope.symbol_table_mut().push(symbol)?;
+            }
+        }
 
         while !self.cur_token_is(&Token::RBrace) {
             if self.cur_token.is_type(&self.scope) && !self.peek_token_is(&Token::LBrace) {
@@ -291,11 +298,11 @@ impl Parser {
         self.expect(&Token::If)?;
 
         let condition = self.expr(Precedence::default())?;
-        let consequence = self.compound_statement(None)?;
+        let consequence = self.compound_statement(None, None)?;
         let alternative = if self.cur_token_is(&Token::Else) {
             self.expect(&Token::Else)?;
 
-            Some(self.compound_statement(None)?)
+            Some(self.compound_statement(None, None)?)
         } else {
             None
         };
@@ -393,8 +400,23 @@ impl Parser {
         self.expect(&Token::LParen)?;
 
         let params = self.params(Token::Comma, Token::RParen)?;
+        let parameters: Vec<Symbol> = params
+            .iter()
+            .enumerate()
+            .map(|(i, (name, type_))| {
+                Symbol::Param(SymbolParam {
+                    name: name.to_owned(),
+                    preceding: params[..i]
+                        .iter()
+                        .map(|(_, type_)| type_.to_owned())
+                        .collect(),
+                    type_: type_.to_owned(),
+                    offset: Offset::default(),
+                })
+            })
+            .collect();
         let block = if self.cur_token_is(&Token::LBrace) {
-            Some(self.compound_statement(Some((name.clone(), type_.clone())))?)
+            Some(self.compound_statement(Some((name.clone(), type_.clone())), Some(parameters))?)
         } else {
             None
         };
@@ -410,19 +432,7 @@ impl Parser {
             panic!("Function definition is not supported here");
         }
 
-        if let Some(mut block) = block {
-            for (i, (name, type_)) in params.iter().enumerate() {
-                block.scope.symbol_table.push(Symbol::Param(SymbolParam {
-                    name: name.to_owned(),
-                    preceding: params[..i]
-                        .iter()
-                        .map(|(_, type_)| type_.to_owned())
-                        .collect(),
-                    type_: type_.to_owned(),
-                    offset: Offset::default(),
-                }))?;
-            }
-
+        if let Some(block) = block {
             Ok(Some(Stmt::Function(StmtFunction {
                 return_type: type_,
                 name,
@@ -834,7 +844,7 @@ mod test {
         for (input, expected) in tests {
             let mut parser = Parser::new(Lexer::new(input.to_string())).unwrap();
             let ast = parser
-                .compound_statement(Some(("".to_string(), Type::Void)))
+                .compound_statement(Some(("".to_string(), Type::Void)), None)
                 .unwrap();
 
             assert_eq!(

@@ -158,7 +158,7 @@ impl CodeGen {
     pub fn expr(
         &mut self,
         expr: Expr,
-        mut dest: Option<Destination>,
+        dest: Option<Destination>,
         state: Option<&State>,
     ) -> Result<(), CodeGenError> {
         match expr {
