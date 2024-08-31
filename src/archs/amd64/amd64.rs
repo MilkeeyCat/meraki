@@ -312,8 +312,16 @@ impl Architecture for Amd64 {
         Ok(())
     }
 
-    fn cmp(&mut self, dest: &Destination, src: &Source, cmp: CmpOp) {
-        let ins = match cmp {
+    fn cmp(&mut self, dest: &Destination, src: &Source) {
+        self.buf.push_str(&formatdoc!(
+            "
+            \tcmp {dest}, {src}
+            ",
+        ));
+    }
+
+    fn setcc(&mut self, dest: &Destination, condition: CmpOp) {
+        let ins = match condition {
             CmpOp::LessThan => "setl",
             CmpOp::LessEqual => "setle",
             CmpOp::GreaterThan => "setg",
@@ -324,7 +332,6 @@ impl Architecture for Amd64 {
 
         self.buf.push_str(&formatdoc!(
             "
-            \tcmp {dest}, {src}
             \t{ins} {dest}
             ",
         ));

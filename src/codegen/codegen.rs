@@ -124,7 +124,6 @@ impl CodeGen {
                 size: expr_size,
             }),
             &Source::Immediate(Immediate::UInt(0)),
-            CmpOp::Equal,
         );
 
         let consequence_label = self.arch.generate_label();
@@ -395,25 +394,24 @@ impl CodeGen {
             | BinOp::Equal
             | BinOp::NotEqual => {
                 if let Some(dest) = dest {
-                    self.expr(*expr.left, Some(dest.clone()), state)?;
+                    let r_left = self.arch.alloc()?;
+                    let left_size = expr
+                        .left
+                        .type_(&self.scope)?
+                        .size(&self.arch, &self.scope)?;
+                    let r_right = self.arch.alloc()?;
+                    let right_size = expr
+                        .right
+                        .type_(&self.scope)?
+                        .size(&self.arch, &self.scope)?;
 
-                    let r = self.arch.alloc()?;
-                    let type_ = expr.right.type_(&self.scope)?;
-
-                    self.expr(
-                        *expr.right,
-                        Some(r.dest(type_.size(&self.arch, &self.scope)?)),
-                        state,
-                    )?;
-                    self.arch.cmp(
-                        &dest,
-                        &Source::Register(operands::Register {
-                            register: r,
-                            size: type_.size(&self.arch, &self.scope)?,
-                        }),
-                        CmpOp::try_from(&expr.op)?,
-                    );
-                    self.arch.free(r)?;
+                    self.expr(*expr.left, Some(r_left.dest(left_size)), state)?;
+                    self.expr(*expr.right, Some(r_right.dest(right_size)), state)?;
+                    self.arch
+                        .cmp(&r_left.dest(left_size), &r_right.source(right_size));
+                    self.arch.setcc(&dest, CmpOp::try_from(&expr.op)?);
+                    self.arch.free(r_left)?;
+                    self.arch.free(r_right)?;
                 }
             }
             BinOp::LogicalAnd | BinOp::LogicalOr => {
@@ -457,11 +455,9 @@ impl CodeGen {
                             }
 
                             if cmp {
-                                codegen.arch.cmp(
-                                    &dest,
-                                    &Source::Immediate(Immediate::UInt(0)),
-                                    CmpOp::Equal,
-                                );
+                                codegen
+                                    .arch
+                                    .cmp(&dest, &Source::Immediate(Immediate::UInt(0)));
 
                                 if op == &BinOp::LogicalAnd {
                                     codegen

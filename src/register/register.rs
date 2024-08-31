@@ -1,4 +1,7 @@
-use crate::codegen::{operands, Destination};
+use crate::codegen::{
+    operands::{self, Source},
+    Destination,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Register {
@@ -51,6 +54,13 @@ impl Register {
 
     pub fn dest(&self, size: usize) -> Destination {
         Destination::Register(operands::Register {
+            register: *self,
+            size,
+        })
+    }
+
+    pub fn source(&self, size: usize) -> Source {
+        Source::Register(operands::Register {
             register: *self,
             size,
         })

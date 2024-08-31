@@ -42,7 +42,8 @@ pub trait Architecture: ArchitectureClone {
     fn sub(&mut self, dest: &Destination, src: &Source);
     fn mul(&mut self, dest: &Destination, src: &Source, signed: bool) -> Result<(), ArchError>;
     fn div(&mut self, dest: &Destination, src: &Source, signed: bool) -> Result<(), ArchError>;
-    fn cmp(&mut self, dest: &Destination, src: &Source, cmp: CmpOp);
+    fn cmp(&mut self, dest: &Destination, src: &Source);
+    fn setcc(&mut self, dest: &Destination, condition: CmpOp);
     fn fn_preamble(
         &mut self,
         name: &str,

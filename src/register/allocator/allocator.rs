@@ -4,7 +4,7 @@ use crate::register::Register;
 #[derive(Clone)]
 pub struct RegisterAllocator {
     registers: Vec<Register>,
-    used: Vec<u8>,
+    used: Vec<usize>,
 }
 
 impl RegisterAllocator {
@@ -29,11 +29,11 @@ impl RegisterAllocator {
 
     pub fn free(&mut self, r: Register) -> Result<(), AllocatorError> {
         for (i, register) in self.registers.iter().enumerate() {
-            if r == *register {
-                if self.used.contains(&i.try_into().unwrap()) {
+            if &r == register {
+                if let Some(i) = self.used.iter().position(|el| el == &i) {
                     self.used.remove(i);
 
-                    return Ok(());
+                    break;
                 } else {
                     return Err(AllocatorError::DoubleFree);
                 }
