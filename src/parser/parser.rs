@@ -298,6 +298,10 @@ impl Parser {
         self.expect(&Token::If)?;
 
         let condition = self.expr(Precedence::default())?;
+        match condition.type_(&self.scope)? {
+            Type::Bool => {}
+            type_ => return Err(ParserError::Type(TypeError::Mismatched(Type::Bool, type_))),
+        }
         let consequence = self.compound_statement(None, None)?;
         let alternative = if self.cur_token_is(&Token::Else) {
             self.expect(&Token::Else)?;
