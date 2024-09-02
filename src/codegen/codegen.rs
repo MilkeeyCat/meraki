@@ -190,6 +190,8 @@ impl CodeGen {
         let end_label = self.arch.generate_label();
         let r = self.arch.alloc()?;
 
+        self.scope.enter(stmt.block.scope);
+
         if let Some(initializer) = stmt.initializer {
             self.stmt(*initializer)?;
         }
@@ -207,15 +209,16 @@ impl CodeGen {
             self.arch.jcc(&end_label, Jump::Equal);
         }
 
-        self.scope.enter(stmt.block.scope);
         for stmt in stmt.block.statements {
             self.stmt(stmt)?;
         }
-        self.scope.leave();
 
         if let Some(increment) = stmt.increment {
             self.expr(increment, None, None)?;
         }
+
+        self.scope.leave();
+
         self.arch.jcc(&start_label, Jump::Unconditional);
         self.arch.write_label(&end_label);
 
