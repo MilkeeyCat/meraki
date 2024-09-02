@@ -1,7 +1,7 @@
 use super::{
     expr::{ExprBinary, ExprLit, ExprUnary},
     precedence::Precedence,
-    stmt::{StmtIf, StmtReturn, StmtWhile},
+    stmt::{StmtFor, StmtIf, StmtReturn, StmtWhile},
     BinOp, Block, Expr, ExprArrayAccess, ExprCast, ExprIdent, ExprStruct, Expression, ParserError,
     Stmt, StmtFunction, StmtVarDecl, UIntLitRepr, UnOp,
 };
@@ -211,6 +211,7 @@ impl Parser {
                     Token::Return => stmts.push(self.parse_return()?),
                     Token::If => stmts.push(self.if_stmt()?),
                     Token::While => stmts.push(self.while_stmt()?),
+                    Token::For => stmts.push(self.for_stmt()?),
                     _ => {
                         let expr = self.expr(Precedence::default())?;
                         expr.type_(&self.scope)?;
@@ -330,6 +331,54 @@ impl Parser {
         let block = self.compound_statement(None, None)?;
 
         Ok(Stmt::While(StmtWhile { condition, block }))
+    }
+
+    fn for_stmt(&mut self) -> Result<Stmt, ParserError> {
+        self.expect(&Token::For)?;
+
+        self.scope
+            .enter_new(self.scope.context().unwrap().to_owned());
+        let initializer = if self.cur_token_is(&Token::Semicolon) {
+            None
+        } else {
+            let stmt = if self.cur_token.is_type(&self.scope) {
+                let type_ = self.parse_type()?;
+                self.var_decl(type_)?
+            } else {
+                Stmt::Expr(self.expr(Precedence::default())?)
+            };
+
+            Some(stmt)
+        };
+        let symbols = self.scope.leave().symbol_table.0;
+
+        let condition = if self.cur_token_is(&Token::Semicolon) {
+            None
+        } else {
+            let condition = self.expr(Precedence::default())?;
+            match condition.type_(&self.scope)? {
+                Type::Bool => {}
+                type_ => return Err(ParserError::Type(TypeError::Mismatched(Type::Bool, type_))),
+            }
+
+            Some(condition)
+        };
+        self.expect(&Token::Semicolon)?;
+
+        let increment = if self.cur_token_is(&Token::LBrace) {
+            None
+        } else {
+            Some(self.expr(Precedence::default())?)
+        };
+
+        let block = self.compound_statement(None, Some(symbols))?;
+
+        Ok(Stmt::For(StmtFor {
+            initializer: initializer.map(|initializer| Box::new(initializer)),
+            condition,
+            increment,
+            block,
+        }))
     }
 
     fn array_type(&mut self, type_: &mut Type) -> Result<(), ParserError> {

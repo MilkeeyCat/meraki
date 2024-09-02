@@ -3,8 +3,8 @@ use crate::{
     archs::{Arch, Jump},
     parser::{
         BinOp, CmpOp, Expr, ExprArrayAccess, ExprBinary, ExprFunctionCall, ExprIdent, ExprLit,
-        ExprStruct, ExprStructAccess, ExprUnary, Expression, LValue, Stmt, StmtFunction, StmtIf,
-        StmtReturn, StmtVarDecl, StmtWhile, UnOp,
+        ExprStruct, ExprStructAccess, ExprUnary, Expression, LValue, Stmt, StmtFor, StmtFunction,
+        StmtIf, StmtReturn, StmtVarDecl, StmtWhile, UnOp,
     },
     scope::Scope,
     symbol_table::{Symbol, SymbolTableError},
@@ -177,6 +177,45 @@ impl CodeGen {
         }
         self.scope.leave();
 
+        self.arch.jcc(&start_label, Jump::Unconditional);
+        self.arch.write_label(&end_label);
+
+        self.arch.free(r)?;
+
+        Ok(())
+    }
+
+    fn for_stmt(&mut self, stmt: StmtFor) -> Result<(), CodeGenError> {
+        let start_label = self.arch.generate_label();
+        let end_label = self.arch.generate_label();
+        let r = self.arch.alloc()?;
+
+        if let Some(initializer) = stmt.initializer {
+            self.stmt(*initializer)?;
+        }
+
+        self.arch.write_label(&start_label);
+        if let Some(condition) = stmt.condition {
+            self.expr(condition, Some(r.dest(1)), None)?;
+            self.arch.cmp(
+                &Destination::Register(operands::Register {
+                    register: r,
+                    size: 1,
+                }),
+                &Source::Immediate(Immediate::UInt(0)),
+            );
+            self.arch.jcc(&end_label, Jump::Equal);
+        }
+
+        self.scope.enter(stmt.block.scope);
+        for stmt in stmt.block.statements {
+            self.stmt(stmt)?;
+        }
+        self.scope.leave();
+
+        if let Some(increment) = stmt.increment {
+            self.expr(increment, None, None)?;
+        }
         self.arch.jcc(&start_label, Jump::Unconditional);
         self.arch.write_label(&end_label);
 
@@ -520,6 +559,7 @@ impl CodeGen {
             Stmt::Return(ret) => self.ret(ret),
             Stmt::If(stmt) => self.if_stmt(stmt),
             Stmt::While(stmt) => self.while_stmt(stmt),
+            Stmt::For(stmt) => self.for_stmt(stmt),
         }
     }
 

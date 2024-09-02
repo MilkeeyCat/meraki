@@ -125,6 +125,7 @@ impl Lexer {
                     "false" => Token::False,
                     "if" => Token::If,
                     "while" => Token::While,
+                    "for" => Token::For,
                     "else" => Token::Else,
                     "return" => Token::Return,
                     "u8" => Token::U8,

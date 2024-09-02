@@ -9,6 +9,7 @@ pub enum Stmt {
     Return(StmtReturn),
     If(StmtIf),
     While(StmtWhile),
+    For(StmtFor),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -46,6 +47,14 @@ pub struct StmtIf {
 #[derive(Debug, Clone, PartialEq)]
 pub struct StmtWhile {
     pub condition: Expr,
+    pub block: Block,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct StmtFor {
+    pub initializer: Option<Box<Stmt>>,
+    pub condition: Option<Expr>,
+    pub increment: Option<Expr>,
     pub block: Block,
 }
 
