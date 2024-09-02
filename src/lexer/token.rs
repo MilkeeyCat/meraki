@@ -42,6 +42,7 @@ pub enum Token {
     Enum,
     Struct,
     If,
+    While,
     Else,
     Return,
 
@@ -121,6 +122,7 @@ impl Display for Token {
             Enum => write!(f, "enum"),
             Struct => write!(f, "struct"),
             If => write!(f, "if"),
+            While => write!(f, "while"),
             Else => write!(f, "else"),
             Return => write!(f, "return"),
             U8 => write!(f, "u8"),

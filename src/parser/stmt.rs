@@ -8,6 +8,7 @@ pub enum Stmt {
     Function(StmtFunction),
     Return(StmtReturn),
     If(StmtIf),
+    While(StmtWhile),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -40,6 +41,12 @@ pub struct StmtIf {
     pub condition: Expr,
     pub consequence: Block,
     pub alternative: Option<Block>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct StmtWhile {
+    pub condition: Expr,
+    pub block: Block,
 }
 
 #[derive(Debug, Clone, PartialEq)]

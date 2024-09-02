@@ -1,7 +1,7 @@
 use super::{
     expr::{ExprBinary, ExprLit, ExprUnary},
     precedence::Precedence,
-    stmt::{StmtIf, StmtReturn},
+    stmt::{StmtIf, StmtReturn, StmtWhile},
     BinOp, Block, Expr, ExprArrayAccess, ExprCast, ExprIdent, ExprStruct, Expression, ParserError,
     Stmt, StmtFunction, StmtVarDecl, UIntLitRepr, UnOp,
 };
@@ -210,6 +210,7 @@ impl Parser {
                 match &self.cur_token {
                     Token::Return => stmts.push(self.parse_return()?),
                     Token::If => stmts.push(self.if_stmt()?),
+                    Token::While => stmts.push(self.while_stmt()?),
                     _ => {
                         let expr = self.expr(Precedence::default())?;
                         expr.type_(&self.scope)?;
@@ -316,6 +317,19 @@ impl Parser {
             consequence,
             alternative,
         }))
+    }
+
+    fn while_stmt(&mut self) -> Result<Stmt, ParserError> {
+        self.expect(&Token::While)?;
+
+        let condition = self.expr(Precedence::default())?;
+        match condition.type_(&self.scope)? {
+            Type::Bool => {}
+            type_ => return Err(ParserError::Type(TypeError::Mismatched(Type::Bool, type_))),
+        }
+        let block = self.compound_statement(None, None)?;
+
+        Ok(Stmt::While(StmtWhile { condition, block }))
     }
 
     fn array_type(&mut self, type_: &mut Type) -> Result<(), ParserError> {

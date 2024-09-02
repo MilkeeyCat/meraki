@@ -4,7 +4,7 @@ use crate::{
     parser::{
         BinOp, CmpOp, Expr, ExprArrayAccess, ExprBinary, ExprFunctionCall, ExprIdent, ExprLit,
         ExprStruct, ExprStructAccess, ExprUnary, Expression, LValue, Stmt, StmtFunction, StmtIf,
-        StmtReturn, StmtVarDecl, UnOp,
+        StmtReturn, StmtVarDecl, StmtWhile, UnOp,
     },
     scope::Scope,
     symbol_table::{Symbol, SymbolTableError},
@@ -151,6 +151,36 @@ impl CodeGen {
             self.scope.leave();
             self.arch.write_label(&consequence_label);
         }
+
+        Ok(())
+    }
+
+    fn while_stmt(&mut self, stmt: StmtWhile) -> Result<(), CodeGenError> {
+        let start_label = self.arch.generate_label();
+        let end_label = self.arch.generate_label();
+        let r = self.arch.alloc()?;
+
+        self.arch.write_label(&start_label);
+        self.expr(stmt.condition, Some(r.dest(1)), None)?;
+        self.arch.cmp(
+            &Destination::Register(operands::Register {
+                register: r,
+                size: 1,
+            }),
+            &Source::Immediate(Immediate::UInt(0)),
+        );
+        self.arch.jcc(&end_label, Jump::Equal);
+
+        self.scope.enter(stmt.block.scope);
+        for stmt in stmt.block.statements {
+            self.stmt(stmt)?;
+        }
+        self.scope.leave();
+
+        self.arch.jcc(&start_label, Jump::Unconditional);
+        self.arch.write_label(&end_label);
+
+        self.arch.free(r)?;
 
         Ok(())
     }
@@ -488,7 +518,8 @@ impl CodeGen {
             Stmt::VarDecl(var_decl) => self.declare(var_decl),
             Stmt::Function(func) => self.function(func),
             Stmt::Return(ret) => self.ret(ret),
-            Stmt::If(if_stmt) => self.if_stmt(if_stmt),
+            Stmt::If(stmt) => self.if_stmt(stmt),
+            Stmt::While(stmt) => self.while_stmt(stmt),
         }
     }
 
