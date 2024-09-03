@@ -54,7 +54,9 @@ impl CodeGen {
     fn function(&mut self, mut func: StmtFunction) -> Result<(), CodeGenError> {
         let offset = self
             .arch
-            .populate_offsets(&mut func.block.scope.symbol_table, &self.scope)?;
+            .populate_offsets(&mut func.block, &self.scope, Default::default())?
+            .unsigned_abs()
+            .next_multiple_of(self.arch.stack_alignment());
 
         self.scope.enter(func.block.scope);
         self.arch.fn_preamble(

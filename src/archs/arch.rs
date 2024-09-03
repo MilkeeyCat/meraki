@@ -1,10 +1,9 @@
 use super::ArchError;
 use crate::{
     codegen::{Destination, EffectiveAddress, Source},
-    parser::CmpOp,
+    parser::{Block, CmpOp},
     register::{allocator::AllocatorError, Register},
     scope::Scope,
-    symbol_table::SymbolTable,
     types::Type,
 };
 
@@ -27,7 +26,7 @@ pub trait Architecture: ArchitectureClone {
     where
         Self: Sized;
     fn word_size(&self) -> usize;
-    fn align(&self, offset: usize, size: usize) -> usize;
+    fn stack_alignment(&self) -> usize;
     fn size(&self, type_: &Type) -> usize;
     fn alloc(&mut self) -> Result<Register, AllocatorError>;
     fn free(&mut self, register: Register) -> Result<(), AllocatorError>;
@@ -64,9 +63,10 @@ pub trait Architecture: ArchitectureClone {
     fn push_arg(&mut self, src: Source, type_: &Type, preceding: &[Type]) -> usize;
     fn populate_offsets(
         &mut self,
-        symbol_table: &mut SymbolTable,
+        block: &mut Block,
         scope: &Scope,
-    ) -> Result<usize, ArchError>;
+        start_offset: isize,
+    ) -> Result<isize, ArchError>;
     fn lea(&mut self, dest: &Destination, address: &EffectiveAddress);
     fn shrink_stack(&mut self, size: usize);
     fn generate_label(&mut self) -> String;

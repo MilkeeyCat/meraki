@@ -18,13 +18,13 @@ pub struct TypeStruct {
 
 impl TypeStruct {
     pub fn size(&self, arch: &Arch, scope: &Scope) -> Result<usize, TypeError> {
-        let mut offset = 0;
+        let mut offset: usize = 0;
         let mut largest = 0;
 
         for (_, type_) in &self.fields {
             let size = type_.size(arch, scope)?;
 
-            offset = arch.align(offset, size);
+            offset = offset.next_multiple_of(size);
             offset += size;
 
             if size > largest {
@@ -33,15 +33,15 @@ impl TypeStruct {
         }
 
         // Align to the largest element in the struct
-        Ok(arch.align(offset, largest))
+        Ok(offset.next_multiple_of(largest))
     }
 
     pub fn offset(&self, arch: &Arch, name: &str, scope: &Scope) -> Result<Offset, TypeError> {
-        let mut offset = 0;
+        let mut offset: usize = 0;
 
         for (field_name, type_) in &self.fields {
             let size = type_.size(arch, scope)?;
-            offset = arch.align(offset, size);
+            offset = offset.next_multiple_of(size);
             if name == field_name {
                 break;
             }

@@ -4,13 +4,13 @@ use crate::{
         operands::{self, Base, EffectiveAddress, Immediate, Memory, Offset},
         Destination, Source,
     },
-    parser::CmpOp,
+    parser::{Block, CmpOp, Stmt},
     register::{
         allocator::{AllocatorError, RegisterAllocator},
         Register,
     },
     scope::Scope,
-    symbol_table::{Symbol, SymbolTable},
+    symbol_table::Symbol,
     types::Type,
 };
 use indoc::formatdoc;
@@ -85,12 +85,9 @@ impl Architecture for Amd64 {
         WORD_SIZE
     }
 
-    fn align(&self, offset: usize, size: usize) -> usize {
-        if offset % size == 0 {
-            offset
-        } else {
-            offset + size - (offset % size)
-        }
+    #[inline]
+    fn stack_alignment(&self) -> usize {
+        STACK_ALIGNMENT
     }
 
     fn size(&self, type_: &Type) -> usize {
@@ -524,39 +521,70 @@ impl Architecture for Amd64 {
 
     fn populate_offsets(
         &mut self,
-        symbol_table: &mut SymbolTable,
+        block: &mut Block,
         scope: &Scope,
-    ) -> Result<usize, ArchError> {
-        let mut offset = 0;
+        mut offset: isize,
+    ) -> Result<isize, ArchError> {
         let mut occurences: HashMap<ParamClass, usize> = HashMap::new();
 
-        for symbol in &mut symbol_table.0 {
-            let type_ = symbol.type_();
+        for param in block.scope.symbol_table.0.iter_mut().filter_map(|symbol| {
+            if let Symbol::Param(param) = symbol {
+                Some(param)
+            } else {
+                None
+            }
+        }) {
+            let n = occurences
+                .entry(ParamClass::from(&param.type_))
+                .or_insert(0);
+            *n += 1;
 
-            match symbol {
-                Symbol::Local(local) => {
-                    offset -= type_.size(&(Box::new(self.clone()) as Arch), &scope)? as isize;
-                    local.offset = Offset(offset);
-                }
-                Symbol::Param(param) => {
-                    let n = occurences.entry(ParamClass::from(&type_)).or_insert(0);
-                    *n += 1;
-
-                    if *n <= 6 {
-                        offset -= type_.size(&(Box::new(self.clone()) as Arch), &scope)? as isize;
-                        param.offset = Offset(offset);
-                    } else {
-                        // When call instruction is called it pushes return address on da stack
-                        param.offset = Offset(((*n - 6) * WORD_SIZE + 8) as isize);
-                    }
-                }
-                // Global variale in a scope, wot
-                Symbol::Global(_) => unreachable!(),
-                Symbol::Function(_) => unreachable!(),
+            if *n <= 6 {
+                offset -= param
+                    .type_
+                    .size(&(Box::new(self.clone()) as Arch), &scope)?
+                    as isize;
+                param.offset = Offset(offset);
+            } else {
+                // When call instruction is called it pushes return address on da stack
+                param.offset = Offset(((*n - 6) * WORD_SIZE + 8) as isize);
             }
         }
 
-        Ok(offset.unsigned_abs().next_multiple_of(STACK_ALIGNMENT))
+        for stmt in &mut block.statements {
+            match stmt {
+                Stmt::VarDecl(stmt2) => {
+                    offset -= stmt2
+                        .type_
+                        .size(&(Box::new(self.clone()) as Arch), &scope)?
+                        as isize;
+
+                    match block.scope.symbol_table.find_mut(&stmt2.name).unwrap() {
+                        Symbol::Local(local) => {
+                            local.offset = Offset(offset);
+                        }
+                        _ => unreachable!(),
+                    };
+                }
+                Stmt::If(stmt) => {
+                    offset = self.populate_offsets(&mut stmt.consequence, scope, offset)?;
+
+                    if let Some(alternative) = &mut stmt.alternative {
+                        offset = self.populate_offsets(alternative, scope, offset)?;
+                    }
+                }
+                Stmt::While(stmt) => {
+                    offset = self.populate_offsets(&mut stmt.block, scope, offset)?;
+                }
+                Stmt::For(stmt) => {
+                    offset = self.populate_offsets(&mut stmt.block, scope, offset)?;
+                }
+                Stmt::Return(_) | Stmt::Expr(_) => {}
+                Stmt::Function(_) => unreachable!(),
+            }
+        }
+
+        Ok(offset)
     }
 
     fn shrink_stack(&mut self, size: usize) {
