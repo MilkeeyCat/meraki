@@ -10,12 +10,12 @@ pub struct TypeArray {
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Type {
     U8,
-    U16,
-    U32,
-    U64,
     I8,
+    U16,
     I16,
+    U32,
     I32,
+    U64,
     I64,
     Usize,
     Isize,
@@ -49,7 +49,7 @@ impl std::fmt::Display for Type {
 }
 
 impl Type {
-    fn int(&self) -> bool {
+    pub fn int(&self) -> bool {
         match self {
             Self::U8
             | Self::U16
@@ -103,31 +103,6 @@ impl Type {
             }
             _ => {}
         }
-    }
-
-    pub fn promote(self, type_: Self) -> Result<Self, TypeError> {
-        if self == type_ {
-            return Ok(self);
-        }
-
-        if self.int() && type_.int() {
-            return self.promote_ints(type_);
-        }
-
-        Err(TypeError::Promotion(self, type_))
-    }
-
-    fn promote_ints(mut self, mut type_: Self) -> Result<Self, TypeError> {
-        if self.signed() || type_.signed() {
-            self.to_signed();
-            type_.to_signed();
-        }
-
-        if self > type_ {
-            return Ok(self);
-        }
-
-        Ok(type_)
     }
 
     pub fn assign(self, type_: Self) -> Result<Self, TypeError> {
@@ -204,26 +179,6 @@ impl Type {
 #[cfg(test)]
 mod test {
     use super::{Type, TypeError};
-
-    #[test]
-    fn int_promotion() -> Result<(), TypeError> {
-        let tests = [
-            ((Type::U8, Type::U8), Type::U8),
-            ((Type::U8, Type::I8), Type::I8),
-            ((Type::I8, Type::U8), Type::I8),
-            ((Type::I8, Type::I8), Type::I8),
-            ((Type::U8, Type::U16), Type::U16),
-            ((Type::U8, Type::I16), Type::I16),
-            ((Type::I8, Type::U16), Type::I16),
-            ((Type::I8, Type::I16), Type::I16),
-        ];
-
-        for (types, expected) in tests {
-            assert_eq!(Type::promote(types.0, types.1)?, expected);
-        }
-
-        Ok(())
-    }
 
     #[test]
     fn casting() -> Result<(), TypeError> {

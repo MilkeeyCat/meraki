@@ -40,9 +40,10 @@ impl CodeGen {
             self.expr(
                 Expr::Binary(ExprBinary::new(
                     BinOp::Assign,
-                    Box::new(Expr::Ident(ExprIdent(variable.name))),
-                    Box::new(expr),
-                )),
+                    Expr::Ident(ExprIdent(variable.name)),
+                    expr,
+                    &self.scope,
+                )?),
                 None,
                 None,
             )?;

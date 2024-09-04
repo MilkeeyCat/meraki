@@ -1,5 +1,3 @@
-use operands::{Base, EffectiveAddress, Memory};
-
 use super::{int_repr::UIntLitRepr, ExprError, IntLitRepr};
 use crate::{
     archs::ArchError,
@@ -10,6 +8,7 @@ use crate::{
     type_table,
     types::{Type, TypeError},
 };
+use operands::{Base, EffectiveAddress, Memory};
 
 pub trait Expression {
     fn type_(&self, scope: &Scope) -> Result<Type, ExprError>;
@@ -73,6 +72,27 @@ impl Expr {
             _ => Ok(None),
         }
     }
+
+    fn int_lit_only(expr: &Expr) -> bool {
+        match expr {
+            Expr::Binary(expr) => {
+                Expr::int_lit_only(expr.left.as_ref()) && Expr::int_lit_only(expr.right.as_ref())
+            }
+            Expr::Unary(expr) => Expr::int_lit_only(expr.expr.as_ref()),
+            Expr::Cast(expr) => {
+                if expr.type_.int() {
+                    Expr::int_lit_only(expr.expr.as_ref())
+                } else {
+                    false
+                }
+            }
+            Expr::Lit(expr) => match expr {
+                ExprLit::Int(_) | ExprLit::UInt(_) => true,
+                _ => false,
+            },
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -83,21 +103,108 @@ pub struct ExprBinary {
 }
 
 impl ExprBinary {
-    pub fn new(op: BinOp, left: Box<Expr>, right: Box<Expr>) -> Self {
-        Self { op, left, right }
+    pub fn new(op: BinOp, left: Expr, right: Expr, scope: &Scope) -> Result<Self, ExprError> {
+        let modify = |expr: Expr, prev: Type, new: Type| -> Expr {
+            if prev != new && Expr::int_lit_only(&expr) {
+                Expr::Cast(ExprCast {
+                    expr: Box::new(expr),
+                    type_: new,
+                })
+            } else {
+                expr
+            }
+        };
+        let promote = |mut from: Type, mut to: Type, signed: bool| -> Type {
+            if from > to {
+                if signed {
+                    from.to_signed();
+                }
+
+                from
+            } else {
+                if signed {
+                    to.to_signed();
+                }
+
+                to
+            }
+        };
+
+        match &op {
+            BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div => {
+                let left_type = left.type_(scope)?;
+                let right_type = right.type_(scope)?;
+
+                if left_type.int() && right_type.int() {
+                    if left_type != right_type {
+                        let signed = left_type.signed() || right_type.signed();
+                        let new_left_type = promote(left_type.clone(), right_type.clone(), signed);
+                        let new_right_type = promote(right_type.clone(), left_type.clone(), signed);
+                        let left = modify(left, left_type, new_left_type);
+                        let right = modify(right, right_type, new_right_type);
+
+                        if left.type_(scope)? != right.type_(scope)? {
+                            return Err(ExprError::Type(TypeError::Mismatched(
+                                left.type_(scope)?,
+                                right.type_(scope)?,
+                            )));
+                        }
+
+                        return Ok(Self {
+                            op,
+                            left: Box::new(left),
+                            right: Box::new(right),
+                        });
+                    }
+                } else {
+                    panic!("Math operations are allowed only on integers");
+                }
+            }
+            BinOp::Assign => {
+                let left_type = left.type_(scope)?;
+                let right_type = right.type_(scope)?;
+
+                if left_type != right_type {
+                    let signed = left_type.signed();
+                    let new_right_type = promote(right_type.clone(), left_type.clone(), signed);
+                    let right = modify(right, right_type, new_right_type);
+
+                    if left.type_(scope)? != right.type_(scope)? {
+                        return Err(ExprError::Type(TypeError::Mismatched(
+                            left.type_(scope)?,
+                            right.type_(scope)?,
+                        )));
+                    }
+
+                    return Ok(Self {
+                        op,
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    });
+                }
+            }
+            _ => {}
+        };
+
+        Ok(Self {
+            op,
+            left: Box::new(left),
+            right: Box::new(right),
+        })
     }
 }
 
 impl Expression for ExprBinary {
     fn type_(&self, scope: &Scope) -> Result<Type, ExprError> {
         match &self.op {
-            BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div => {
+            BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Assign => {
                 let left = self.left.as_ref().type_(scope)?;
                 let right = self.right.as_ref().type_(scope)?;
 
-                Ok(Type::promote(left, right)?)
+                assert_eq!(left, right);
+
+                Ok(left)
             }
-            BinOp::Assign => Ok(self.left.type_(scope)?.assign(self.right.type_(scope)?)?),
             BinOp::LessThan
             | BinOp::GreaterThan
             | BinOp::LessEqual

@@ -644,17 +644,17 @@ impl Parser {
                 _ => todo!("Don't know what error to return yet"),
             },
             token => {
-                let left = Box::new(left);
+                let left = left;
                 // NOTE: assignment expression is right-associative
                 let precedence = if let &Token::Assign = &token {
                     Precedence::from(&token).lower()
                 } else {
                     Precedence::from(&token)
                 };
-                let right = Box::new(self.expr(precedence)?);
+                let right = self.expr(precedence)?;
                 let op = BinOp::try_from(&token).map_err(|e| ParserError::Operator(e))?;
 
-                Ok(Expr::Binary(ExprBinary::new(op, left, right)))
+                Ok(Expr::Binary(ExprBinary::new(op, left, right, &self.scope)?))
             }
         }
     }
@@ -773,14 +773,16 @@ mod test {
     use crate::{
         lexer::Lexer,
         parser::{
-            BinOp, Expr, ExprBinary, ExprCast, ExprIdent, ExprLit, ExprUnary, IntLitReprError,
-            Stmt, StmtVarDecl, UIntLitRepr, UnOp,
+            BinOp, Expr, ExprBinary, ExprCast, ExprIdent, ExprLit, ExprUnary, ParserError, Stmt,
+            StmtVarDecl, UIntLitRepr, UnOp,
         },
+        scope::Scope,
+        symbol_table::{Symbol, SymbolLocal},
         types::Type,
     };
 
     #[test]
-    fn parse_arithmetic_expression() -> Result<(), IntLitReprError> {
+    fn parse_arithmetic_expression() -> Result<(), ParserError> {
         let tests = [
             (
                 "
@@ -790,24 +792,28 @@ mod test {
                 ",
                 vec![Stmt::Expr(Expr::Binary(ExprBinary::new(
                     BinOp::Add,
-                    Box::new(Expr::Binary(ExprBinary::new(
+                    Expr::Binary(ExprBinary::new(
                         BinOp::Mul,
-                        Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(1)))),
-                        Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(2)))),
-                    ))),
-                    Box::new(Expr::Binary(ExprBinary::new(
+                        Expr::Lit(ExprLit::UInt(UIntLitRepr::new(1))),
+                        Expr::Lit(ExprLit::UInt(UIntLitRepr::new(2))),
+                        &Scope::new(),
+                    )?),
+                    Expr::Binary(ExprBinary::new(
                         BinOp::Div,
-                        Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(3)))),
-                        Box::new(Expr::Binary(ExprBinary::new(
+                        Expr::Lit(ExprLit::UInt(UIntLitRepr::new(3))),
+                        Expr::Binary(ExprBinary::new(
                             BinOp::Add,
-                            Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(4)))),
-                            Box::new(Expr::Cast(ExprCast::new(
+                            Expr::Lit(ExprLit::UInt(UIntLitRepr::new(4))),
+                            Expr::Cast(ExprCast::new(
                                 Type::U8,
                                 Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(1)))),
-                            ))),
-                        ))),
-                    ))),
-                )))],
+                            )),
+                            &Scope::new(),
+                        )?),
+                        &Scope::new(),
+                    )?),
+                    &Scope::new(),
+                )?))],
             ),
             (
                 "
@@ -820,19 +826,25 @@ mod test {
                     Stmt::VarDecl(StmtVarDecl::new(Type::U8, "foo".to_owned(), None)),
                     Stmt::Expr(Expr::Binary(ExprBinary::new(
                         BinOp::Assign,
-                        Box::new(Expr::Ident(ExprIdent("foo".to_owned()))),
-                        Box::new(Expr::Binary(ExprBinary::new(
+                        Expr::Ident(ExprIdent("foo".to_owned())),
+                        Expr::Binary(ExprBinary::new(
                             BinOp::Add,
-                            Box::new(Expr::Cast(ExprCast::new(
+                            Expr::Cast(ExprCast::new(
                                 Type::U8,
                                 Box::new(Expr::Unary(ExprUnary::new(
                                     UnOp::Negative,
                                     Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(1)))),
                                 ))),
-                            ))),
-                            Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(5)))),
-                        ))),
-                    ))),
+                            )),
+                            Expr::Lit(ExprLit::UInt(UIntLitRepr::new(5))),
+                            &Scope::new(),
+                        )?),
+                        &Scope::from(vec![Symbol::Local(SymbolLocal {
+                            name: "foo".to_string(),
+                            type_: Type::U8,
+                            offset: Default::default(),
+                        })]),
+                    )?)),
                 ],
             ),
             (
@@ -848,20 +860,38 @@ mod test {
                     Stmt::VarDecl(StmtVarDecl::new(Type::I8, "bar".to_owned(), None)),
                     Stmt::Expr(Expr::Binary(ExprBinary::new(
                         BinOp::Assign,
-                        Box::new(Expr::Ident(ExprIdent("bar".to_owned()))),
-                        Box::new(Expr::Binary(ExprBinary::new(
+                        Expr::Ident(ExprIdent("bar".to_owned())),
+                        Expr::Binary(ExprBinary::new(
                             BinOp::Add,
-                            Box::new(Expr::Cast(ExprCast::new(
+                            Expr::Cast(ExprCast::new(
                                 Type::I8,
                                 Box::new(Expr::Ident(ExprIdent("foo".to_owned()))),
-                            ))),
-                            Box::new(Expr::Binary(ExprBinary::new(
+                            )),
+                            Expr::Binary(ExprBinary::new(
                                 BinOp::Div,
-                                Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(5)))),
-                                Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(10)))),
-                            ))),
-                        ))),
-                    ))),
+                                Expr::Lit(ExprLit::UInt(UIntLitRepr::new(5))),
+                                Expr::Lit(ExprLit::UInt(UIntLitRepr::new(10))),
+                                &Scope::new(),
+                            )?),
+                            &Scope::from(vec![Symbol::Local(SymbolLocal {
+                                name: "foo".to_string(),
+                                type_: Type::U8,
+                                offset: Default::default(),
+                            })]),
+                        )?),
+                        &Scope::from(vec![
+                            Symbol::Local(SymbolLocal {
+                                name: "bar".to_string(),
+                                type_: Type::I8,
+                                offset: Default::default(),
+                            }),
+                            Symbol::Local(SymbolLocal {
+                                name: "foo".to_string(),
+                                type_: Type::U8,
+                                offset: Default::default(),
+                            }),
+                        ]),
+                    )?)),
                 ],
             ),
             (
@@ -872,16 +902,18 @@ mod test {
                 ",
                 vec![Stmt::Expr(Expr::Binary(ExprBinary::new(
                     BinOp::Add,
-                    Box::new(Expr::Cast(ExprCast::new(
+                    Expr::Cast(ExprCast::new(
                         Type::I8,
                         Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(1)))),
-                    ))),
-                    Box::new(Expr::Binary(ExprBinary::new(
+                    )),
+                    Expr::Binary(ExprBinary::new(
                         BinOp::Div,
-                        Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(2)))),
-                        Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(3)))),
-                    ))),
-                )))],
+                        Expr::Lit(ExprLit::UInt(UIntLitRepr::new(2))),
+                        Expr::Lit(ExprLit::UInt(UIntLitRepr::new(3))),
+                        &Scope::new(),
+                    )?),
+                    &Scope::new(),
+                )?))],
             ),
             (
                 "
@@ -897,16 +929,34 @@ mod test {
                     Stmt::VarDecl(StmtVarDecl::new(Type::U8, "b".to_owned(), None)),
                     Stmt::Expr(Expr::Binary(ExprBinary::new(
                         BinOp::Assign,
-                        Box::new(Expr::Ident(ExprIdent("a".to_owned()))),
-                        Box::new(Expr::Binary(ExprBinary::new(
+                        Expr::Ident(ExprIdent("a".to_owned())),
+                        Expr::Binary(ExprBinary::new(
                             BinOp::Assign,
-                            Box::new(Expr::Ident(ExprIdent("b".to_owned()))),
-                            Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(69)))),
-                        ))),
-                    ))),
+                            Expr::Ident(ExprIdent("b".to_owned())),
+                            Expr::Lit(ExprLit::UInt(UIntLitRepr::new(69))),
+                            &Scope::from(vec![Symbol::Local(SymbolLocal {
+                                name: "b".to_string(),
+                                type_: Type::U8,
+                                offset: Default::default(),
+                            })]),
+                        )?),
+                        &Scope::from(vec![
+                            Symbol::Local(SymbolLocal {
+                                name: "a".to_string(),
+                                type_: Type::U8,
+                                offset: Default::default(),
+                            }),
+                            Symbol::Local(SymbolLocal {
+                                name: "b".to_string(),
+                                type_: Type::U8,
+                                offset: Default::default(),
+                            }),
+                        ]),
+                    )?)),
                 ],
             ),
         ];
+        dbg!("GOTTEM");
 
         for (input, expected) in tests {
             let mut parser = Parser::new(Lexer::new(input.to_string())).unwrap();

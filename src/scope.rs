@@ -97,3 +97,14 @@ impl Scope {
         self.0.len() > 1
     }
 }
+
+impl From<Vec<Symbol>> for Scope {
+    fn from(value: Vec<Symbol>) -> Self {
+        let mut scope = Self::new();
+        let mut scope_impl = ScopeImpl::new(None);
+        scope_impl.symbol_table.0 = value;
+        scope.enter(scope_impl);
+
+        scope
+    }
+}
