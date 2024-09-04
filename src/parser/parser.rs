@@ -2,8 +2,8 @@ use super::{
     expr::{ExprBinary, ExprLit, ExprUnary},
     precedence::Precedence,
     stmt::{StmtFor, StmtIf, StmtReturn, StmtWhile},
-    BinOp, Block, Expr, ExprArrayAccess, ExprCast, ExprIdent, ExprStruct, Expression, ParserError,
-    Stmt, StmtFunction, StmtVarDecl, UIntLitRepr, UnOp,
+    BinOp, Block, Expr, ExprArray, ExprArrayAccess, ExprCast, ExprIdent, ExprStruct, Expression,
+    ParserError, Stmt, StmtFunction, StmtVarDecl, UIntLitRepr, UnOp,
 };
 use crate::{
     codegen::Offset,
@@ -49,6 +49,7 @@ impl Parser {
                 (Token::LParen, Self::grouped_expr),
                 (Token::Ampersand, Self::addr_expr),
                 (Token::Asterisk, Self::deref_expr),
+                (Token::LBracket, Self::array_expr),
             ]),
             infix_fns: HashMap::from([
                 (Token::Plus, Self::bin_expr as InfixFn),
@@ -764,6 +765,23 @@ impl Parser {
         };
 
         Ok(Expr::Unary(ExprUnary::new(UnOp::Deref, Box::new(expr))))
+    }
+
+    fn array_expr(&mut self) -> Result<Expr, ParserError> {
+        self.expect(&Token::LBracket)?;
+        let mut items = Vec::new();
+
+        while !self.cur_token_is(&Token::RBracket) {
+            items.push(self.expr(Precedence::default())?);
+
+            if !self.cur_token_is(&Token::RBracket) {
+                self.expect(&Token::Comma)?;
+            }
+        }
+
+        self.expect(&Token::RBracket)?;
+
+        Ok(Expr::Array(ExprArray::new(items, &self.scope)))
     }
 }
 

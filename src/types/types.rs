@@ -1,13 +1,13 @@
 use super::TypeError;
 use crate::{archs::Arch, scope::Scope};
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash)]
 pub struct TypeArray {
     pub type_: Box<Type>,
     pub length: usize,
 }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash)]
 pub enum Type {
     U8,
     I8,

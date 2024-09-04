@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use super::{int_repr::UIntLitRepr, ExprError, IntLitRepr};
 use crate::{
     archs::ArchError,
@@ -6,7 +8,7 @@ use crate::{
     scope::Scope,
     symbol_table::{Symbol, SymbolTableError},
     type_table,
-    types::{Type, TypeError},
+    types::{Type, TypeArray, TypeError},
 };
 use operands::{Base, EffectiveAddress, Memory};
 
@@ -26,6 +28,7 @@ pub enum Expr {
     Lit(ExprLit),
     Ident(ExprIdent),
     Struct(ExprStruct),
+    Array(ExprArray),
     StructAccess(ExprStructAccess),
     ArrayAccess(ExprArrayAccess),
     FunctionCall(ExprFunctionCall),
@@ -40,6 +43,7 @@ impl Expression for Expr {
             Self::Ident(ident) => ident.type_(scope),
             Self::Cast(cast) => cast.type_(scope),
             Self::Struct(expr_struct) => expr_struct.type_(scope),
+            Self::Array(expr) => expr.type_(scope),
             Self::StructAccess(expr_struct_access) => expr_struct_access.type_(scope),
             Self::ArrayAccess(expr) => expr.type_(scope),
             Self::FunctionCall(function_call) => {
@@ -285,6 +289,35 @@ impl ExprStruct {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct ExprArray(pub Vec<Expr>);
+
+impl Expression for ExprArray {
+    fn type_(&self, scope: &Scope) -> Result<Type, ExprError> {
+        Ok(Type::Array(TypeArray {
+            type_: Box::new(self.0.get(0).unwrap().type_(scope)?),
+            length: self.0.len(),
+        }))
+    }
+}
+
+impl ExprArray {
+    pub fn new(items: Vec<Expr>, scope: &Scope) -> Self {
+        let unique = items
+            .iter()
+            .map(|item| item.type_(scope).unwrap())
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+
+        if unique.len() != 1 {
+            panic!("Types only of the same type allowed in an array expression")
+        }
+
+        Self(items)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct ExprStructAccess {
     pub expr: Box<Expr>,
     pub field: String,
@@ -383,6 +416,13 @@ impl LValue for ExprArrayAccess {
         let r = codegen.arch.alloc()?;
         let r_loc = r.dest(codegen.arch.word_size());
 
+        codegen
+            .expr(
+                *self.index.clone(),
+                Some(index.dest(codegen.arch.word_size())),
+                None,
+            )
+            .unwrap();
         codegen.arch.lea(
             &Destination::Register(operands::Register {
                 register: r,
@@ -395,13 +435,6 @@ impl LValue for ExprArrayAccess {
                 displacement: None,
             },
         );
-        codegen
-            .expr(
-                *self.index.clone(),
-                Some(index.dest(codegen.arch.word_size())),
-                None,
-            )
-            .unwrap();
         codegen.arch.array_offset(
             &r_loc,
             &index.dest(codegen.arch.word_size()),
@@ -409,7 +442,17 @@ impl LValue for ExprArrayAccess {
                 .size(&codegen.arch, &codegen.scope)?,
         )?;
 
-        Ok(r_loc)
+        Ok(Destination::Memory(Memory {
+            effective_address: EffectiveAddress {
+                base: Base::Register(r),
+                index: None,
+                scale: None,
+                displacement: None,
+            },
+            size: self
+                .type_(&codegen.scope)?
+                .size(&codegen.arch, &codegen.scope)?,
+        }))
     }
 }
 

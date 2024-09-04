@@ -1,10 +1,12 @@
+use operands::{Base, Memory};
+
 use super::{operands, CodeGenError, Destination, EffectiveAddress, Immediate, Offset, Source};
 use crate::{
     archs::{Arch, Jump},
     parser::{
-        BinOp, CmpOp, Expr, ExprArrayAccess, ExprBinary, ExprFunctionCall, ExprIdent, ExprLit,
-        ExprStruct, ExprStructAccess, ExprUnary, Expression, LValue, Stmt, StmtFor, StmtFunction,
-        StmtIf, StmtReturn, StmtVarDecl, StmtWhile, UnOp,
+        BinOp, CmpOp, Expr, ExprArray, ExprArrayAccess, ExprBinary, ExprFunctionCall, ExprIdent,
+        ExprLit, ExprStruct, ExprStructAccess, ExprUnary, Expression, IntLitRepr, LValue, Stmt,
+        StmtFor, StmtFunction, StmtIf, StmtReturn, StmtVarDecl, StmtWhile, UIntLitRepr, UnOp,
     },
     scope::Scope,
     symbol_table::{Symbol, SymbolTableError},
@@ -313,6 +315,11 @@ impl CodeGen {
             Expr::Struct(expr) => {
                 if let Some(dest) = dest {
                     self.struct_expr(expr, dest, state)?
+                }
+            }
+            Expr::Array(expr) => {
+                if let Some(dest) = dest {
+                    self.array_expr(expr, dest, state)?
                 }
             }
             Expr::StructAccess(expr) => {
@@ -731,6 +738,59 @@ impl CodeGen {
                 }),
                 state,
             )?;
+        }
+
+        Ok(())
+    }
+
+    fn array_expr(
+        &mut self,
+        expr: ExprArray,
+        dest: Destination,
+        state: Option<&State>,
+    ) -> Result<(), CodeGenError> {
+        for (i, expr) in expr.0.into_iter().enumerate() {
+            let size = expr.type_(&self.scope)?.size(&self.arch, &self.scope)?;
+            let index = self.arch.alloc()?;
+            let r = self.arch.alloc()?;
+            let r_loc = r.dest(self.arch.word_size());
+
+            self.arch.mov(
+                &Source::Immediate(Immediate::UInt(i as u64)),
+                &index.dest(self.arch.word_size()),
+                false,
+            )?;
+
+            self.arch.lea(
+                &Destination::Register(operands::Register {
+                    register: r,
+                    size: self.arch.word_size(),
+                }),
+                &EffectiveAddress {
+                    base: dest.clone().into(),
+                    index: Some(index),
+                    scale: None,
+                    displacement: None,
+                },
+            );
+
+            self.arch
+                .array_offset(&r_loc, &index.dest(self.arch.word_size()), size)?;
+
+            self.expr(
+                expr,
+                Some(Destination::Memory(Memory {
+                    effective_address: EffectiveAddress {
+                        base: Base::Register(r),
+                        index: None,
+                        scale: None,
+                        displacement: None,
+                    },
+                    size,
+                })),
+                state,
+            )?;
+            self.arch.free(r)?;
         }
 
         Ok(())
