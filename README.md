@@ -8,7 +8,7 @@ It's like if C and Rust had a love child and was ashamed of it
 - usize
 - isize
 - u8
-- i8
+- i8(i8 is also used as `char` in C)
 - u16
 - i16
 - u32
@@ -16,44 +16,58 @@ It's like if C and Rust had a love child and was ashamed of it
 - u64
 - i64
 - bool
-- char: typedef for u8? remove it?
-- void: only as return type or pointer
+- void
+
+### Functions
+
+```rust
+fn printf(format: *i8) -> void;
+
+fn main() -> u8 {
+    printf("Hello, world!");
+
+    return 0;
+}
+```
+
+### Variables
+
+```rust
+let foo: usize = 69;
+let bar: *Struct = &Struct;
+let baz: u32[5] = [1, 2, 3, 4, 5];
+```
 
 ### Structs
 
-```c
+```rust
 struct Foo {
-    u8 bar;
-    i16 *baz;
+    bar: u8;
+    baz: *i16;
 
-    static Self new(u8 bar, i16 *baz_ptr) {
+    static fn new(bar: u8, baz_ptr: *i16): Self {
         return Self {
             bar,
             baz: baz_ptr
-        }
+        };
     }
 
-    i16 useless_method() {
+    fn useless_method(): i16 {
         return (i16)self.bar + *self.baz;
     }
 }
 
-Foo foo = Foo::new();
-i16 res = foo.useless_method();
+let foo: Foo = Foo::new();
+let res: i16 = foo.useless_method();
 ```
 
 ### Typedefs
 
-`type SmolInt = u8;`
+```rust
+type SmolInt = u8;
+```
 
 ### Casting
 
-Programmer gotta cast types himself. No implicit conversions!
-
-### Arrays
-
-`int foo[] = [1,2,3,4,5];`
-
-### Other
-
-Everything else is the same as in C language, prolly
+It's good ol' `(type)epxr`. Also we don't cast integer variables for ya.
+No implicit conversions! Only integer literals can be promoted to bigger type

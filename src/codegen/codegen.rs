@@ -5,8 +5,8 @@ use crate::{
     archs::{Arch, Jump},
     parser::{
         BinOp, CmpOp, Expr, ExprArray, ExprArrayAccess, ExprBinary, ExprFunctionCall, ExprIdent,
-        ExprLit, ExprStruct, ExprStructAccess, ExprUnary, Expression, IntLitRepr, LValue, Stmt,
-        StmtFor, StmtFunction, StmtIf, StmtReturn, StmtVarDecl, StmtWhile, UIntLitRepr, UnOp,
+        ExprLit, ExprStruct, ExprStructAccess, ExprUnary, Expression, LValue, Stmt, StmtFor,
+        StmtFunction, StmtIf, StmtReturn, StmtVarDecl, StmtWhile, UnOp,
     },
     scope::Scope,
     symbol_table::{Symbol, SymbolTableError},

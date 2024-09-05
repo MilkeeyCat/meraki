@@ -235,7 +235,7 @@ impl Expression for ExprLit {
             ExprLit::Int(int) => Ok(int.type_()),
             ExprLit::UInt(uint) => Ok(uint.type_()),
             ExprLit::Bool(_) => Ok(Type::Bool),
-            ExprLit::String(_) => Ok(Type::Ptr(Box::new(Type::U8))),
+            ExprLit::String(_) => Ok(Type::Ptr(Box::new(Type::I8))),
         }
     }
 }

@@ -1,7 +1,7 @@
-u8 main() {
-	u8 a = 5 + 5;
-	u8 b = 10 - 2;
-	u8 c = a * b;
+fn main() -> u8 {
+	let a: u8 = 5 + 5;
+	let b: u8 = 10 - 2;
+	let c: u8 = a * b;
 
 	return c / 4;
 }

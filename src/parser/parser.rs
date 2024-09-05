@@ -84,10 +84,6 @@ impl Parser {
         &self.cur_token == token
     }
 
-    fn peek_token_is(&self, token: &Token) -> bool {
-        &self.peek_token == token
-    }
-
     fn expect(&mut self, token: &Token) -> Result<(), ParserError> {
         if self.cur_token_is(token) {
             self.next_token()?;
@@ -111,28 +107,17 @@ impl Parser {
         while !&self.cur_token_is(&Token::Eof) {
             match self.cur_token {
                 Token::Struct => self.parse_struct()?,
-                _ => {
-                    let type_ = self.parse_type()?;
-
-                    if let Some(stmt) = self.parse_symbol(type_, true)? {
-                        stmts.push(stmt);
+                Token::Let => stmts.push(self.var_decl()?),
+                Token::Fn => {
+                    if let Some(stmt) = self.function(true)? {
+                        stmts.push(stmt)
                     }
                 }
+                _ => unreachable!(),
             }
         }
 
         Ok(stmts)
-    }
-
-    fn parse_symbol(
-        &mut self,
-        type_: Type,
-        func_definition: bool,
-    ) -> Result<Option<Stmt>, ParserError> {
-        match &self.peek_token {
-            Token::LParen => self.function(type_, func_definition),
-            _ => Ok(Some(self.var_decl(type_)?)),
-        }
     }
 
     fn expr(&mut self, precedence: Precedence) -> Result<Expr, ParserError> {
@@ -201,27 +186,25 @@ impl Parser {
         }
 
         while !self.cur_token_is(&Token::RBrace) {
-            if self.cur_token.is_type(&self.scope) && !self.peek_token_is(&Token::LBrace) {
-                let type_ = self.parse_type()?;
-
-                if let Some(stmt) = self.parse_symbol(type_, false)? {
-                    stmts.push(stmt);
-                }
-            } else {
-                match &self.cur_token {
-                    Token::Return => stmts.push(self.parse_return()?),
-                    Token::If => stmts.push(self.if_stmt()?),
-                    Token::While => stmts.push(self.while_stmt()?),
-                    Token::For => stmts.push(self.for_stmt()?),
-                    _ => {
-                        let expr = self.expr(Precedence::default())?;
-                        expr.type_(&self.scope)?;
-                        let expr = Stmt::Expr(expr);
-
-                        self.expect(&Token::Semicolon)?;
-
-                        stmts.push(expr);
+            match &self.cur_token {
+                Token::Return => stmts.push(self.parse_return()?),
+                Token::If => stmts.push(self.if_stmt()?),
+                Token::While => stmts.push(self.while_stmt()?),
+                Token::For => stmts.push(self.for_stmt()?),
+                Token::Let => stmts.push(self.var_decl()?),
+                Token::Fn => {
+                    if let Some(stmt) = self.function(true)? {
+                        stmts.push(stmt)
                     }
+                }
+                _ => {
+                    let expr = self.expr(Precedence::default())?;
+                    expr.type_(&self.scope)?;
+                    let expr = Stmt::Expr(expr);
+
+                    self.expect(&Token::Semicolon)?;
+
+                    stmts.push(expr);
                 }
             }
         }
@@ -236,6 +219,12 @@ impl Parser {
     }
 
     fn parse_type(&mut self) -> Result<Type, ParserError> {
+        let mut n = 0;
+        while self.cur_token_is(&Token::Asterisk) {
+            self.expect(&Token::Asterisk)?;
+            n += 1;
+        }
+
         let mut base = match self.next_token()? {
             Token::U8 => Ok(Type::U8),
             Token::U16 => Ok(Type::U16),
@@ -261,10 +250,9 @@ impl Parser {
             token => Err(ParserError::ParseType(token)),
         }?;
 
-        while self.cur_token_is(&Token::Asterisk) {
-            self.expect(&Token::Asterisk)?;
-
+        while n > 0 {
             base = Type::Ptr(Box::new(base));
+            n -= 1;
         }
 
         Ok(base)
@@ -342,9 +330,8 @@ impl Parser {
         let initializer = if self.cur_token_is(&Token::Semicolon) {
             None
         } else {
-            let stmt = if self.cur_token.is_type(&self.scope) {
-                let type_ = self.parse_type()?;
-                self.var_decl(type_)?
+            let stmt = if self.cur_token_is(&Token::Let) {
+                self.var_decl()?
             } else {
                 Stmt::Expr(self.expr(Precedence::default())?)
             };
@@ -403,16 +390,21 @@ impl Parser {
         Ok(())
     }
 
-    fn var_decl(&mut self, mut type_: Type) -> Result<Stmt, ParserError> {
-        if let Type::Void = type_ {
-            return Err(ParserError::Type(TypeError::VoidVariable));
-        }
+    fn var_decl(&mut self) -> Result<Stmt, ParserError> {
+        self.expect(&Token::Let)?;
+
         let name = match self.next_token()? {
             Token::Ident(ident) => ident,
             _ => {
                 return Err(ParserError::ParseType(self.cur_token.to_owned()));
             }
         };
+        self.expect(&Token::Colon)?;
+
+        let mut type_ = self.parse_type()?;
+        if let Type::Void = type_ {
+            return Err(ParserError::Type(TypeError::VoidVariable));
+        }
 
         self.array_type(&mut type_)?;
 
@@ -453,11 +445,9 @@ impl Parser {
         Ok(Stmt::VarDecl(StmtVarDecl::new(type_, name, expr)))
     }
 
-    fn function(
-        &mut self,
-        type_: Type,
-        func_definition: bool,
-    ) -> Result<Option<Stmt>, ParserError> {
+    fn function(&mut self, func_definition: bool) -> Result<Option<Stmt>, ParserError> {
+        self.expect(&Token::Fn)?;
+
         let name = match self.next_token()? {
             Token::Ident(ident) => ident,
             _ => {
@@ -483,6 +473,8 @@ impl Parser {
                 })
             })
             .collect();
+        self.expect(&Token::Arrow)?;
+        let type_ = self.parse_type()?;
         let block = if self.cur_token_is(&Token::LBrace) {
             Some(self.compound_statement(Some((name.clone(), type_.clone())), Some(parameters))?)
         } else {
@@ -517,11 +509,12 @@ impl Parser {
         let mut params = Vec::new();
 
         while !self.cur_token_is(&end) {
-            let type_ = self.parse_type()?;
             let name = match self.next_token()? {
                 Token::Ident(ident) => ident,
                 _ => todo!("Don't know what error to return yet"),
             };
+            self.expect(&Token::Colon)?;
+            let type_ = self.parse_type()?;
 
             match params.iter().find(|(field_name, _)| field_name == &name) {
                 Some(_) => todo!("Don't know yet what error to return"),
@@ -836,7 +829,7 @@ mod test {
             (
                 "
                 {
-                    u8 foo;
+                    let foo: u8;
                     foo = (u8)-1 + 5;
                 }
                 ",
@@ -868,8 +861,8 @@ mod test {
             (
                 "
                 {
-                    u8 foo;
-                    i8 bar;
+                    let foo: u8;
+                    let bar: i8;
                     bar = (i8)foo + 5 / 10;
                 }
                 ",
@@ -936,8 +929,8 @@ mod test {
             (
                 "
                 {
-                    u8 a;
-                    u8 b;
+                    let a: u8;
+                    let b: u8;
 
                     a = b = 69;
                 }
@@ -974,7 +967,6 @@ mod test {
                 ],
             ),
         ];
-        dbg!("GOTTEM");
 
         for (input, expected) in tests {
             let mut parser = Parser::new(Lexer::new(input.to_string())).unwrap();

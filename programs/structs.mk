@@ -1,19 +1,19 @@
 struct Foo {
-	u8 value;
+    value: u8;
 }
 
 struct Bar {
-	Foo foo;
-	u8 value;
+	foo: Foo;
+	value: u8;
 }
 
 struct Baz {
-	Bar bar;
-	u16 value;
+	bar: Bar;
+	value: u16;
 }
 
-u8 main() {
-	Baz baz = Baz {
+fn main() -> u8 {
+	let baz: Baz = Baz {
 		bar: Bar {
 			foo: Foo {
 				value: 6,
