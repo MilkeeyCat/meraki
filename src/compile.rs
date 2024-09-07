@@ -3,7 +3,7 @@ use crate::{
     codegen::CodeGen,
     lexer::Lexer,
     parser,
-    passes::{pass::Pass, symbol_resolver::SymbolResolver},
+    passes::{Pass, SymbolResolver, TypeChecker},
 };
 use clap::Parser;
 use std::{
@@ -43,6 +43,7 @@ pub fn compile(args: CompileArgs) -> Result<(), Box<dyn std::error::Error>> {
     let (mut stmts, mut scope) = parser::Parser::new(lexer)?.into_parts()?;
 
     SymbolResolver::proccess(&mut stmts, &mut scope)?;
+    TypeChecker::proccess(&mut stmts, &mut scope)?;
 
     dbg!(&stmts);
     dbg!(&scope);

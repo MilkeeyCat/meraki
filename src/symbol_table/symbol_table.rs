@@ -42,6 +42,13 @@ impl Symbol {
         }
     }
 
+    pub fn function_unchecked(&self) -> &SymbolFunction {
+        match self {
+            Symbol::Function(symbol) => symbol,
+            _ => unreachable!(),
+        }
+    }
+
     pub fn source(&self, arch: &Arch, scope: &Scope) -> Result<Source, SymbolTableError> {
         Ok(self.dest(arch, scope)?.into())
     }

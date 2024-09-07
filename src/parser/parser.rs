@@ -239,22 +239,15 @@ impl Parser {
     fn parse_return(&mut self) -> Result<Stmt, ParserError> {
         self.expect(&Token::Return)?;
 
-        let mut expr = None;
-        //let type_;
-        if !self.cur_token_is(&Token::Semicolon) {
-            expr = Some(self.expr(Precedence::default())?);
-            //type_ = expr.as_ref().unwrap().type_(&self.scope)?;
+        let expr = if !self.cur_token_is(&Token::Semicolon) {
+            Some(self.expr(Precedence::default())?)
         } else {
-            //type_ = Type::Void;
-        }
+            None
+        };
 
         self.expect(&Token::Semicolon)?;
 
-        let (name, return_type) = self.scope.context().unwrap();
-        //return_type.to_owned().assign(type_).map_err(|e| match e {
-        //    TypeError::Assignment(left, right) => TypeError::Return(left, right),
-        //    e => e,
-        //})?;
+        let (name, _) = self.scope.context().unwrap();
 
         Ok(Stmt::Return(StmtReturn {
             expr,
@@ -267,10 +260,6 @@ impl Parser {
         self.expect(&Token::If)?;
 
         let condition = self.expr(Precedence::default())?;
-        //match condition.type_(&self.scope)? {
-        //    Type::Bool => {}
-        //    type_ => return Err(ParserError::Type(TypeError::Mismatched(Type::Bool, type_))),
-        //}
         let consequence = self.compound_statement(self.scope.context().unwrap().to_owned())?;
         let alternative = if self.cur_token_is(&Token::Else) {
             self.expect(&Token::Else)?;
@@ -291,10 +280,6 @@ impl Parser {
         self.expect(&Token::While)?;
 
         let condition = self.expr(Precedence::default())?;
-        //match condition.type_(&self.scope)? {
-        //    Type::Bool => {}
-        //    type_ => return Err(ParserError::Type(TypeError::Mismatched(Type::Bool, type_))),
-        //}
         let block = self.compound_statement(self.scope.context().unwrap().to_owned())?;
 
         Ok(Stmt::While(StmtWhile { condition, block }))
@@ -318,13 +303,7 @@ impl Parser {
         let condition = if self.cur_token_is(&Token::Semicolon) {
             None
         } else {
-            let condition = self.expr(Precedence::default())?;
-            //match condition.type_(&self.scope)? {
-            //    Type::Bool => {}
-            //    type_ => return Err(ParserError::Type(TypeError::Mismatched(Type::Bool, type_))),
-            //}
-
-            Some(condition)
+            Some(self.expr(Precedence::default())?)
         };
         self.expect(&Token::Semicolon)?;
 
@@ -506,7 +485,7 @@ impl Parser {
 
         self.expect(&Token::RBrace)?;
 
-        Ok(Expr::Struct(ExprStruct::new(name, fields)))
+        Ok(Expr::Struct(ExprStruct { name, fields }))
     }
 
     fn string_lit(&mut self) -> Result<Expr, ParserError> {
@@ -537,28 +516,12 @@ impl Parser {
         match self.next_token()? {
             Token::LParen => match left {
                 Expr::Ident(ident) => {
-                    //if let Some(Symbol::Function(function)) = self.scope.find_symbol(&ident.0) {
-                    //    let function_name = function.name.to_owned();
-                    //    let function_params = function.parameters.to_owned();
                     let args = self.expr_list()?;
-                    //    let args_types = args
-                    //        .iter()
-                    //        .map(|expr| expr.type_(&self.scope))
-                    //        .collect::<Result<Vec<_>, _>>()?;
-                    //    for (param_type, arg_type) in function_params.iter().zip(&args_types) {
-                    //        if let Err(_) = param_type.to_owned().assign(arg_type.to_owned()) {
-                    //            return Err(ParserError::FunctionArguments(
-                    //                function_name,
-                    //                function_params,
-                    //                args_types,
-                    //            ));
-                    //        }
-                    //    }
 
-                    Ok(Expr::FunctionCall(ExprFunctionCall::new(ident.0, args)))
-                    //} else {
-                    //    return Err(ParserError::UndeclaredFunction(ident.0));
-                    //}
+                    Ok(Expr::FunctionCall(ExprFunctionCall {
+                        name: ident.0,
+                        arguments: args,
+                    }))
                 }
                 _ => todo!("Don't know what error to return yet"),
             },
@@ -618,7 +581,10 @@ impl Parser {
         let op = UnOp::try_from(&self.next_token()?).map_err(|e| ParserError::Operator(e))?;
         let expr = self.expr(Precedence::Prefix)?;
 
-        Ok(Expr::Unary(ExprUnary::new(op, Box::new(expr))))
+        Ok(Expr::Unary(ExprUnary {
+            op,
+            expr: Box::new(expr),
+        }))
     }
 
     fn expr_list(&mut self) -> Result<Vec<Expr>, ParserError> {
@@ -653,19 +619,21 @@ impl Parser {
             panic!("Can't get address of {expr:?}");
         }
 
-        Ok(Expr::Unary(ExprUnary::new(UnOp::Address, Box::new(expr))))
+        Ok(Expr::Unary(ExprUnary {
+            op: UnOp::Address,
+            expr: Box::new(expr),
+        }))
     }
 
     fn deref_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect(&Token::Asterisk)?;
 
         let expr = self.expr(Precedence::Prefix)?;
-        //match expr.type_(&self.scope)? {
-        //    Type::Ptr(_) => {}
-        //    type_ => panic!("Can't dereference an expression of type {type_}"),
-        //};
 
-        Ok(Expr::Unary(ExprUnary::new(UnOp::Deref, Box::new(expr))))
+        Ok(Expr::Unary(ExprUnary {
+            op: UnOp::Deref,
+            expr: Box::new(expr),
+        }))
     }
 
     fn array_expr(&mut self) -> Result<Expr, ParserError> {
@@ -720,10 +688,10 @@ mod test {
                         right: Box::new(Expr::Binary(ExprBinary {
                             op: BinOp::Add,
                             left: Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(4)))),
-                            right: Box::new(Expr::Cast(ExprCast::new(
-                                Type::U8,
-                                Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(1)))),
-                            ))),
+                            right: Box::new(Expr::Cast(ExprCast {
+                                type_: Type::U8,
+                                expr: Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(1)))),
+                            })),
                         })),
                     })),
                 }))],
@@ -742,13 +710,13 @@ mod test {
                         left: Box::new(Expr::Ident(ExprIdent("foo".to_owned()))),
                         right: Box::new(Expr::Binary(ExprBinary {
                             op: BinOp::Add,
-                            left: Box::new(Expr::Cast(ExprCast::new(
-                                Type::U8,
-                                Box::new(Expr::Unary(ExprUnary::new(
-                                    UnOp::Negative,
-                                    Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(1)))),
-                                ))),
-                            ))),
+                            left: Box::new(Expr::Cast(ExprCast {
+                                type_: Type::U8,
+                                expr: Box::new(Expr::Unary(ExprUnary {
+                                    op: UnOp::Negative,
+                                    expr: Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(1)))),
+                                })),
+                            })),
                             right: Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(5)))),
                         })),
                     })),
@@ -770,10 +738,10 @@ mod test {
                         left: Box::new(Expr::Ident(ExprIdent("bar".to_owned()))),
                         right: Box::new(Expr::Binary(ExprBinary {
                             op: BinOp::Add,
-                            left: Box::new(Expr::Cast(ExprCast::new(
-                                Type::I8,
-                                Box::new(Expr::Ident(ExprIdent("foo".to_owned()))),
-                            ))),
+                            left: Box::new(Expr::Cast(ExprCast {
+                                type_: Type::I8,
+                                expr: Box::new(Expr::Ident(ExprIdent("foo".to_owned()))),
+                            })),
                             right: Box::new(Expr::Binary(ExprBinary {
                                 op: BinOp::Div,
                                 left: Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(5)))),
@@ -791,10 +759,10 @@ mod test {
                 ",
                 vec![Stmt::Expr(Expr::Binary(ExprBinary {
                     op: BinOp::Add,
-                    left: Box::new(Expr::Cast(ExprCast::new(
-                        Type::I8,
-                        Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(1)))),
-                    ))),
+                    left: Box::new(Expr::Cast(ExprCast {
+                        type_: Type::I8,
+                        expr: Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(1)))),
+                    })),
                     right: Box::new(Expr::Binary(ExprBinary {
                         op: BinOp::Div,
                         left: Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(2)))),

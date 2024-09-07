@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use super::{int_repr::UIntLitRepr, ExprError, IntLitRepr};
 use crate::{
     archs::ArchError,
@@ -77,7 +75,7 @@ impl Expr {
         }
     }
 
-    fn int_lit_only(expr: &Expr) -> bool {
+    pub fn int_lit_only(expr: &Expr) -> bool {
         match expr {
             Expr::Binary(expr) => {
                 Expr::int_lit_only(expr.left.as_ref()) && Expr::int_lit_only(expr.right.as_ref())
@@ -282,12 +280,6 @@ pub struct ExprStruct {
     pub fields: Vec<(String, Expr)>,
 }
 
-impl ExprStruct {
-    pub fn new(name: String, fields: Vec<(String, Expr)>) -> Self {
-        Self { name, fields }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprArray(pub Vec<Expr>);
 
@@ -297,23 +289,6 @@ impl Expression for ExprArray {
             type_: Box::new(self.0.get(0).unwrap().type_(scope)?),
             length: self.0.len(),
         }))
-    }
-}
-
-impl ExprArray {
-    pub fn new(items: Vec<Expr>, scope: &Scope) -> Self {
-        let unique = items
-            .iter()
-            .map(|item| item.type_(scope).unwrap())
-            .collect::<HashSet<_>>()
-            .into_iter()
-            .collect::<Vec<_>>();
-
-        if unique.len() != 1 {
-            panic!("Types only of the same type allowed in an array expression")
-        }
-
-        Self(items)
     }
 }
 
@@ -389,12 +364,6 @@ impl LValue for ExprStructAccess {
 pub struct ExprFunctionCall {
     pub name: String,
     pub arguments: Vec<Expr>,
-}
-
-impl ExprFunctionCall {
-    pub fn new(name: String, arguments: Vec<Expr>) -> Self {
-        Self { name, arguments }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -501,12 +470,6 @@ impl LValue for ExprUnary {
     }
 }
 
-impl ExprUnary {
-    pub fn new(op: UnOp, expr: Box<Expr>) -> Self {
-        Self { op, expr }
-    }
-}
-
 impl Expression for ExprUnary {
     fn type_(&self, scope: &Scope) -> Result<Type, ExprError> {
         Ok(match &self.op {
@@ -527,12 +490,6 @@ impl Expression for ExprUnary {
 pub struct ExprCast {
     pub expr: Box<Expr>,
     pub type_: Type,
-}
-
-impl ExprCast {
-    pub fn new(type_: Type, expr: Box<Expr>) -> Self {
-        Self { type_, expr }
-    }
 }
 
 impl Expression for ExprCast {

@@ -1,4 +1,3 @@
-use crate::scope::Scope;
 use std::fmt::Display;
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
