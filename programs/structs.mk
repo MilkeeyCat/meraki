@@ -24,5 +24,5 @@ fn main() -> u8 {
 	};
 	baz.value = 42;
 
-	return (u8)baz.value + baz.bar.value + baz.bar.foo.value;
+	return baz.value as u8 + baz.bar.value + baz.bar.foo.value;
 }

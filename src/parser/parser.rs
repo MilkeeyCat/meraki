@@ -67,6 +67,7 @@ impl Parser {
                 (Token::LParen, Self::bin_expr),
                 (Token::Period, Self::struct_access),
                 (Token::LBracket, Self::array_access),
+                (Token::As, Self::cast_expr),
             ]),
         })
     }
@@ -604,6 +605,15 @@ impl Parser {
         }))
     }
 
+    fn cast_expr(&mut self, expr: Expr) -> Result<Expr, ParserError> {
+        self.expect(&Token::As)?;
+
+        Ok(Expr::Cast(ExprCast {
+            expr: Box::new(expr),
+            type_: self.parse_type()?,
+        }))
+    }
+
     fn unary_expr(&mut self) -> Result<Expr, ParserError> {
         let op = UnOp::try_from(&self.next_token()?).map_err(|e| ParserError::Operator(e))?;
         let expr = self.expr(Precedence::Prefix)?;
@@ -629,13 +639,6 @@ impl Parser {
     fn grouped_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect(&Token::LParen)?;
 
-        //if self.cur_token.is_type(&self.scope) {
-        //    let type_ = self.parse_type()?;
-        //    self.expect(&Token::RParen)?;
-        //    let expr = self.expr(Precedence::Cast)?;
-
-        //    Ok(Expr::Cast(ExprCast::new(type_, Box::new(expr))))
-        //} else {
         let expr = self.expr(Precedence::default())?;
         self.expect(&Token::RParen)?;
 
@@ -692,8 +695,6 @@ mod test {
             BinOp, Expr, ExprBinary, ExprCast, ExprIdent, ExprLit, ExprUnary, ParserError, Stmt,
             StmtVarDecl, UIntLitRepr, UnOp,
         },
-        scope::Scope,
-        symbol_table::{Symbol, SymbolLocal},
         types::Type,
     };
 
@@ -703,64 +704,54 @@ mod test {
             (
                 "
                 {
-                    1 * 2 + 3 / (4 + (u8)1);
+                    1 * 2 + 3 / (4 + 1 as u8);
                 }
                 ",
-                vec![Stmt::Expr(Expr::Binary(ExprBinary::new(
-                    BinOp::Add,
-                    Expr::Binary(ExprBinary::new(
-                        BinOp::Mul,
-                        Expr::Lit(ExprLit::UInt(UIntLitRepr::new(1))),
-                        Expr::Lit(ExprLit::UInt(UIntLitRepr::new(2))),
-                        &Scope::new(),
-                    )?),
-                    Expr::Binary(ExprBinary::new(
-                        BinOp::Div,
-                        Expr::Lit(ExprLit::UInt(UIntLitRepr::new(3))),
-                        Expr::Binary(ExprBinary::new(
-                            BinOp::Add,
-                            Expr::Lit(ExprLit::UInt(UIntLitRepr::new(4))),
-                            Expr::Cast(ExprCast::new(
+                vec![Stmt::Expr(Expr::Binary(ExprBinary {
+                    op: BinOp::Add,
+                    left: Box::new(Expr::Binary(ExprBinary {
+                        op: BinOp::Mul,
+                        left: Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(1)))),
+                        right: Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(2)))),
+                    })),
+                    right: Box::new(Expr::Binary(ExprBinary {
+                        op: BinOp::Div,
+                        left: Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(3)))),
+                        right: Box::new(Expr::Binary(ExprBinary {
+                            op: BinOp::Add,
+                            left: Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(4)))),
+                            right: Box::new(Expr::Cast(ExprCast::new(
                                 Type::U8,
                                 Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(1)))),
-                            )),
-                            &Scope::new(),
-                        )?),
-                        &Scope::new(),
-                    )?),
-                    &Scope::new(),
-                )?))],
+                            ))),
+                        })),
+                    })),
+                }))],
             ),
             (
                 "
                 {
                     let foo: u8;
-                    foo = (u8)-1 + 5;
+                    foo = -1 as u8 + 5;
                 }
                 ",
                 vec![
                     Stmt::VarDecl(StmtVarDecl::new(Type::U8, "foo".to_owned(), None)),
-                    Stmt::Expr(Expr::Binary(ExprBinary::new(
-                        BinOp::Assign,
-                        Expr::Ident(ExprIdent("foo".to_owned())),
-                        Expr::Binary(ExprBinary::new(
-                            BinOp::Add,
-                            Expr::Cast(ExprCast::new(
+                    Stmt::Expr(Expr::Binary(ExprBinary {
+                        op: BinOp::Assign,
+                        left: Box::new(Expr::Ident(ExprIdent("foo".to_owned()))),
+                        right: Box::new(Expr::Binary(ExprBinary {
+                            op: BinOp::Add,
+                            left: Box::new(Expr::Cast(ExprCast::new(
                                 Type::U8,
                                 Box::new(Expr::Unary(ExprUnary::new(
                                     UnOp::Negative,
                                     Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(1)))),
                                 ))),
-                            )),
-                            Expr::Lit(ExprLit::UInt(UIntLitRepr::new(5))),
-                            &Scope::new(),
-                        )?),
-                        &Scope::from(vec![Symbol::Local(SymbolLocal {
-                            name: "foo".to_string(),
-                            type_: Type::U8,
-                            offset: Default::default(),
-                        })]),
-                    )?)),
+                            ))),
+                            right: Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(5)))),
+                        })),
+                    })),
                 ],
             ),
             (
@@ -768,68 +759,48 @@ mod test {
                 {
                     let foo: u8;
                     let bar: i8;
-                    bar = (i8)foo + 5 / 10;
+                    bar = foo as i8 + 5 / 10;
                 }
                 ",
                 vec![
                     Stmt::VarDecl(StmtVarDecl::new(Type::U8, "foo".to_owned(), None)),
                     Stmt::VarDecl(StmtVarDecl::new(Type::I8, "bar".to_owned(), None)),
-                    Stmt::Expr(Expr::Binary(ExprBinary::new(
-                        BinOp::Assign,
-                        Expr::Ident(ExprIdent("bar".to_owned())),
-                        Expr::Binary(ExprBinary::new(
-                            BinOp::Add,
-                            Expr::Cast(ExprCast::new(
+                    Stmt::Expr(Expr::Binary(ExprBinary {
+                        op: BinOp::Assign,
+                        left: Box::new(Expr::Ident(ExprIdent("bar".to_owned()))),
+                        right: Box::new(Expr::Binary(ExprBinary {
+                            op: BinOp::Add,
+                            left: Box::new(Expr::Cast(ExprCast::new(
                                 Type::I8,
                                 Box::new(Expr::Ident(ExprIdent("foo".to_owned()))),
-                            )),
-                            Expr::Binary(ExprBinary::new(
-                                BinOp::Div,
-                                Expr::Lit(ExprLit::UInt(UIntLitRepr::new(5))),
-                                Expr::Lit(ExprLit::UInt(UIntLitRepr::new(10))),
-                                &Scope::new(),
-                            )?),
-                            &Scope::from(vec![Symbol::Local(SymbolLocal {
-                                name: "foo".to_string(),
-                                type_: Type::U8,
-                                offset: Default::default(),
-                            })]),
-                        )?),
-                        &Scope::from(vec![
-                            Symbol::Local(SymbolLocal {
-                                name: "bar".to_string(),
-                                type_: Type::I8,
-                                offset: Default::default(),
-                            }),
-                            Symbol::Local(SymbolLocal {
-                                name: "foo".to_string(),
-                                type_: Type::U8,
-                                offset: Default::default(),
-                            }),
-                        ]),
-                    )?)),
+                            ))),
+                            right: Box::new(Expr::Binary(ExprBinary {
+                                op: BinOp::Div,
+                                left: Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(5)))),
+                                right: Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(10)))),
+                            })),
+                        })),
+                    })),
                 ],
             ),
             (
                 "
                 {
-                    (i8)1 + 2 / 3;
+                    1 as i8 + 2 / 3;
                 }
                 ",
-                vec![Stmt::Expr(Expr::Binary(ExprBinary::new(
-                    BinOp::Add,
-                    Expr::Cast(ExprCast::new(
+                vec![Stmt::Expr(Expr::Binary(ExprBinary {
+                    op: BinOp::Add,
+                    left: Box::new(Expr::Cast(ExprCast::new(
                         Type::I8,
                         Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(1)))),
-                    )),
-                    Expr::Binary(ExprBinary::new(
-                        BinOp::Div,
-                        Expr::Lit(ExprLit::UInt(UIntLitRepr::new(2))),
-                        Expr::Lit(ExprLit::UInt(UIntLitRepr::new(3))),
-                        &Scope::new(),
-                    )?),
-                    &Scope::new(),
-                )?))],
+                    ))),
+                    right: Box::new(Expr::Binary(ExprBinary {
+                        op: BinOp::Div,
+                        left: Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(2)))),
+                        right: Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(3)))),
+                    })),
+                }))],
             ),
             (
                 "
@@ -843,32 +814,15 @@ mod test {
                 vec![
                     Stmt::VarDecl(StmtVarDecl::new(Type::U8, "a".to_owned(), None)),
                     Stmt::VarDecl(StmtVarDecl::new(Type::U8, "b".to_owned(), None)),
-                    Stmt::Expr(Expr::Binary(ExprBinary::new(
-                        BinOp::Assign,
-                        Expr::Ident(ExprIdent("a".to_owned())),
-                        Expr::Binary(ExprBinary::new(
-                            BinOp::Assign,
-                            Expr::Ident(ExprIdent("b".to_owned())),
-                            Expr::Lit(ExprLit::UInt(UIntLitRepr::new(69))),
-                            &Scope::from(vec![Symbol::Local(SymbolLocal {
-                                name: "b".to_string(),
-                                type_: Type::U8,
-                                offset: Default::default(),
-                            })]),
-                        )?),
-                        &Scope::from(vec![
-                            Symbol::Local(SymbolLocal {
-                                name: "a".to_string(),
-                                type_: Type::U8,
-                                offset: Default::default(),
-                            }),
-                            Symbol::Local(SymbolLocal {
-                                name: "b".to_string(),
-                                type_: Type::U8,
-                                offset: Default::default(),
-                            }),
-                        ]),
-                    )?)),
+                    Stmt::Expr(Expr::Binary(ExprBinary {
+                        op: BinOp::Assign,
+                        left: Box::new(Expr::Ident(ExprIdent("a".to_owned()))),
+                        right: Box::new(Expr::Binary(ExprBinary {
+                            op: BinOp::Assign,
+                            left: Box::new(Expr::Ident(ExprIdent("b".to_owned()))),
+                            right: Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(69)))),
+                        })),
+                    })),
                 ],
             ),
         ];

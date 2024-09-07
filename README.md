@@ -69,5 +69,5 @@ type SmolInt = u8;
 
 ### Casting
 
-It's good ol' `(type)epxr`. Also we don't cast integer variables for ya.
+Use keyword `as` for casting expressions. Also we don't cast integer variables for ya.
 No implicit conversions! Only integer literals can be promoted to bigger type

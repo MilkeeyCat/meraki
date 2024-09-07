@@ -130,6 +130,7 @@ impl Lexer {
                     "for" => Token::For,
                     "else" => Token::Else,
                     "return" => Token::Return,
+                    "as" => Token::As,
                     "u8" => Token::U8,
                     "u16" => Token::U16,
                     "u32" => Token::U32,

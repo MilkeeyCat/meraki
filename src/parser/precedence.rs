@@ -11,8 +11,8 @@ pub enum Precedence {
     Equality,
     Sum,
     Product,
-    Prefix,
     Cast,
+    Prefix,
     Access,
     Call,
 }
@@ -28,6 +28,7 @@ impl From<&Token> for Precedence {
             Token::Equal | Token::NotEqual => Self::Equality,
             Token::Assign => Self::Assign,
             Token::LParen => Self::Call,
+            Token::As => Self::Cast,
             Token::Period | Token::LBracket => Self::Access,
             Token::And => Self::LogicalAnd,
             Token::Or => Self::LogicalOr,
