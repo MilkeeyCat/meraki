@@ -2,16 +2,15 @@ use super::{
     expr::{ExprBinary, ExprLit, ExprUnary},
     precedence::Precedence,
     stmt::{StmtFor, StmtIf, StmtReturn, StmtWhile},
-    BinOp, Block, Expr, ExprArray, ExprArrayAccess, ExprCast, ExprIdent, ExprStruct, Expression,
-    ParserError, Stmt, StmtFunction, StmtVarDecl, UIntLitRepr, UnOp,
+    BinOp, Block, Expr, ExprArray, ExprArrayAccess, ExprCast, ExprIdent, ExprStruct, ParserError,
+    Stmt, StmtFunction, StmtVarDecl, UIntLitRepr, UnOp,
 };
 use crate::{
-    codegen::Offset,
     lexer::{Lexer, Token},
     parser::{ExprFunctionCall, ExprStructAccess},
     scope::Scope,
-    symbol_table::{Symbol, SymbolFunction, SymbolGlobal, SymbolLocal, SymbolParam},
-    type_table::{self, TypeStruct},
+    symbol_table::{Symbol, SymbolFunction},
+    type_table::TypeStruct,
     types::{Type, TypeArray, TypeError},
 };
 use std::collections::HashMap;
@@ -168,22 +167,11 @@ impl Parser {
         Ok(())
     }
 
-    fn compound_statement(
-        &mut self,
-        context: Option<(String, Type)>,
-        predefined_symbols: Option<Vec<Symbol>>,
-    ) -> Result<Block, ParserError> {
+    fn compound_statement(&mut self, context: (String, Type)) -> Result<Block, ParserError> {
         let mut stmts = Vec::new();
 
-        self.scope
-            .enter_new(context.unwrap_or_else(|| self.scope.context().unwrap().clone()));
+        self.scope.enter_new(context);
         self.expect(&Token::LBrace)?;
-
-        if let Some(symbols) = predefined_symbols {
-            for symbol in symbols {
-                self.scope.symbol_table_mut().push(symbol)?;
-            }
-        }
 
         while !self.cur_token_is(&Token::RBrace) {
             match &self.cur_token {
@@ -198,9 +186,7 @@ impl Parser {
                     }
                 }
                 _ => {
-                    let expr = self.expr(Precedence::default())?;
-                    expr.type_(&self.scope)?;
-                    let expr = Stmt::Expr(expr);
+                    let expr = Stmt::Expr(self.expr(Precedence::default())?);
 
                     self.expect(&Token::Semicolon)?;
 
@@ -210,11 +196,10 @@ impl Parser {
         }
 
         self.expect(&Token::RBrace)?;
-        let scope_impl = self.scope.leave();
 
         Ok(Block {
             statements: stmts,
-            scope: scope_impl,
+            scope: self.scope.leave(),
         })
     }
 
@@ -238,15 +223,7 @@ impl Parser {
             Token::Isize => Ok(Type::Isize),
             Token::Bool => Ok(Type::Bool),
             Token::Void => Ok(Type::Void),
-            Token::Ident(ident) => Ok(
-                match self
-                    .scope
-                    .find_type(&ident)
-                    .ok_or(TypeError::Nonexistent(ident.clone()))?
-                {
-                    type_table::Type::Struct(_) => Type::Struct(ident),
-                },
-            ),
+            Token::Ident(ident) => Ok(Type::Struct(ident)),
             token => Err(ParserError::ParseType(token)),
         }?;
 
@@ -262,21 +239,21 @@ impl Parser {
         self.expect(&Token::Return)?;
 
         let mut expr = None;
-        let type_;
+        //let type_;
         if !self.cur_token_is(&Token::Semicolon) {
             expr = Some(self.expr(Precedence::default())?);
-            type_ = expr.as_ref().unwrap().type_(&self.scope)?;
+            //type_ = expr.as_ref().unwrap().type_(&self.scope)?;
         } else {
-            type_ = Type::Void;
+            //type_ = Type::Void;
         }
 
         self.expect(&Token::Semicolon)?;
 
         let (name, return_type) = self.scope.context().unwrap();
-        return_type.to_owned().assign(type_).map_err(|e| match e {
-            TypeError::Assignment(left, right) => TypeError::Return(left, right),
-            e => e,
-        })?;
+        //return_type.to_owned().assign(type_).map_err(|e| match e {
+        //    TypeError::Assignment(left, right) => TypeError::Return(left, right),
+        //    e => e,
+        //})?;
 
         Ok(Stmt::Return(StmtReturn {
             expr,
@@ -289,15 +266,15 @@ impl Parser {
         self.expect(&Token::If)?;
 
         let condition = self.expr(Precedence::default())?;
-        match condition.type_(&self.scope)? {
-            Type::Bool => {}
-            type_ => return Err(ParserError::Type(TypeError::Mismatched(Type::Bool, type_))),
-        }
-        let consequence = self.compound_statement(None, None)?;
+        //match condition.type_(&self.scope)? {
+        //    Type::Bool => {}
+        //    type_ => return Err(ParserError::Type(TypeError::Mismatched(Type::Bool, type_))),
+        //}
+        let consequence = self.compound_statement(self.scope.context().unwrap().to_owned())?;
         let alternative = if self.cur_token_is(&Token::Else) {
             self.expect(&Token::Else)?;
 
-            Some(self.compound_statement(None, None)?)
+            Some(self.compound_statement(self.scope.context().unwrap().to_owned())?)
         } else {
             None
         };
@@ -313,11 +290,11 @@ impl Parser {
         self.expect(&Token::While)?;
 
         let condition = self.expr(Precedence::default())?;
-        match condition.type_(&self.scope)? {
-            Type::Bool => {}
-            type_ => return Err(ParserError::Type(TypeError::Mismatched(Type::Bool, type_))),
-        }
-        let block = self.compound_statement(None, None)?;
+        //match condition.type_(&self.scope)? {
+        //    Type::Bool => {}
+        //    type_ => return Err(ParserError::Type(TypeError::Mismatched(Type::Bool, type_))),
+        //}
+        let block = self.compound_statement(self.scope.context().unwrap().to_owned())?;
 
         Ok(Stmt::While(StmtWhile { condition, block }))
     }
@@ -325,8 +302,6 @@ impl Parser {
     fn for_stmt(&mut self) -> Result<Stmt, ParserError> {
         self.expect(&Token::For)?;
 
-        self.scope
-            .enter_new(self.scope.context().unwrap().to_owned());
         let initializer = if self.cur_token_is(&Token::Semicolon) {
             None
         } else {
@@ -338,16 +313,15 @@ impl Parser {
 
             Some(stmt)
         };
-        let symbols = self.scope.leave().symbol_table.0;
 
         let condition = if self.cur_token_is(&Token::Semicolon) {
             None
         } else {
             let condition = self.expr(Precedence::default())?;
-            match condition.type_(&self.scope)? {
-                Type::Bool => {}
-                type_ => return Err(ParserError::Type(TypeError::Mismatched(Type::Bool, type_))),
-            }
+            //match condition.type_(&self.scope)? {
+            //    Type::Bool => {}
+            //    type_ => return Err(ParserError::Type(TypeError::Mismatched(Type::Bool, type_))),
+            //}
 
             Some(condition)
         };
@@ -359,7 +333,7 @@ impl Parser {
             Some(self.expr(Precedence::default())?)
         };
 
-        let block = self.compound_statement(None, Some(symbols))?;
+        let block = self.compound_statement(self.scope.context().unwrap().to_owned())?;
 
         Ok(Stmt::For(StmtFor {
             initializer: initializer.map(|initializer| Box::new(initializer)),
@@ -408,34 +382,10 @@ impl Parser {
 
         self.array_type(&mut type_)?;
 
-        if self.scope.local() {
-            self.scope
-                .symbol_table_mut()
-                .push(Symbol::Local(SymbolLocal {
-                    name: name.clone(),
-                    type_: type_.clone(),
-                    offset: Offset::default(),
-                }))?;
-        } else {
-            self.scope
-                .symbol_table_mut()
-                .push(Symbol::Global(SymbolGlobal {
-                    name: name.clone(),
-                    type_: type_.clone(),
-                }))?;
-        }
-
         let expr = if self.cur_token_is(&Token::Assign) {
             self.expect(&Token::Assign)?;
-            let expr = self.expr(Precedence::default())?;
 
-            self.scope
-                .find_symbol(&name)
-                .unwrap()
-                .type_()
-                .assign(expr.type_(&self.scope)?)?;
-
-            Some(expr)
+            Some(self.expr(Precedence::default())?)
         } else {
             None
         };
@@ -458,35 +408,14 @@ impl Parser {
         self.expect(&Token::LParen)?;
 
         let params = self.params(Token::Comma, Token::RParen)?;
-        let parameters: Vec<Symbol> = params
-            .iter()
-            .enumerate()
-            .map(|(i, (name, type_))| {
-                Symbol::Param(SymbolParam {
-                    name: name.to_owned(),
-                    preceding: params[..i]
-                        .iter()
-                        .map(|(_, type_)| type_.to_owned())
-                        .collect(),
-                    type_: type_.to_owned(),
-                    offset: Offset::default(),
-                })
-            })
-            .collect();
         self.expect(&Token::Arrow)?;
+
         let type_ = self.parse_type()?;
         let block = if self.cur_token_is(&Token::LBrace) {
-            Some(self.compound_statement(Some((name.clone(), type_.clone())), Some(parameters))?)
+            Some(self.compound_statement((name.clone(), type_.clone()))?)
         } else {
             None
         };
-        self.scope
-            .symbol_table_mut()
-            .push(Symbol::Function(SymbolFunction {
-                name: name.clone(),
-                return_type: type_.clone(),
-                parameters: params.clone().into_iter().map(|(_, type_)| type_).collect(),
-            }))?;
 
         if block.is_some() & !func_definition {
             panic!("Function definition is not supported here");
@@ -500,7 +429,15 @@ impl Parser {
                 block,
             })))
         } else {
+            self.scope
+                .symbol_table_mut()
+                .push(Symbol::Function(SymbolFunction {
+                    name: name.clone(),
+                    return_type: type_.clone(),
+                    parameters: params.clone().into_iter().map(|(_, type_)| type_).collect(),
+                }))?;
             self.expect(&Token::Semicolon)?;
+
             Ok(None)
         }
     }
@@ -553,26 +490,13 @@ impl Parser {
         while !self.cur_token_is(&Token::RBrace) {
             match self.next_token()? {
                 Token::Ident(field) => {
-                    let type_ = match self
-                        .scope
-                        .find_type(&name)
-                        .ok_or(TypeError::Nonexistent(name.clone()))?
-                    {
-                        type_table::Type::Struct(type_struct) => {
-                            match type_struct.fields.iter().find(|(name, _)| name == &field) {
-                                Some((_, type_)) => type_.clone(),
-                                _ => todo!("Field {field} doesn't exist in struct {name}"),
-                            }
-                        }
-                    };
-
                     self.expect(&Token::Colon)?;
                     let expr = self.expr(Precedence::Lowest)?;
-                    type_.assign(expr.type_(&self.scope)?)?;
 
                     if !self.cur_token_is(&Token::RBrace) {
                         self.expect(&Token::Comma)?;
                     }
+
                     fields.push((field, expr));
                 }
                 _ => todo!("Don't know what error to return yet"),
@@ -612,28 +536,28 @@ impl Parser {
         match self.next_token()? {
             Token::LParen => match left {
                 Expr::Ident(ident) => {
-                    if let Some(Symbol::Function(function)) = self.scope.find_symbol(&ident.0) {
-                        let function_name = function.name.to_owned();
-                        let function_params = function.parameters.to_owned();
-                        let args = self.expr_list()?;
-                        let args_types = args
-                            .iter()
-                            .map(|expr| expr.type_(&self.scope))
-                            .collect::<Result<Vec<_>, _>>()?;
-                        for (param_type, arg_type) in function_params.iter().zip(&args_types) {
-                            if let Err(_) = param_type.to_owned().assign(arg_type.to_owned()) {
-                                return Err(ParserError::FunctionArguments(
-                                    function_name,
-                                    function_params,
-                                    args_types,
-                                ));
-                            }
-                        }
+                    //if let Some(Symbol::Function(function)) = self.scope.find_symbol(&ident.0) {
+                    //    let function_name = function.name.to_owned();
+                    //    let function_params = function.parameters.to_owned();
+                    let args = self.expr_list()?;
+                    //    let args_types = args
+                    //        .iter()
+                    //        .map(|expr| expr.type_(&self.scope))
+                    //        .collect::<Result<Vec<_>, _>>()?;
+                    //    for (param_type, arg_type) in function_params.iter().zip(&args_types) {
+                    //        if let Err(_) = param_type.to_owned().assign(arg_type.to_owned()) {
+                    //            return Err(ParserError::FunctionArguments(
+                    //                function_name,
+                    //                function_params,
+                    //                args_types,
+                    //            ));
+                    //        }
+                    //    }
 
-                        Ok(Expr::FunctionCall(ExprFunctionCall::new(ident.0, args)))
-                    } else {
-                        return Err(ParserError::UndeclaredFunction(ident.0));
-                    }
+                    Ok(Expr::FunctionCall(ExprFunctionCall::new(ident.0, args)))
+                    //} else {
+                    //    return Err(ParserError::UndeclaredFunction(ident.0));
+                    //}
                 }
                 _ => todo!("Don't know what error to return yet"),
             },
@@ -648,7 +572,11 @@ impl Parser {
                 let right = self.expr(precedence)?;
                 let op = BinOp::try_from(&token).map_err(|e| ParserError::Operator(e))?;
 
-                Ok(Expr::Binary(ExprBinary::new(op, left, right, &self.scope)?))
+                Ok(Expr::Binary(ExprBinary {
+                    op,
+                    left: Box::new(left),
+                    right: Box::new(right),
+                }))
             }
         }
     }
@@ -657,45 +585,23 @@ impl Parser {
         let token = self.next_token()?;
 
         match self.expr(Precedence::from(&token))? {
-            Expr::Ident(field) => match expr.type_(&self.scope)? {
-                Type::Struct(struct_type) => {
-                    match self
-                        .scope
-                        .find_type(&struct_type)
-                        .ok_or(TypeError::Nonexistent(struct_type))?
-                    {
-                        type_table::Type::Struct(s) => {
-                            if s.contains(&field.0) {
-                                Ok(Expr::StructAccess(ExprStructAccess {
-                                    expr: Box::new(expr),
-                                    field: field.0,
-                                }))
-                            } else {
-                                panic!("no such field bitch");
-                            }
-                        }
-                    }
-                }
-                type_ => panic!("Expected struct type, got {type_}"),
-            },
+            Expr::Ident(field) => Ok(Expr::StructAccess(ExprStructAccess {
+                expr: Box::new(expr),
+                field: field.0,
+            })),
             _ => panic!("Struct field name should be of type string"),
         }
     }
 
     fn array_access(&mut self, expr: Expr) -> Result<Expr, ParserError> {
-        match expr.type_(&self.scope)? {
-            Type::Array(_) => {
-                self.expect(&Token::LBracket)?;
-                let index = self.expr(Precedence::Access)?;
-                self.expect(&Token::RBracket)?;
+        self.expect(&Token::LBracket)?;
+        let index = self.expr(Precedence::Access)?;
+        self.expect(&Token::RBracket)?;
 
-                Ok(Expr::ArrayAccess(ExprArrayAccess {
-                    expr: Box::new(expr),
-                    index: Box::new(index),
-                }))
-            }
-            type_ => panic!("Cannot use [] syntax for type {type_}"),
-        }
+        Ok(Expr::ArrayAccess(ExprArrayAccess {
+            expr: Box::new(expr),
+            index: Box::new(index),
+        }))
     }
 
     fn unary_expr(&mut self) -> Result<Expr, ParserError> {
@@ -723,18 +629,17 @@ impl Parser {
     fn grouped_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect(&Token::LParen)?;
 
-        if self.cur_token.is_type(&self.scope) {
-            let type_ = self.parse_type()?;
-            self.expect(&Token::RParen)?;
-            let expr = self.expr(Precedence::Cast)?;
+        //if self.cur_token.is_type(&self.scope) {
+        //    let type_ = self.parse_type()?;
+        //    self.expect(&Token::RParen)?;
+        //    let expr = self.expr(Precedence::Cast)?;
 
-            Ok(Expr::Cast(ExprCast::new(type_, Box::new(expr))))
-        } else {
-            let expr = self.expr(Precedence::default())?;
-            self.expect(&Token::RParen)?;
+        //    Ok(Expr::Cast(ExprCast::new(type_, Box::new(expr))))
+        //} else {
+        let expr = self.expr(Precedence::default())?;
+        self.expect(&Token::RParen)?;
 
-            Ok(expr)
-        }
+        Ok(expr)
     }
 
     fn addr_expr(&mut self) -> Result<Expr, ParserError> {
@@ -752,10 +657,10 @@ impl Parser {
         self.expect(&Token::Asterisk)?;
 
         let expr = self.expr(Precedence::Prefix)?;
-        match expr.type_(&self.scope)? {
-            Type::Ptr(_) => {}
-            type_ => panic!("Can't dereference an expression of type {type_}"),
-        };
+        //match expr.type_(&self.scope)? {
+        //    Type::Ptr(_) => {}
+        //    type_ => panic!("Can't dereference an expression of type {type_}"),
+        //};
 
         Ok(Expr::Unary(ExprUnary::new(UnOp::Deref, Box::new(expr))))
     }
@@ -774,7 +679,7 @@ impl Parser {
 
         self.expect(&Token::RBracket)?;
 
-        Ok(Expr::Array(ExprArray::new(items, &self.scope)))
+        Ok(Expr::Array(ExprArray(items)))
     }
 }
 
@@ -971,7 +876,7 @@ mod test {
         for (input, expected) in tests {
             let mut parser = Parser::new(Lexer::new(input.to_string())).unwrap();
             let ast = parser
-                .compound_statement(Some(("".to_string(), Type::Void)), None)
+                .compound_statement(("".to_string(), Type::Void))
                 .unwrap();
 
             assert_eq!(

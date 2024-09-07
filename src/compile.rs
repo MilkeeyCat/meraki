@@ -3,6 +3,7 @@ use crate::{
     codegen::CodeGen,
     lexer::Lexer,
     parser,
+    passes::{pass::Pass, symbol_resolver::SymbolResolver},
 };
 use clap::Parser;
 use std::{
@@ -39,7 +40,9 @@ pub fn compile(args: CompileArgs) -> Result<(), Box<dyn std::error::Error>> {
     file.read_to_string(&mut source_code)?;
 
     let lexer = Lexer::new(source_code);
-    let (stmts, scope) = parser::Parser::new(lexer)?.into_parts()?;
+    let (mut stmts, mut scope) = parser::Parser::new(lexer)?.into_parts()?;
+
+    SymbolResolver::proccess(&mut stmts, &mut scope)?;
 
     dbg!(&stmts);
     dbg!(&scope);
