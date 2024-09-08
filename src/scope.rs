@@ -85,6 +85,10 @@ impl Scope {
         &mut self.0.last_mut().unwrap().symbol_table
     }
 
+    pub fn type_table(&self) -> &TypeTable {
+        &self.0.last().unwrap().type_table
+    }
+
     pub fn type_table_mut(&mut self) -> &mut TypeTable {
         &mut self.0.last_mut().unwrap().type_table
     }

@@ -2,6 +2,8 @@ use super::Pass;
 use crate::{
     parser::{Block, Expr, Expression, ParserError, Stmt, UnOp},
     scope::Scope,
+    type_table as tt,
+    type_table::TypeTable,
     types::{Type, TypeError},
 };
 use std::collections::HashSet;
@@ -13,6 +15,7 @@ impl Pass for TypeChecker {
     type Output = Result<()>;
 
     fn proccess(stmts: &mut Vec<Stmt>, scope: &mut Scope) -> Self::Output {
+        Self::check_type_table(scope.type_table(), scope)?;
         for stmt in stmts {
             Self::check_stmt(stmt, scope)?;
         }
@@ -24,6 +27,7 @@ impl Pass for TypeChecker {
 impl TypeChecker {
     fn check_block(block: &Block, scope: &mut Scope) -> Result<()> {
         scope.enter(block.scope.clone());
+        Self::check_type_table(scope.type_table(), scope)?;
         for stmt in &block.statements {
             Self::check_stmt(stmt, scope)?;
         }
@@ -174,5 +178,22 @@ impl TypeChecker {
             }
             _ => {}
         })
+    }
+
+    fn check_type_table(type_table: &TypeTable, scope: &Scope) -> Result<()> {
+        for type_ in &type_table.0 {
+            match type_ {
+                tt::Type::Struct(type_struct) => {
+                    for (_, type_) in &type_struct.fields {
+                        Self::check_type(type_, scope)?;
+                        if type_ == &Type::Struct(type_struct.name.clone()) {
+                            panic!("Recursize type {type_} has infinite size");
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
     }
 }

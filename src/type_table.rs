@@ -65,7 +65,7 @@ impl TypeStruct {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct TypeTable(Vec<Type>);
+pub struct TypeTable(pub Vec<Type>);
 
 impl TypeTable {
     pub fn new() -> Self {
