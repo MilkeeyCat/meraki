@@ -14,6 +14,14 @@ pub enum Type {
 pub struct TypeStruct {
     pub name: String,
     pub fields: Vec<(String, types::Type)>,
+    pub methods: Vec<TypeStructMethod>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TypeStructMethod {
+    pub return_type: types::Type,
+    pub name: String,
+    pub params: Vec<(String, types::Type)>,
 }
 
 impl TypeStruct {
@@ -57,6 +65,10 @@ impl TypeStruct {
             .iter()
             .find(|(name, _)| name == field)
             .map(|(_, type_)| type_)
+    }
+
+    pub fn find_method(&self, name: &str) -> Option<&TypeStructMethod> {
+        self.methods.iter().find(|method| method.name == name)
     }
 
     pub fn contains(&self, field: &str) -> bool {

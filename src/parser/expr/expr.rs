@@ -28,6 +28,7 @@ pub enum Expr {
     Struct(ExprStruct),
     Array(ExprArray),
     StructAccess(ExprStructAccess),
+    StructMethod(ExprStructMethod),
     ArrayAccess(ExprArrayAccess),
     FunctionCall(ExprFunctionCall),
 }
@@ -43,6 +44,7 @@ impl Expression for Expr {
             Self::Struct(expr_struct) => expr_struct.type_(scope),
             Self::Array(expr) => expr.type_(scope),
             Self::StructAccess(expr_struct_access) => expr_struct_access.type_(scope),
+            Self::StructMethod(expr) => expr.type_(scope),
             Self::ArrayAccess(expr) => expr.type_(scope),
             Self::FunctionCall(function_call) => {
                 match scope
@@ -357,6 +359,33 @@ impl LValue for ExprStructAccess {
                 size: field_size,
             }),
         })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExprStructMethod {
+    pub expr: Box<Expr>,
+    pub method: String,
+    pub arguments: Vec<Expr>,
+}
+
+impl Expression for ExprStructMethod {
+    fn type_(&self, scope: &Scope) -> Result<Type, ExprError> {
+        match self.expr.type_(scope)? {
+            Type::Struct(struct_name) => {
+                match scope
+                    .find_type(&struct_name)
+                    .ok_or(TypeError::Nonexistent(struct_name.to_owned()))?
+                {
+                    type_table::Type::Struct(type_struct) => Ok(type_struct
+                        .find_method(&self.method)
+                        .unwrap()
+                        .return_type
+                        .to_owned()),
+                }
+            }
+            _ => unreachable!(),
+        }
     }
 }
 

@@ -124,6 +124,7 @@ impl TypeChecker {
                 }
             }
             Expr::StructAccess(expr) => {}
+            Expr::StructMethod(expr) => {}
             Expr::ArrayAccess(expr) => {}
             Expr::FunctionCall(expr) => {
                 let symbol = scope.find_symbol(&expr.name).unwrap().function_unchecked();

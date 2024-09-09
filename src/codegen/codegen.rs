@@ -1,18 +1,17 @@
-use operands::{Base, Memory};
-
 use super::{operands, CodeGenError, Destination, EffectiveAddress, Immediate, Offset, Source};
 use crate::{
     archs::{Arch, Jump},
     parser::{
         BinOp, CmpOp, Expr, ExprArray, ExprArrayAccess, ExprBinary, ExprFunctionCall, ExprIdent,
-        ExprLit, ExprStruct, ExprStructAccess, ExprUnary, Expression, LValue, Stmt, StmtFor,
-        StmtFunction, StmtIf, StmtReturn, StmtVarDecl, StmtWhile, UnOp,
+        ExprLit, ExprStruct, ExprStructAccess, ExprStructMethod, ExprUnary, Expression, LValue,
+        Stmt, StmtFor, StmtFunction, StmtIf, StmtReturn, StmtVarDecl, StmtWhile, UnOp,
     },
     scope::Scope,
     symbol_table::{Symbol, SymbolTableError},
-    type_table,
+    type_table as tt,
     types::{Type, TypeError},
 };
+use operands::{Base, Memory};
 
 #[derive(Debug, Clone)]
 pub struct State {
@@ -326,6 +325,9 @@ impl CodeGen {
                 if let Some(dest) = dest {
                     self.struct_access(expr, dest)?;
                 }
+            }
+            Expr::StructMethod(expr) => {
+                self.struct_call_method(expr, dest, state)?;
             }
             Expr::ArrayAccess(expr) => {
                 if let Some(dest) = dest {
@@ -707,7 +709,7 @@ impl CodeGen {
             .find_type(&expr.name)
             .ok_or(TypeError::Nonexistent(expr.name))?
         {
-            type_table::Type::Struct(type_) => type_,
+            tt::Type::Struct(type_) => type_,
         }
         .clone();
         //NOTE: clone bad ^
@@ -806,6 +808,65 @@ impl CodeGen {
         Ok(self
             .arch
             .mov(&expr_dest.into(), &dest, expr.type_(&self.scope)?.signed())?)
+    }
+
+    fn struct_call_method(
+        &mut self,
+        expr: ExprStructMethod,
+        dest: Option<Destination>,
+        state: Option<&State>,
+    ) -> Result<(), CodeGenError> {
+        let struct_name = expr.expr.type_(&self.scope)?.struct_unchecked();
+        let expr_dest = expr.expr.dest(self)?.unwrap();
+        let r = self.arch.alloc()?;
+        let effective_address = match expr_dest {
+            Destination::Memory(memory) => memory.effective_address,
+            _ => unreachable!(),
+        };
+
+        self.arch
+            .lea(&r.dest(self.arch.word_size()), &effective_address);
+
+        let this = Type::Ptr(Box::new(Type::Struct(struct_name.clone())));
+        let mut preceding = Vec::new();
+        let mut stack_size = 0;
+
+        self.arch
+            .push_arg(r.source(self.arch.word_size()), &this, &preceding);
+        preceding.push(this);
+
+        for expr in expr.arguments.into_iter() {
+            let type_ = expr.type_(&self.scope)?;
+            let r = self.arch.alloc()?;
+
+            self.expr(expr, Some(r.dest(self.arch.word_size())), state)?;
+            stack_size += self.arch.push_arg(
+                Source::Register(operands::Register {
+                    register: r,
+                    size: self.arch.word_size(),
+                }),
+                &type_,
+                &preceding,
+            );
+            self.arch.free(r)?;
+            preceding.push(type_);
+        }
+
+        let method = match self.scope.find_type(&struct_name).unwrap() {
+            tt::Type::Struct(type_) => type_.find_method(&expr.method).unwrap(),
+        };
+        self.arch.call_fn(
+            &format!("{struct_name}__{}", expr.method),
+            dest.as_ref(),
+            method.return_type.signed(),
+            method.return_type.size(&self.arch, &self.scope)?,
+        )?;
+        if stack_size > 0 {
+            self.arch.shrink_stack(stack_size);
+        }
+        self.arch.free(r)?;
+
+        Ok(())
     }
 
     fn array_access(

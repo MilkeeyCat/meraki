@@ -192,6 +192,25 @@ impl SymbolResolver {
                     }
                 }
             }
+            Expr::StructMethod(expr) => {
+                Self::resolve_expr(&expr.expr, scope)?;
+
+                let type_name = match expr.expr.type_(scope)? {
+                    Type::Struct(name) => name,
+                    _ => unreachable!(),
+                };
+
+                match scope
+                    .find_type(&type_name)
+                    .ok_or(TypeError::Nonexistent(type_name))?
+                {
+                    tt::Type::Struct(s) => {
+                        if s.find_method(&expr.method).is_none() {
+                            panic!("Method {} doesn't exist", expr.method);
+                        }
+                    }
+                }
+            }
             Expr::ArrayAccess(expr) => {
                 Self::resolve_expr(&expr.expr, scope)?;
                 Self::resolve_expr(&expr.index, scope)?;

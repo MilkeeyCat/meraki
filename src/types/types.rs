@@ -174,6 +174,13 @@ impl Type {
             type_ => Err(TypeError::Deref(type_.clone())),
         }
     }
+
+    pub fn struct_unchecked(self) -> String {
+        match self {
+            Type::Struct(name) => name,
+            _ => unreachable!(),
+        }
+    }
 }
 
 #[cfg(test)]

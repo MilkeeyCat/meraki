@@ -2,15 +2,15 @@ use super::{
     expr::{ExprBinary, ExprLit, ExprUnary},
     precedence::Precedence,
     stmt::{StmtFor, StmtIf, StmtReturn, StmtWhile},
-    BinOp, Block, Expr, ExprArray, ExprArrayAccess, ExprCast, ExprIdent, ExprStruct, ParserError,
-    Stmt, StmtFunction, StmtVarDecl, UIntLitRepr, UnOp,
+    BinOp, Block, Expr, ExprArray, ExprArrayAccess, ExprCast, ExprIdent, ExprStruct,
+    ExprStructMethod, ParserError, Stmt, StmtFunction, StmtVarDecl, UIntLitRepr, UnOp,
 };
 use crate::{
     lexer::{Lexer, Token},
     parser::{ExprFunctionCall, ExprStructAccess},
     scope::Scope,
     symbol_table::{Symbol, SymbolFunction},
-    type_table::TypeStruct,
+    type_table::{TypeStruct, TypeStructMethod},
     types::{Type, TypeArray, TypeError},
 };
 use std::collections::HashMap;
@@ -23,6 +23,7 @@ pub struct Parser {
     cur_token: Token,
     peek_token: Token,
     scope: Scope,
+    global_stms: Vec<Stmt>,
     prefix_fns: HashMap<Token, PrefixFn>,
     infix_fns: HashMap<Token, InfixFn>,
 }
@@ -34,6 +35,7 @@ impl Parser {
             peek_token: lexer.next_token()?,
             lexer,
             scope: Scope::new(),
+            global_stms: Vec::new(),
             prefix_fns: HashMap::from([
                 (Token::Ident(Default::default()), Self::ident as PrefixFn),
                 (
@@ -84,6 +86,10 @@ impl Parser {
         &self.cur_token == token
     }
 
+    fn peek_token_is(&self, token: &Token) -> bool {
+        &self.peek_token == token
+    }
+
     fn expect(&mut self, token: &Token) -> Result<(), ParserError> {
         if self.cur_token_is(token) {
             self.next_token()?;
@@ -116,6 +122,8 @@ impl Parser {
                 _ => unreachable!(),
             }
         }
+
+        stmts.extend_from_slice(&self.global_stms);
 
         Ok(stmts)
     }
@@ -159,11 +167,70 @@ impl Parser {
 
         self.expect(&Token::LBrace)?;
 
-        let fields = self.params(Token::Semicolon, Token::RBrace)?;
+        let mut fields = Vec::new();
+        let mut methods = Vec::new();
+
+        while !self.cur_token_is(&Token::RBrace) {
+            if self.cur_token_is(&Token::Fn) {
+                self.expect(&Token::Fn)?;
+
+                let method_name = match self.next_token()? {
+                    Token::Ident(ident) => ident,
+                    _ => todo!(),
+                };
+                self.expect(&Token::LParen)?;
+                let mut params = self.params(Token::Comma, Token::RParen)?;
+                params.insert(
+                    0,
+                    (
+                        "this".to_owned(),
+                        Type::Ptr(Box::new(Type::Struct(name.clone()))),
+                    ),
+                );
+                self.expect(&Token::Arrow)?;
+
+                let type_ = self.parse_type()?;
+                let block = self.compound_statement((method_name.clone(), type_.clone()))?;
+
+                methods.push(TypeStructMethod {
+                    return_type: type_.clone(),
+                    name: method_name.clone(),
+                    params: params.clone(),
+                });
+                self.global_stms.push(Stmt::Function(StmtFunction {
+                    return_type: type_,
+                    name: format!("{name}__{method_name}"),
+                    params,
+                    block,
+                }));
+            } else {
+                let name = match self.next_token()? {
+                    Token::Ident(ident) => ident,
+                    _ => todo!("Don't know what error to return yet"),
+                };
+                self.expect(&Token::Colon)?;
+                let type_ = self.parse_type()?;
+
+                match fields.iter().find(|(field_name, _)| field_name == &name) {
+                    Some(_) => todo!("Don't know yet what error to return"),
+                    None => fields.push((name, type_)),
+                };
+
+                if !self.cur_token_is(&Token::RBrace) {
+                    self.expect(&Token::Semicolon)?;
+                }
+            }
+        }
+
+        self.expect(&Token::RBrace)?;
 
         self.scope
             .type_table_mut()
-            .define(crate::type_table::Type::Struct(TypeStruct { name, fields }));
+            .define(crate::type_table::Type::Struct(TypeStruct {
+                name,
+                fields,
+                methods,
+            }));
 
         Ok(())
     }
@@ -548,12 +615,28 @@ impl Parser {
     fn struct_access(&mut self, expr: Expr) -> Result<Expr, ParserError> {
         let token = self.next_token()?;
 
-        match self.expr(Precedence::from(&token))? {
-            Expr::Ident(field) => Ok(Expr::StructAccess(ExprStructAccess {
+        if self.peek_token_is(&Token::LParen) {
+            let method = match self.next_token()? {
+                Token::Ident(field) => field,
+                _ => panic!("Struct field name should be of type string"),
+            };
+
+            self.expect(&Token::LParen)?;
+            let arguments = self.expr_list()?;
+
+            Ok(Expr::StructMethod(ExprStructMethod {
                 expr: Box::new(expr),
-                field: field.0,
-            })),
-            _ => panic!("Struct field name should be of type string"),
+                method,
+                arguments,
+            }))
+        } else {
+            match self.next_token()? {
+                Token::Ident(field) => Ok(Expr::StructAccess(ExprStructAccess {
+                    expr: Box::new(expr),
+                    field,
+                })),
+                _ => panic!("Struct field name should be of type string"),
+            }
         }
     }
 
