@@ -763,18 +763,12 @@ impl CodeGen {
                 false,
             )?;
 
-            self.arch.lea(
-                &Destination::Register(operands::Register {
-                    register: r,
-                    size: self.arch.word_size(),
-                }),
-                &EffectiveAddress {
-                    base: dest.clone().into(),
-                    index: Some(index),
-                    scale: None,
-                    displacement: None,
-                },
-            );
+            match &dest {
+                Destination::Memory(memory) => {
+                    self.arch.lea(&r_loc, &memory.effective_address);
+                }
+                Destination::Register(_) => unreachable!(),
+            }
 
             self.arch
                 .array_offset(&r_loc, &index.dest(self.arch.word_size()), size)?;

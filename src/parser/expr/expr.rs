@@ -421,18 +421,12 @@ impl LValue for ExprArrayAccess {
                 None,
             )
             .unwrap();
-        codegen.arch.lea(
-            &Destination::Register(operands::Register {
-                register: r,
-                size: codegen.arch.word_size(),
-            }),
-            &EffectiveAddress {
-                base: base.into(),
-                index: Some(index),
-                scale: None,
-                displacement: None,
-            },
-        );
+        match base {
+            Destination::Memory(memory) => {
+                codegen.arch.lea(&r_loc, &memory.effective_address);
+            }
+            Destination::Register(_) => unreachable!(),
+        }
         codegen.arch.array_offset(
             &r_loc,
             &index.dest(codegen.arch.word_size()),
