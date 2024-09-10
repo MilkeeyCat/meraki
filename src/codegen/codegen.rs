@@ -771,6 +771,7 @@ impl CodeGen {
                 })),
                 state,
             )?;
+            self.arch.free(index)?;
             self.arch.free(r)?;
         }
 
