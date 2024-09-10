@@ -16,8 +16,8 @@ use std::{
 #[derive(Parser, Debug, Clone)]
 #[command(version, about, long_about = None)]
 pub struct CompileArgs {
-    /// Source code filenames
-    #[arg(required = true, num_args = 1..)]
+    /// Source code file to compile
+    #[arg(required = true, num_args = 1)]
     pub file: PathBuf,
 
     /// Output binary file name
