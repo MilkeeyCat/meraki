@@ -456,24 +456,23 @@ impl CodeGen {
             | BinOp::Equal
             | BinOp::NotEqual => {
                 if let Some(dest) = dest {
-                    let r_left = self.arch.alloc()?;
-                    let left_size = expr
-                        .left
-                        .type_(&self.scope)?
-                        .size(&self.arch, &self.scope)?;
-                    let r_right = self.arch.alloc()?;
-                    let right_size = expr
-                        .right
-                        .type_(&self.scope)?
-                        .size(&self.arch, &self.scope)?;
+                    let size = std::cmp::max(
+                        expr.left
+                            .type_(&self.scope)?
+                            .size(&self.arch, &self.scope)?,
+                        expr.right
+                            .type_(&self.scope)?
+                            .size(&self.arch, &self.scope)?,
+                    );
+                    let left = self.arch.alloc()?;
+                    let right = self.arch.alloc()?;
 
-                    self.expr(*expr.left, Some(r_left.dest(left_size)), state)?;
-                    self.expr(*expr.right, Some(r_right.dest(right_size)), state)?;
-                    self.arch
-                        .cmp(&r_left.dest(left_size), &r_right.source(right_size));
+                    self.expr(*expr.left, Some(left.dest(size)), state)?;
+                    self.expr(*expr.right, Some(right.dest(size)), state)?;
+                    self.arch.cmp(&left.dest(size), &right.source(size));
                     self.arch.setcc(&dest, CmpOp::try_from(&expr.op)?);
-                    self.arch.free(r_left)?;
-                    self.arch.free(r_right)?;
+                    self.arch.free(left)?;
+                    self.arch.free(right)?;
                 }
             }
             BinOp::LogicalAnd | BinOp::LogicalOr => {
