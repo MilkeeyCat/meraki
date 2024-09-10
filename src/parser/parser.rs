@@ -209,7 +209,8 @@ impl Parser {
                     _ => todo!("Don't know what error to return yet"),
                 };
                 self.expect(&Token::Colon)?;
-                let type_ = self.parse_type()?;
+                let mut type_ = self.parse_type()?;
+                self.array_type(&mut type_)?;
 
                 match fields.iter().find(|(field_name, _)| field_name == &name) {
                     Some(_) => todo!("Don't know yet what error to return"),
