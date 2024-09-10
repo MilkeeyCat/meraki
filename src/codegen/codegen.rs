@@ -623,24 +623,10 @@ impl CodeGen {
                 )?;
             }
             UnOp::Deref => {
-                let dest2 = unary_expr.expr.dest(self)?.unwrap();
-                let r = self.arch.alloc()?;
+                let expr_dest = unary_expr.dest(self)?;
 
                 self.arch.mov(
-                    &dest2.into(),
-                    &Destination::Register(operands::Register {
-                        register: r,
-                        size: self.arch.word_size(),
-                    }),
-                    false,
-                )?;
-                self.arch.mov(
-                    &Source::Register(operands::Register {
-                        register: r,
-                        size: unary_expr
-                            .type_(&self.scope)?
-                            .size(&self.arch, &self.scope)?,
-                    }),
+                    &expr_dest.into(),
                     &dest,
                     unary_expr.expr.type_(&self.scope)?.signed(),
                 )?;

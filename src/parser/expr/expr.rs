@@ -462,18 +462,22 @@ pub struct ExprUnary {
 
 impl LValue for ExprUnary {
     fn dest(&self, codegen: &mut CodeGen) -> Result<Destination, ArchError> {
-        let expr_dest = self.expr.dest(codegen)?.unwrap();
+        assert_eq!(self.op, UnOp::Deref);
+        let dest = self.expr.dest(codegen)?.unwrap();
         let r = codegen.arch.alloc().unwrap();
 
         codegen
             .arch
             .mov(
-                &expr_dest.into(),
+                &dest.into(),
                 &Destination::Register(operands::Register {
                     register: r,
-                    size: 8,
+                    size: self
+                        .expr
+                        .type_(&codegen.scope)?
+                        .size(&codegen.arch, &codegen.scope)?,
                 }),
-                self.type_(&codegen.scope)?.signed(),
+                self.expr.type_(&codegen.scope)?.signed(),
             )
             .unwrap();
 
