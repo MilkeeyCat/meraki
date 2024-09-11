@@ -66,15 +66,15 @@ impl Type {
     }
 
     fn bool(&self) -> bool {
-        if self == &Self::Bool {
-            true
-        } else {
-            false
-        }
+        matches!(self, Self::Bool)
     }
 
     fn ptr(&self) -> bool {
         matches!(self, Self::Ptr(..))
+    }
+
+    fn arr(&self) -> bool {
+        matches!(self, Self::Array(..))
     }
 
     pub fn signed(&self) -> bool {
@@ -105,40 +105,16 @@ impl Type {
         }
     }
 
-    pub fn assign(self, type_: Self) -> Result<Self, TypeError> {
-        if self == type_ {
-            return Ok(self);
-        }
-
-        match (&self, &type_) {
-            (Type::Ptr(pointee), Type::Array(array))
-                if pointee.as_ref() == array.type_.as_ref() =>
-            {
-                return Ok(self);
-            }
-            _ => {}
-        }
-
-        if self.int() && type_.int() {
-            // Not possible to assign signed int to unsigned but possible to assigned unsigned to signed
-            if !self.signed() && type_.signed() {
-                return Err(TypeError::Assignment(type_, self));
-            }
-
-            if self >= type_ {
-                return Ok(self);
-            }
-        }
-
-        Err(TypeError::Assignment(type_, self))
-    }
-
     pub fn cast(self, type_: Self) -> Result<Self, TypeError> {
         if (self == type_) || (self.int() && type_.int()) {
             return Ok(type_);
         }
 
         if (self.bool() && type_.int()) || (self.int() && type_.bool()) {
+            return Ok(type_);
+        }
+
+        if self.arr() && type_.ptr() && self.inner()? == type_.inner()? {
             return Ok(type_);
         }
 

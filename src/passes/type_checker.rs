@@ -158,6 +158,7 @@ impl TypeChecker {
             Expr::StructMethod(expr) => {}
             Expr::ArrayAccess(expr) => {}
             Expr::FunctionCall(expr) => {
+                let fn_name = &expr.name;
                 let symbol = scope.find_symbol(&expr.name).unwrap().function_unchecked();
                 let args_types = expr
                     .arguments
@@ -165,10 +166,12 @@ impl TypeChecker {
                     .map(|expr| expr.type_(scope))
                     .collect::<std::result::Result<Vec<_>, _>>()?;
 
-                for (param_type, arg_type) in symbol.parameters.iter().zip(&args_types) {
-                    if let Err(_) = param_type.to_owned().assign(arg_type.to_owned()) {
+                for (expr, type_) in expr.arguments.iter().zip(&symbol.parameters) {
+                    if let Err(_) =
+                        Self::check_if_expr_assignable_to_type(expr, scope, type_.to_owned())
+                    {
                         return Err(ParserError::FunctionArguments(
-                            expr.name.clone(),
+                            fn_name.clone(),
                             symbol.parameters.to_owned(),
                             args_types,
                         ));
@@ -195,7 +198,7 @@ impl TypeChecker {
         }
 
         if Expr::int_lit_only(expr) {
-            type_.clone().assign(target.clone())?;
+            Type::promote(type_.clone(), target.clone())?;
         }
 
         Err(ParserError::Type(TypeError::Mismatched(type_, target)))
