@@ -358,7 +358,7 @@ impl CodeGen {
                     self.arch.mov(&lvalue_dest.into(), &dest, type_.signed())?;
                 }
             }
-            BinOp::Add => {
+            BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div => {
                 if let Some(dest) = dest {
                     self.expr(*expr.left, Some(dest.clone()), state)?;
 
@@ -370,81 +370,49 @@ impl CodeGen {
                         Some(r.dest(type_.size(&self.arch, &self.scope)?)),
                         state,
                     )?;
-                    self.arch.add(
-                        &dest,
-                        &Source::Register(operands::Register {
-                            register: r,
-                            size: type_.size(&self.arch, &self.scope)?,
-                        }),
-                    );
-                    self.arch.free(r)?;
-                }
-            }
-            BinOp::Sub => {
-                if let Some(dest) = dest {
-                    self.expr(*expr.left, Some(dest.clone()), state)?;
 
-                    let r = self.arch.alloc()?;
-                    let type_ = expr.right.type_(&self.scope)?;
+                    match &expr.op {
+                        BinOp::Add => {
+                            self.arch.add(
+                                &dest,
+                                &Source::Register(operands::Register {
+                                    register: r,
+                                    size: type_.size(&self.arch, &self.scope)?,
+                                }),
+                            );
+                        }
+                        BinOp::Sub => {
+                            self.arch.sub(
+                                &dest,
+                                &Source::Register(operands::Register {
+                                    register: r,
+                                    size: type_.size(&self.arch, &self.scope)?,
+                                }),
+                            );
+                        }
+                        BinOp::Mul => {
+                            self.arch.mul(
+                                &dest,
+                                &Source::Register(operands::Register {
+                                    register: r,
+                                    size: type_.size(&self.arch, &self.scope)?,
+                                }),
+                                type_.signed(),
+                            )?;
+                        }
+                        BinOp::Div => {
+                            self.arch.div(
+                                &dest,
+                                &Source::Register(operands::Register {
+                                    register: r,
+                                    size: type_.size(&self.arch, &self.scope)?,
+                                }),
+                                type_.signed(),
+                            )?;
+                        }
+                        _ => unreachable!(),
+                    };
 
-                    self.expr(
-                        *expr.right,
-                        Some(r.dest(type_.size(&self.arch, &self.scope)?)),
-                        state,
-                    )?;
-                    self.arch.sub(
-                        &dest,
-                        &Source::Register(operands::Register {
-                            register: r,
-                            size: type_.size(&self.arch, &self.scope)?,
-                        }),
-                    );
-                    self.arch.free(r)?;
-                }
-            }
-            BinOp::Mul => {
-                if let Some(dest) = dest {
-                    self.expr(*expr.left, Some(dest.clone()), state)?;
-
-                    let r = self.arch.alloc()?;
-                    let type_ = expr.right.type_(&self.scope)?;
-
-                    self.expr(
-                        *expr.right,
-                        Some(r.dest(type_.size(&self.arch, &self.scope)?)),
-                        state,
-                    )?;
-                    self.arch.mul(
-                        &dest,
-                        &Source::Register(operands::Register {
-                            register: r,
-                            size: type_.size(&self.arch, &self.scope)?,
-                        }),
-                        type_.signed(),
-                    )?;
-                    self.arch.free(r)?;
-                }
-            }
-            BinOp::Div => {
-                if let Some(dest) = dest {
-                    self.expr(*expr.left, Some(dest.clone()), state)?;
-
-                    let r = self.arch.alloc()?;
-                    let type_ = expr.right.type_(&self.scope)?;
-
-                    self.expr(
-                        *expr.right,
-                        Some(r.dest(type_.size(&self.arch, &self.scope)?)),
-                        state,
-                    )?;
-                    self.arch.div(
-                        &dest,
-                        &Source::Register(operands::Register {
-                            register: r,
-                            size: type_.size(&self.arch, &self.scope)?,
-                        }),
-                        type_.signed(),
-                    )?;
                     self.arch.free(r)?;
                 }
             }
