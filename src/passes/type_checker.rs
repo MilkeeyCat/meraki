@@ -87,7 +87,33 @@ impl TypeChecker {
 
     fn check_expr(expr: &Expr, scope: &Scope) -> Result<()> {
         Ok(match expr {
-            Expr::Binary(expr) => {}
+            Expr::Binary(expr) => {
+                Self::check_expr(&expr.left, scope)?;
+                Self::check_expr(&expr.right, scope)?;
+
+                let left = expr.left.type_(scope)?;
+                let right = expr.right.type_(scope)?;
+
+                match (
+                    Expr::int_lit_only(&expr.left),
+                    Expr::int_lit_only(&expr.right),
+                ) {
+                    (true, true) => {
+                        Type::common(left, right)?;
+                    }
+                    (true, false) => {
+                        Type::promote(left, right)?;
+                    }
+                    (false, true) => {
+                        Type::promote(right, left)?;
+                    }
+                    (false, false) => {
+                        if left != right {
+                            return Err(ParserError::Type(TypeError::Mismatched(left, right)));
+                        }
+                    }
+                }
+            }
             Expr::Unary(expr) => match expr.op {
                 UnOp::Deref => {
                     let type_ = expr.expr.type_(scope)?;

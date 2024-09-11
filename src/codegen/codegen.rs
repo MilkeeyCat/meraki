@@ -39,12 +39,11 @@ impl CodeGen {
 
         if let Some(expr) = variable.value {
             self.expr(
-                Expr::Binary(ExprBinary::new(
-                    BinOp::Assign,
-                    Expr::Ident(ExprIdent(variable.name)),
-                    expr,
-                    &self.scope,
-                )?),
+                Expr::Binary(ExprBinary {
+                    op: BinOp::Assign,
+                    left: Box::new(Expr::Ident(ExprIdent(variable.name))),
+                    right: Box::new(expr),
+                }),
                 None,
                 None,
             )?;

@@ -106,98 +106,6 @@ pub struct ExprBinary {
     pub right: Box<Expr>,
 }
 
-impl ExprBinary {
-    pub fn new(op: BinOp, left: Expr, right: Expr, scope: &Scope) -> Result<Self, ExprError> {
-        let modify = |expr: Expr, prev: Type, new: Type| -> Expr {
-            if prev != new && Expr::int_lit_only(&expr) {
-                Expr::Cast(ExprCast {
-                    expr: Box::new(expr),
-                    type_: new,
-                })
-            } else {
-                expr
-            }
-        };
-        let promote = |mut from: Type, mut to: Type, signed: bool| -> Type {
-            if from > to {
-                if signed {
-                    from.to_signed();
-                }
-
-                from
-            } else {
-                if signed {
-                    to.to_signed();
-                }
-
-                to
-            }
-        };
-
-        match &op {
-            BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div => {
-                let left_type = left.type_(scope)?;
-                let right_type = right.type_(scope)?;
-
-                if left_type.int() && right_type.int() {
-                    if left_type != right_type {
-                        let signed = left_type.signed() || right_type.signed();
-                        let new_left_type = promote(left_type.clone(), right_type.clone(), signed);
-                        let new_right_type = promote(right_type.clone(), left_type.clone(), signed);
-                        let left = modify(left, left_type, new_left_type);
-                        let right = modify(right, right_type, new_right_type);
-
-                        if left.type_(scope)? != right.type_(scope)? {
-                            return Err(ExprError::Type(TypeError::Mismatched(
-                                left.type_(scope)?,
-                                right.type_(scope)?,
-                            )));
-                        }
-
-                        return Ok(Self {
-                            op,
-                            left: Box::new(left),
-                            right: Box::new(right),
-                        });
-                    }
-                } else {
-                    panic!("Math operations are allowed only on integers");
-                }
-            }
-            BinOp::Assign => {
-                let left_type = left.type_(scope)?;
-                let right_type = right.type_(scope)?;
-
-                if left_type != right_type {
-                    let signed = left_type.signed();
-                    let new_right_type = promote(right_type.clone(), left_type.clone(), signed);
-                    let right = modify(right, right_type, new_right_type);
-
-                    if left.type_(scope)? != right.type_(scope)? {
-                        return Err(ExprError::Type(TypeError::Mismatched(
-                            left.type_(scope)?,
-                            right.type_(scope)?,
-                        )));
-                    }
-
-                    return Ok(Self {
-                        op,
-                        left: Box::new(left),
-                        right: Box::new(right),
-                    });
-                }
-            }
-            _ => {}
-        };
-
-        Ok(Self {
-            op,
-            left: Box::new(left),
-            right: Box::new(right),
-        })
-    }
-}
-
 impl Expression for ExprBinary {
     fn type_(&self, scope: &Scope) -> Result<Type, ExprError> {
         match &self.op {
@@ -205,9 +113,7 @@ impl Expression for ExprBinary {
                 let left = self.left.as_ref().type_(scope)?;
                 let right = self.right.as_ref().type_(scope)?;
 
-                assert_eq!(left, right);
-
-                Ok(left)
+                Ok(Type::common(left, right)?)
             }
             BinOp::LessThan
             | BinOp::GreaterThan
@@ -520,8 +426,8 @@ pub struct ExprCast {
 }
 
 impl Expression for ExprCast {
-    fn type_(&self, symbtable: &Scope) -> Result<Type, ExprError> {
-        let expr_type = self.expr.type_(symbtable)?;
+    fn type_(&self, scope: &Scope) -> Result<Type, ExprError> {
+        let expr_type = self.expr.type_(scope)?;
 
         Ok(expr_type.cast(self.type_.clone())?)
     }

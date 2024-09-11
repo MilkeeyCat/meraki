@@ -181,6 +181,37 @@ impl Type {
             _ => unreachable!(),
         }
     }
+
+    pub fn promote(mut from: Self, mut to: Self) -> Result<Self, TypeError> {
+        if from == to {
+            return Ok(from);
+        }
+
+        if from.int() && to.int() {
+            if from.signed() || to.signed() {
+                from.to_signed();
+                to.to_signed();
+            }
+
+            if from < to {
+                return Ok(from);
+            }
+        }
+
+        Err(TypeError::Promotion(from, to))
+    }
+
+    pub fn common(left: Self, right: Self) -> Result<Self, TypeError> {
+        if let Ok(type_) = Self::promote(left.clone(), right.clone()) {
+            return Ok(type_);
+        }
+
+        if let Ok(type_) = Self::promote(right.clone(), left.clone()) {
+            return Ok(type_);
+        }
+
+        panic!("Couldn't find common type for {left} & {right}");
+    }
 }
 
 #[cfg(test)]
