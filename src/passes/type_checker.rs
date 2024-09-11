@@ -121,6 +121,11 @@ impl TypeChecker {
                         panic!("Can't dereference an expression of type {type_}")
                     }
                 }
+                UnOp::Address => {
+                    if !expr.expr.lvalue() {
+                        panic!("Can't get address of {expr:?}");
+                    }
+                }
                 _ => {}
             },
             Expr::Cast(expr) => {

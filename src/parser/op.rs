@@ -82,6 +82,8 @@ impl TryFrom<&Token> for UnOp {
         match value {
             Token::Bang => Ok(Self::Not),
             Token::Minus => Ok(Self::Negative),
+            Token::Ampersand => Ok(Self::Address),
+            Token::Asterisk => Ok(Self::Deref),
             token => Err(OpParseError::Un(token.to_owned())),
         }
     }

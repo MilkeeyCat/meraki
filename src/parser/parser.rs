@@ -48,8 +48,8 @@ impl Parser {
                 (Token::Minus, Self::unary_expr),
                 (Token::Bang, Self::unary_expr),
                 (Token::LParen, Self::grouped_expr),
-                (Token::Ampersand, Self::addr_expr),
-                (Token::Asterisk, Self::deref_expr),
+                (Token::Ampersand, Self::unary_expr),
+                (Token::Asterisk, Self::unary_expr),
                 (Token::LBracket, Self::array_expr),
             ]),
             infix_fns: HashMap::from([
@@ -632,7 +632,7 @@ impl Parser {
     }
 
     fn struct_access(&mut self, expr: Expr) -> Result<Expr, ParserError> {
-        let token = self.next_token()?;
+        self.expect(&Token::Period)?;
 
         if self.peek_token_is(&Token::LParen) {
             let method = match self.next_token()? {
@@ -711,31 +711,6 @@ impl Parser {
         self.expect(&Token::RParen)?;
 
         Ok(expr)
-    }
-
-    fn addr_expr(&mut self) -> Result<Expr, ParserError> {
-        self.expect(&Token::Ampersand)?;
-
-        let expr = self.expr(Precedence::Prefix)?;
-        if !expr.lvalue() {
-            panic!("Can't get address of {expr:?}");
-        }
-
-        Ok(Expr::Unary(ExprUnary {
-            op: UnOp::Address,
-            expr: Box::new(expr),
-        }))
-    }
-
-    fn deref_expr(&mut self) -> Result<Expr, ParserError> {
-        self.expect(&Token::Asterisk)?;
-
-        let expr = self.expr(Precedence::Prefix)?;
-
-        Ok(Expr::Unary(ExprUnary {
-            op: UnOp::Deref,
-            expr: Box::new(expr),
-        }))
     }
 
     fn array_expr(&mut self) -> Result<Expr, ParserError> {
