@@ -267,30 +267,17 @@ impl CodeGen {
                         .ok_or(SymbolTableError::NotFound(ident.0.clone()))?;
                     let dst = symbol.dest(&self.arch, &self.scope)?;
 
-                    // If the ident is of type pointer, the address of variable has to be moved, not the value
+                    // If the ident is of type array, the address of variable has to be moved, not the value
                     if let Type::Array(_) = ident.type_(&self.scope)? {
                         let r = self.arch.alloc()?;
+                        let r_op = operands::Register {
+                            register: r,
+                            size: self.arch.word_size(),
+                        };
 
-                        self.arch.lea(
-                            &Destination::Register(operands::Register {
-                                register: r,
-                                size: self.arch.word_size(),
-                            }),
-                            &EffectiveAddress {
-                                base: dst.into(),
-                                index: None,
-                                scale: None,
-                                displacement: None,
-                            },
-                        );
-                        self.arch.mov(
-                            &Source::Register(operands::Register {
-                                register: r,
-                                size: self.arch.word_size(),
-                            }),
-                            &dest,
-                            false,
-                        )?;
+                        self.arch
+                            .lea(&Destination::Register(r_op.clone()), &dst.into());
+                        self.arch.mov(&Source::Register(r_op), &dest, false)?;
                         self.arch.free(r)?;
                     } else {
                         self.arch.mov(&dst.into(), &dest, false)?;
