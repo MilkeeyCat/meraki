@@ -67,6 +67,7 @@ impl Parser {
                 (Token::And, Self::bin_expr),
                 (Token::Or, Self::bin_expr),
                 (Token::LParen, Self::bin_expr),
+                (Token::Arrow, Self::pointer_access),
                 (Token::Period, Self::struct_access),
                 (Token::LBracket, Self::array_access),
                 (Token::As, Self::cast_expr),
@@ -611,6 +612,23 @@ impl Parser {
                 }))
             }
         }
+    }
+
+    fn pointer_access(&mut self, left: Expr) -> Result<Expr, ParserError> {
+        self.expect(&Token::Arrow)?;
+
+        let field = match self.next_token()? {
+            Token::Ident(ident) => ident,
+            _ => unreachable!(),
+        };
+
+        Ok(Expr::StructAccess(ExprStructAccess {
+            expr: Box::new(Expr::Unary(ExprUnary {
+                op: UnOp::Deref,
+                expr: Box::new(left),
+            })),
+            field,
+        }))
     }
 
     fn struct_access(&mut self, expr: Expr) -> Result<Expr, ParserError> {

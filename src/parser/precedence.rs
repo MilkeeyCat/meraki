@@ -29,7 +29,7 @@ impl From<&Token> for Precedence {
             Token::Assign => Self::Assign,
             Token::LParen => Self::Call,
             Token::As => Self::Cast,
-            Token::Period | Token::LBracket => Self::Access,
+            Token::Period | Token::Arrow | Token::LBracket => Self::Access,
             Token::And => Self::LogicalAnd,
             Token::Or => Self::LogicalOr,
             _ => Self::Lowest,
