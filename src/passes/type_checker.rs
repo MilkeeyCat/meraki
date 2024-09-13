@@ -1,9 +1,8 @@
 use super::Pass;
 use crate::{
-    parser::{Block, Expr, Expression, ParserError, Stmt, UnOp},
+    parser::{BinOp, Block, Expr, ExprBinary, Expression, ParserError, Stmt, UnOp},
     scope::Scope,
-    type_table as tt,
-    type_table::TypeTable,
+    type_table::{self as tt, TypeTable},
     types::{Type, TypeError},
 };
 use std::collections::HashSet;
@@ -42,8 +41,7 @@ impl TypeChecker {
                 Self::check_type(&stmt.type_, scope)?;
 
                 if let Some(expr) = &stmt.value {
-                    Self::check_expr(expr, scope)?;
-                    Self::check_if_expr_assignable_to_type(expr, scope, stmt.type_.clone())?;
+                    Self::check_assign(stmt.type_.clone(), expr, scope)?;
                 }
             }
             Stmt::Expr(expr) => {
@@ -87,32 +85,16 @@ impl TypeChecker {
 
     fn check_expr(expr: &Expr, scope: &Scope) -> Result<()> {
         Ok(match expr {
+            Expr::Binary(ExprBinary {
+                op: BinOp::Assign,
+                left,
+                right,
+            }) => {
+                Self::check_expr(left, scope)?;
+                Self::check_assign(left.type_(scope)?, right, scope)?;
+            }
             Expr::Binary(expr) => {
-                Self::check_expr(&expr.left, scope)?;
-                Self::check_expr(&expr.right, scope)?;
-
-                let left = expr.left.type_(scope)?;
-                let right = expr.right.type_(scope)?;
-
-                match (
-                    Expr::int_lit_only(&expr.left),
-                    Expr::int_lit_only(&expr.right),
-                ) {
-                    (true, true) => {
-                        Type::common(left, right)?;
-                    }
-                    (true, false) => {
-                        Type::promote(left, right)?;
-                    }
-                    (false, true) => {
-                        Type::promote(right, left)?;
-                    }
-                    (false, false) => {
-                        if left != right {
-                            return Err(ParserError::Type(TypeError::Mismatched(left, right)));
-                        }
-                    }
-                }
+                Self::check_bin(&expr.op, &expr.left, &expr.right, scope)?;
             }
             Expr::Unary(expr) => match expr.op {
                 UnOp::Deref => {
@@ -132,7 +114,7 @@ impl TypeChecker {
                 Self::check_type(&expr.type_, scope)?;
                 Self::check_expr(&expr.expr, scope)?;
             }
-            Expr::Lit(expr) => {}
+            Expr::Lit(_) => {}
             Expr::Ident(expr) => {}
             Expr::Struct(expr) => {
                 Self::check_type(&expr.type_(scope)?, scope)?;
@@ -227,6 +209,90 @@ impl TypeChecker {
                     }
                 }
             }
+        }
+
+        Ok(())
+    }
+
+    pub fn check_bin(op: &BinOp, left: &Expr, right: &Expr, scope: &Scope) -> Result<Type> {
+        Self::check_expr(left, scope)?;
+        Self::check_expr(right, scope)?;
+
+        let left_type = left.type_(scope)?;
+        let right_type = right.type_(scope)?;
+
+        let type_ = match op {
+            BinOp::Add | BinOp::Sub => {
+                if left_type.int() && right_type.int() {
+                    if Expr::int_lit_only(left) || Expr::int_lit_only(right) {
+                        if left_type > right_type {
+                            Type::promote(right_type, left_type)?
+                        } else {
+                            Type::promote(left_type, right_type)?
+                        }
+                    } else {
+                        assert_eq!(left_type, right_type);
+
+                        left_type
+                    }
+                } else if left_type.ptr() && right_type.int() || left_type.int() && right_type.ptr()
+                {
+                    let (ptr, int, int_expr) = if left_type.ptr() {
+                        (left_type, right_type, right)
+                    } else {
+                        (right_type, left_type, left)
+                    };
+
+                    if int != Type::Usize && !Expr::int_lit_only(int_expr) {
+                        panic!("Only interger of type usize is allowed in pointer arithmetic");
+                    }
+
+                    if Expr::int_lit_only(int_expr) {
+                        Type::promote(int, Type::Usize)?;
+                    }
+
+                    ptr
+                } else {
+                    panic!("Go fuck yourself");
+                }
+            }
+            BinOp::LogicalAnd | BinOp::LogicalOr => {
+                assert_eq!(left_type, Type::Bool);
+                assert_eq!(right_type, Type::Bool);
+                Type::Bool
+            }
+            BinOp::Assign => unreachable!(),
+            _ => {
+                assert!(
+                    left_type.int() && right_type.int(),
+                    "Math operations can be applied only to integers"
+                );
+                if Expr::int_lit_only(left) || Expr::int_lit_only(right) {
+                    if left_type > right_type {
+                        Type::promote(right_type, left_type)?
+                    } else {
+                        Type::promote(left_type, right_type)?
+                    }
+                } else {
+                    assert_eq!(left_type, right_type);
+
+                    left_type
+                }
+            }
+        };
+
+        Ok(type_)
+    }
+
+    fn check_assign(left_type: Type, right: &Expr, scope: &Scope) -> Result<()> {
+        Self::check_expr(right, scope)?;
+
+        let right_type = right.type_(scope)?;
+
+        if left_type.int() {
+            Type::promote(right_type, left_type)?;
+        } else {
+            assert_eq!(left_type, right_type);
         }
 
         Ok(())

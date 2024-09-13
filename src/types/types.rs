@@ -69,7 +69,7 @@ impl Type {
         matches!(self, Self::Bool)
     }
 
-    fn ptr(&self) -> bool {
+    pub fn ptr(&self) -> bool {
         matches!(self, Self::Ptr(..))
     }
 

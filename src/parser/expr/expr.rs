@@ -3,6 +3,7 @@ use crate::{
     archs::ArchError,
     codegen::{operands, CodeGen, Destination},
     parser::op::{BinOp, UnOp},
+    passes::TypeChecker,
     scope::Scope,
     symbol_table::{Symbol, SymbolTableError},
     type_table,
@@ -110,10 +111,7 @@ impl Expression for ExprBinary {
     fn type_(&self, scope: &Scope) -> Result<Type, ExprError> {
         match &self.op {
             BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Assign => {
-                let left = self.left.as_ref().type_(scope)?;
-                let right = self.right.as_ref().type_(scope)?;
-
-                Ok(Type::common(left, right)?)
+                Ok(TypeChecker::check_bin(&self.op, &self.left, &self.right, scope).unwrap())
             }
             BinOp::LessThan
             | BinOp::GreaterThan
