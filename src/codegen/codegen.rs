@@ -2,9 +2,9 @@ use super::{operands, CodeGenError, Destination, EffectiveAddress, Immediate, Of
 use crate::{
     archs::{Arch, Jump},
     parser::{
-        BinOp, CmpOp, Expr, ExprArray, ExprArrayAccess, ExprBinary, ExprFunctionCall, ExprIdent,
-        ExprLit, ExprStruct, ExprStructAccess, ExprStructMethod, ExprUnary, Expression, LValue,
-        Stmt, StmtFor, StmtFunction, StmtIf, StmtReturn, StmtVarDecl, StmtWhile, UnOp,
+        BinOp, BitwiseOp, CmpOp, Expr, ExprArray, ExprArrayAccess, ExprBinary, ExprFunctionCall,
+        ExprIdent, ExprLit, ExprStruct, ExprStructAccess, ExprStructMethod, ExprUnary, Expression,
+        LValue, Stmt, StmtFor, StmtFunction, StmtIf, StmtReturn, StmtVarDecl, StmtWhile, UnOp,
     },
     scope::Scope,
     symbol_table::{Symbol, SymbolTableError},
@@ -345,7 +345,12 @@ impl CodeGen {
                     self.arch.mov(&lvalue_dest.into(), &dest, type_.signed())?;
                 }
             }
-            BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div => {
+            BinOp::Add
+            | BinOp::Sub
+            | BinOp::Mul
+            | BinOp::Div
+            | BinOp::BitwiseAnd
+            | BinOp::BitwiseOr => {
                 if let Some(dest) = dest {
                     self.expr(*expr.left, Some(dest.clone()), state)?;
 
@@ -396,6 +401,16 @@ impl CodeGen {
                                 }),
                                 type_.signed(),
                             )?;
+                        }
+                        BinOp::BitwiseAnd | BinOp::BitwiseOr => {
+                            self.arch.bitwise(
+                                &dest,
+                                &Source::Register(operands::Register {
+                                    register: r,
+                                    size: type_.size(&self.arch, &self.scope)?,
+                                }),
+                                BitwiseOp::try_from(&expr.op).unwrap(),
+                            );
                         }
                         _ => unreachable!(),
                     };

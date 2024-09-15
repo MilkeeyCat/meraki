@@ -4,7 +4,7 @@ use crate::{
         operands::{self, Base, EffectiveAddress, Immediate, Memory, Offset},
         Destination, Source,
     },
-    parser::{Block, CmpOp, Stmt},
+    parser::{BitwiseOp, Block, CmpOp, Stmt},
     register::{
         allocator::{AllocatorError, RegisterAllocator},
         Register,
@@ -307,6 +307,25 @@ impl Architecture for Amd64 {
         )?;
 
         Ok(())
+    }
+
+    fn bitwise(&mut self, dest: &Destination, src: &Source, op: BitwiseOp) {
+        match op {
+            BitwiseOp::And => {
+                self.buf.push_str(&formatdoc!(
+                    "
+                    \tand {dest}, {src}
+                    "
+                ));
+            }
+            BitwiseOp::Or => {
+                self.buf.push_str(&formatdoc!(
+                    "
+                    \tor {dest}, {src}
+                    "
+                ));
+            }
+        }
     }
 
     fn cmp(&mut self, dest: &Destination, src: &Source) {

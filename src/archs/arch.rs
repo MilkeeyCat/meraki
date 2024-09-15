@@ -1,7 +1,7 @@
 use super::ArchError;
 use crate::{
     codegen::{Destination, EffectiveAddress, Source},
-    parser::{Block, CmpOp},
+    parser::{BitwiseOp, Block, CmpOp},
     register::{allocator::AllocatorError, Register},
     scope::Scope,
     types::Type,
@@ -41,6 +41,7 @@ pub trait Architecture: ArchitectureClone {
     fn sub(&mut self, dest: &Destination, src: &Source);
     fn mul(&mut self, dest: &Destination, src: &Source, signed: bool) -> Result<(), ArchError>;
     fn div(&mut self, dest: &Destination, src: &Source, signed: bool) -> Result<(), ArchError>;
+    fn bitwise(&mut self, dest: &Destination, src: &Source, op: BitwiseOp);
     fn cmp(&mut self, dest: &Destination, src: &Source);
     fn setcc(&mut self, dest: &Destination, condition: CmpOp);
     fn fn_preamble(

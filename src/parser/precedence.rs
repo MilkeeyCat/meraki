@@ -7,6 +7,8 @@ pub enum Precedence {
     Assign,
     LogicalOr,
     LogicalAnd,
+    BitwiseOr,
+    BitwiseAnd,
     Comparison,
     Equality,
     Sum,
@@ -32,6 +34,8 @@ impl From<&Token> for Precedence {
             Token::Period | Token::Arrow | Token::LBracket => Self::Access,
             Token::And => Self::LogicalAnd,
             Token::Or => Self::LogicalOr,
+            Token::Ampersand => Self::BitwiseAnd,
+            Token::Bar => Self::BitwiseOr,
             _ => Self::Lowest,
         }
     }
@@ -40,11 +44,13 @@ impl From<&Token> for Precedence {
 impl Precedence {
     pub fn lower(self) -> Self {
         match self {
-            Self::Lowest => panic!(),
+            Self::Lowest => unreachable!(),
             Self::Assign => Self::Lowest,
             Self::LogicalOr => Self::Assign,
             Self::LogicalAnd => Self::LogicalOr,
-            Self::Comparison => Self::LogicalAnd,
+            Self::BitwiseOr => Self::LogicalAnd,
+            Self::BitwiseAnd => Self::BitwiseOr,
+            Self::Comparison => Self::BitwiseAnd,
             Self::Equality => Self::Comparison,
             Self::Sum => Self::Equality,
             Self::Product => Self::Sum,

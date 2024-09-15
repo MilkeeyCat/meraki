@@ -5,6 +5,7 @@ pub enum OpParseError {
     Bin(Token),
     Un(Token),
     Cmp(BinOp),
+    Bitwise(BinOp),
 }
 
 impl std::fmt::Display for OpParseError {
@@ -20,6 +21,13 @@ impl std::fmt::Display for OpParseError {
                 write!(
                     f,
                     "Failed to parse comparison operator from binary operator {:?}",
+                    op
+                )
+            }
+            Self::Bitwise(op) => {
+                write!(
+                    f,
+                    "Failed to parse bitwise operator from binary operator {:?}",
                     op
                 )
             }
@@ -42,6 +50,8 @@ pub enum BinOp {
     Assign,
     LogicalAnd,
     LogicalOr,
+    BitwiseAnd,
+    BitwiseOr,
 }
 
 impl TryFrom<&Token> for BinOp {
@@ -62,6 +72,8 @@ impl TryFrom<&Token> for BinOp {
             Token::Assign => Ok(Self::Assign),
             Token::And => Ok(Self::LogicalAnd),
             Token::Or => Ok(Self::LogicalOr),
+            Token::Ampersand => Ok(Self::BitwiseAnd),
+            Token::Bar => Ok(Self::BitwiseOr),
             token => Err(OpParseError::Bin(token.to_owned())),
         }
     }
@@ -110,6 +122,23 @@ impl TryFrom<&BinOp> for CmpOp {
             BinOp::Equal => Ok(Self::Equal),
             BinOp::NotEqual => Ok(Self::NotEqual),
             _ => Err(OpParseError::Cmp(value.to_owned())),
+        }
+    }
+}
+
+pub enum BitwiseOp {
+    And,
+    Or,
+}
+
+impl TryFrom<&BinOp> for BitwiseOp {
+    type Error = OpParseError;
+
+    fn try_from(value: &BinOp) -> Result<Self, Self::Error> {
+        match value {
+            BinOp::BitwiseAnd => Ok(Self::And),
+            BinOp::BitwiseOr => Ok(Self::Or),
+            _ => Err(OpParseError::Bitwise(value.to_owned())),
         }
     }
 }

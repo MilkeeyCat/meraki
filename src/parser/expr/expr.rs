@@ -110,7 +110,13 @@ pub struct ExprBinary {
 impl Expression for ExprBinary {
     fn type_(&self, scope: &Scope) -> Result<Type, ExprError> {
         match &self.op {
-            BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Assign => {
+            BinOp::Add
+            | BinOp::Sub
+            | BinOp::Mul
+            | BinOp::Div
+            | BinOp::Assign
+            | BinOp::BitwiseAnd
+            | BinOp::BitwiseOr => {
                 Ok(TypeChecker::check_bin(&self.op, &self.left, &self.right, scope).unwrap())
             }
             BinOp::LessThan

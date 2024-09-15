@@ -76,7 +76,7 @@ impl Lexer {
                     self.read_char();
                     Token::Or
                 } else {
-                    todo!("Add bitwise or owo");
+                    Token::Bar
                 }
             }
             b'!' => {
