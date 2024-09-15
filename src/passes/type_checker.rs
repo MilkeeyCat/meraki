@@ -289,6 +289,10 @@ impl TypeChecker {
 
         let right_type = right.type_(scope)?;
 
+        if left_type.ptr() && right_type == Type::Null {
+            return Ok(());
+        }
+
         if left_type.int() {
             Type::promote(right_type, left_type)?;
         } else {

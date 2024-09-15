@@ -87,6 +87,7 @@ impl From<ExprLit> for Immediate {
             ExprLit::Int(int) => Self::Int(int.inner),
             ExprLit::String(label) => Self::Label(label),
             ExprLit::Bool(bool) => Self::UInt(if bool { 1 } else { 0 }),
+            ExprLit::Null => Self::UInt(0),
         }
     }
 }

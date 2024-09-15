@@ -62,6 +62,8 @@ pub enum Token {
     Isize,
     Bool,
     Void,
+
+    Null,
 }
 
 impl Display for Token {
@@ -125,6 +127,7 @@ impl Display for Token {
             Isize => write!(f, "isize"),
             Bool => write!(f, "bool"),
             Void => write!(f, "void"),
+            Null => write!(f, "NULL"),
         }
     }
 }

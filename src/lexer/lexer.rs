@@ -143,6 +143,7 @@ impl Lexer {
                     "isize" => Token::Isize,
                     "bool" => Token::Bool,
                     "void" => Token::Void,
+                    "NULL" => Token::Null,
                     _ => Token::Ident(ident),
                 });
             }

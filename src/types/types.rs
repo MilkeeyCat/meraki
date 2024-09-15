@@ -24,6 +24,7 @@ pub enum Type {
     Struct(String),
     Ptr(Box<Type>),
     Array(TypeArray),
+    Null,
 }
 
 impl std::fmt::Display for Type {
@@ -41,9 +42,10 @@ impl std::fmt::Display for Type {
             Self::Isize => write!(f, "isize"),
             Self::Bool => write!(f, "bool"),
             Self::Void => write!(f, "void"),
-            Self::Ptr(type_) => write!(f, "{type_}*"),
+            Self::Ptr(type_) => write!(f, "*{type_}"),
             Self::Struct(name) => write!(f, "struct '{name}'"),
             Self::Array(array) => write!(f, "{}[{}]", array.type_, array.length),
+            Self::Null => write!(f, "NULL"),
         }
     }
 }

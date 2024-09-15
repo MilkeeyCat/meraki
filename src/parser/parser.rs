@@ -43,6 +43,7 @@ impl Parser {
                     Self::string_lit as PrefixFn,
                 ),
                 (Token::Integer(Default::default()), Self::int_lit),
+                (Token::Null, Self::null),
                 (Token::True, Self::bool),
                 (Token::False, Self::bool),
                 (Token::Minus, Self::unary_expr),
@@ -575,6 +576,12 @@ impl Parser {
         }
     }
 
+    fn null(&mut self) -> Result<Expr, ParserError> {
+        self.expect(&Token::Null)?;
+
+        Ok(Expr::Lit(ExprLit::Null))
+    }
+
     fn bool(&mut self) -> Result<Expr, ParserError> {
         match self.next_token()? {
             Token::True => Ok(Expr::Lit(ExprLit::Bool(true))),
@@ -597,7 +604,6 @@ impl Parser {
                 _ => todo!("Don't know what error to return yet"),
             },
             token => {
-                let left = left;
                 // NOTE: assignment expression is right-associative
                 let precedence = if let &Token::Assign = &token {
                     Precedence::from(&token).lower()

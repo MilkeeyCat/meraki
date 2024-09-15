@@ -137,6 +137,7 @@ pub enum ExprLit {
     UInt(UIntLitRepr),
     Bool(bool),
     String(String),
+    Null,
 }
 
 impl Expression for ExprLit {
@@ -146,6 +147,7 @@ impl Expression for ExprLit {
             ExprLit::UInt(uint) => Ok(uint.type_()),
             ExprLit::Bool(_) => Ok(Type::Bool),
             ExprLit::String(_) => Ok(Type::Ptr(Box::new(Type::I8))),
+            ExprLit::Null => Ok(Type::Null),
         }
     }
 }
@@ -154,7 +156,7 @@ impl ExprLit {
     pub fn signed(&self) -> bool {
         match self {
             ExprLit::Int(_) => true,
-            ExprLit::UInt(_) | ExprLit::Bool(_) | ExprLit::String(_) => false,
+            _ => false,
         }
     }
 }
