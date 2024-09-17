@@ -90,6 +90,7 @@ impl TypeChecker {
                 left,
                 right,
             }) => {
+                assert!(left.lvalue());
                 Self::check_expr(left, scope)?;
                 Self::check_assign(left.type_(scope)?, right, scope)?;
             }
@@ -291,6 +292,18 @@ impl TypeChecker {
 
         if left_type.ptr() && right_type == Type::Null {
             return Ok(());
+        }
+
+        if left_type.arr() {
+            if let Expr::Array(array) = right {
+                for expr in &array.0 {
+                    Self::check_assign(left_type.inner()?, expr, scope)?;
+                }
+
+                return Ok(());
+            } else {
+                unreachable!("Can't assign non-array expression to variable of type array");
+            }
         }
 
         if left_type.int() {

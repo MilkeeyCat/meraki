@@ -75,7 +75,7 @@ impl Type {
         matches!(self, Self::Ptr(..))
     }
 
-    fn arr(&self) -> bool {
+    pub fn arr(&self) -> bool {
         matches!(self, Self::Array(..))
     }
 
