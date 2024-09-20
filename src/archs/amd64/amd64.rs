@@ -92,7 +92,7 @@ impl Architecture for Amd64 {
 
     fn size(&self, type_: &Type) -> usize {
         match type_ {
-            Type::Ptr(_) | Type::Usize | Type::Isize => WORD_SIZE,
+            Type::Ptr(_) | Type::Null | Type::Usize | Type::Isize => WORD_SIZE,
             _ => unreachable!(),
         }
     }
