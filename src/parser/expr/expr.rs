@@ -418,9 +418,10 @@ impl Expression for ExprUnary {
 
                 expr_type
             }
-            UnOp::Not => Type::Bool,
+            UnOp::LogicalNot => Type::Bool,
             UnOp::Address => Type::Ptr(Box::new(self.expr.type_(scope)?)),
             UnOp::Deref => self.expr.type_(scope)?.inner()?,
+            UnOp::BitwiseNot => self.expr.type_(scope)?,
         })
     }
 }

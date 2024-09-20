@@ -63,6 +63,7 @@ impl Lexer {
                 }
             }
             b'.' => Token::Period,
+            b'~' => Token::Tilde,
             b'&' => {
                 if self.peek() == b'&' {
                     self.read_char();

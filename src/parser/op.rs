@@ -81,10 +81,11 @@ impl TryFrom<&Token> for BinOp {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum UnOp {
-    Not,
+    LogicalNot,
     Negative,
     Address,
     Deref,
+    BitwiseNot,
 }
 
 impl TryFrom<&Token> for UnOp {
@@ -92,10 +93,11 @@ impl TryFrom<&Token> for UnOp {
 
     fn try_from(value: &Token) -> Result<Self, Self::Error> {
         match value {
-            Token::Bang => Ok(Self::Not),
+            Token::Bang => Ok(Self::LogicalNot),
             Token::Minus => Ok(Self::Negative),
             Token::Ampersand => Ok(Self::Address),
             Token::Asterisk => Ok(Self::Deref),
+            Token::Tilde => Ok(Self::BitwiseNot),
             token => Err(OpParseError::Un(token.to_owned())),
         }
     }

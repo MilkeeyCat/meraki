@@ -328,6 +328,14 @@ impl Architecture for Amd64 {
         }
     }
 
+    fn bitwise_not(&mut self, dest: &Destination) {
+        self.buf.push_str(&formatdoc!(
+            "
+            \tnot {dest}
+            "
+        ));
+    }
+
     fn cmp(&mut self, dest: &Destination, src: &Source) {
         self.buf.push_str(&formatdoc!(
             "

@@ -51,6 +51,7 @@ impl Parser {
                 (Token::LParen, Self::grouped_expr),
                 (Token::Ampersand, Self::unary_expr),
                 (Token::Asterisk, Self::unary_expr),
+                (Token::Tilde, Self::unary_expr),
                 (Token::LBracket, Self::array_expr),
             ]),
             infix_fns: HashMap::from([

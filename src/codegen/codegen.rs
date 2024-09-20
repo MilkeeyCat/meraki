@@ -557,7 +557,7 @@ impl CodeGen {
                 self.expr(*unary_expr.expr, Some(dest.clone()), state)?;
                 self.arch.negate(&dest);
             }
-            UnOp::Not => {
+            UnOp::LogicalNot => {
                 let type_ = unary_expr.type_(&self.scope)?;
                 let r = self.arch.alloc()?;
 
@@ -598,6 +598,11 @@ impl CodeGen {
                     &dest,
                     unary_expr.expr.type_(&self.scope)?.signed(),
                 )?;
+            }
+            UnOp::BitwiseNot => {
+                self.expr(*unary_expr.expr, Some(dest.clone()), state)?;
+
+                self.arch.bitwise_not(&dest);
             }
         };
 
