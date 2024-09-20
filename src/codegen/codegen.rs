@@ -355,63 +355,50 @@ impl CodeGen {
             | BinOp::BitwiseAnd
             | BinOp::BitwiseOr => {
                 if let Some(dest) = dest {
+                    let left_type = expr.left.type_(&self.scope)?;
+                    let right_type = expr.right.type_(&self.scope)?;
+                    let size = std::cmp::max(
+                        left_type.size(&self.arch, &self.scope)?,
+                        right_type.size(&self.arch, &self.scope)?,
+                    );
+                    let signed = left_type.signed() || right_type.signed();
                     self.expr(*expr.left, Some(dest.clone()), state)?;
 
-                    let type_ = expr.right.type_(&self.scope)?;
                     let r = self.arch.alloc()?;
 
-                    self.expr(
-                        *expr.right,
-                        Some(r.dest(type_.size(&self.arch, &self.scope)?)),
-                        state,
-                    )?;
+                    self.expr(*expr.right, Some(r.dest(size)), state)?;
 
                     match &expr.op {
                         BinOp::Add => {
                             self.arch.add(
                                 &dest,
-                                &Source::Register(operands::Register {
-                                    register: r,
-                                    size: type_.size(&self.arch, &self.scope)?,
-                                }),
+                                &Source::Register(operands::Register { register: r, size }),
                             );
                         }
                         BinOp::Sub => {
                             self.arch.sub(
                                 &dest,
-                                &Source::Register(operands::Register {
-                                    register: r,
-                                    size: type_.size(&self.arch, &self.scope)?,
-                                }),
+                                &Source::Register(operands::Register { register: r, size }),
                             );
                         }
                         BinOp::Mul => {
                             self.arch.mul(
                                 &dest,
-                                &Source::Register(operands::Register {
-                                    register: r,
-                                    size: type_.size(&self.arch, &self.scope)?,
-                                }),
-                                type_.signed(),
+                                &Source::Register(operands::Register { register: r, size }),
+                                signed,
                             )?;
                         }
                         BinOp::Div => {
                             self.arch.div(
                                 &dest,
-                                &Source::Register(operands::Register {
-                                    register: r,
-                                    size: type_.size(&self.arch, &self.scope)?,
-                                }),
-                                type_.signed(),
+                                &Source::Register(operands::Register { register: r, size }),
+                                signed,
                             )?;
                         }
                         BinOp::BitwiseAnd | BinOp::BitwiseOr => {
                             self.arch.bitwise(
                                 &dest,
-                                &Source::Register(operands::Register {
-                                    register: r,
-                                    size: type_.size(&self.arch, &self.scope)?,
-                                }),
+                                &Source::Register(operands::Register { register: r, size }),
                                 BitwiseOp::try_from(&expr.op).unwrap(),
                             );
                         }
