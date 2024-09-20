@@ -63,7 +63,12 @@ impl Expression for Expr {
 impl Expr {
     pub fn lvalue(&self) -> bool {
         match self {
-            Self::StructAccess(_) | Self::ArrayAccess(_) | Self::Ident(_) => true,
+            Self::StructAccess(_)
+            | Self::ArrayAccess(_)
+            | Self::Ident(_)
+            | Self::Unary(ExprUnary {
+                op: UnOp::Deref, ..
+            }) => true,
             _ => false,
         }
     }
