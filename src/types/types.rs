@@ -171,7 +171,7 @@ impl Type {
                 to.to_signed();
             }
 
-            if from < to {
+            if from <= to {
                 return Ok(from);
             }
         }
