@@ -342,8 +342,11 @@ impl CodeGen {
                 self.expr(*expr.right, Some(lvalue_dest.clone()), state)?;
 
                 if let Some(dest) = dest {
-                    self.arch.mov(&lvalue_dest.into(), &dest, type_.signed())?;
+                    self.arch
+                        .mov(&lvalue_dest.clone().into(), &dest, type_.signed())?;
                 }
+
+                self.free(lvalue_dest)?;
             }
             BinOp::Add
             | BinOp::Sub
@@ -579,7 +582,7 @@ impl CodeGen {
                         register: r,
                         size: self.arch.word_size(),
                     }),
-                    &expr_dest.into(),
+                    &expr_dest.clone().into(),
                 );
                 self.arch.mov(
                     &Source::Register(operands::Register {
@@ -589,15 +592,17 @@ impl CodeGen {
                     &dest,
                     unary_expr.expr.type_(&self.scope)?.signed(),
                 )?;
+                self.free(expr_dest)?;
             }
             UnOp::Deref => {
                 let expr_dest = unary_expr.dest(self)?;
 
                 self.arch.mov(
-                    &expr_dest.into(),
+                    &expr_dest.clone().into(),
                     &dest,
                     unary_expr.expr.type_(&self.scope)?.signed(),
                 )?;
+                self.free(expr_dest)?;
             }
             UnOp::BitwiseNot => {
                 self.expr(*unary_expr.expr, Some(dest.clone()), state)?;
@@ -759,9 +764,12 @@ impl CodeGen {
     ) -> Result<(), CodeGenError> {
         let expr_dest = expr.dest(self)?;
 
-        Ok(self
-            .arch
-            .mov(&expr_dest.into(), &dest, expr.type_(&self.scope)?.signed())?)
+        self.arch.mov(
+            &expr_dest.clone().into(),
+            &dest,
+            expr.type_(&self.scope)?.signed(),
+        )?;
+        self.free(expr_dest)
     }
 
     fn struct_call_method(
@@ -773,7 +781,7 @@ impl CodeGen {
         let struct_name = expr.expr.type_(&self.scope)?.struct_unchecked();
         let expr_dest = expr.expr.dest(self)?.unwrap();
         let r = self.arch.alloc()?;
-        let effective_address = match expr_dest {
+        let effective_address = match expr_dest.clone() {
             Destination::Memory(memory) => memory.effective_address,
             _ => unreachable!(),
         };
@@ -818,6 +826,7 @@ impl CodeGen {
         if stack_size > 0 {
             self.arch.shrink_stack(stack_size);
         }
+        self.free(expr_dest)?;
         self.arch.free(r)?;
 
         Ok(())
@@ -830,9 +839,29 @@ impl CodeGen {
     ) -> Result<(), CodeGenError> {
         let expr_dest = expr.dest(self)?;
 
-        Ok(self
-            .arch
-            .mov(&expr_dest.into(), &dest, expr.type_(&self.scope)?.signed())?)
+        self.arch.mov(
+            &expr_dest.clone().into(),
+            &dest,
+            expr.type_(&self.scope)?.signed(),
+        )?;
+        self.free(expr_dest)
+    }
+
+    fn free(&mut self, dest: Destination) -> Result<(), CodeGenError> {
+        Ok(match dest {
+            Destination::Memory(memory) => {
+                match memory.effective_address.base {
+                    Base::Register(register) => self.arch.free(register)?,
+                    Base::Label(_) => {}
+                }
+                if let Some(index) = memory.effective_address.index {
+                    self.arch.free(index)?;
+                }
+            }
+            Destination::Register(register) => {
+                self.arch.free(register.register)?;
+            }
+        })
     }
 
     pub fn compile(&mut self, program: Vec<Stmt>) -> Result<Vec<u8>, CodeGenError> {
