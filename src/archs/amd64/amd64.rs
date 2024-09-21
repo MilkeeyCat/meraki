@@ -606,6 +606,20 @@ impl Architecture for Amd64 {
                     offset = self.populate_offsets(&mut stmt.block, scope, offset)?;
                 }
                 Stmt::For(stmt) => {
+                    if let Some(Stmt::VarDecl(stmt2)) = stmt.initializer.as_deref() {
+                        offset -= stmt2
+                            .type_
+                            .size(&(Box::new(self.clone()) as Arch), &scope)?
+                            as isize;
+
+                        match stmt.block.scope.symbol_table.find_mut(&stmt2.name).unwrap() {
+                            Symbol::Local(local) => {
+                                local.offset = Offset(offset);
+                            }
+                            _ => unreachable!(),
+                        };
+                    }
+
                     offset = self.populate_offsets(&mut stmt.block, scope, offset)?;
                 }
                 Stmt::Return(_) | Stmt::Expr(_) => {}
@@ -672,7 +686,7 @@ impl Architecture for Amd64 {
             src,
             &Destination::Register(operands::Register {
                 register: self.rcx,
-                size: 1,
+                size: self.word_size(),
             }),
             false,
         )?;
@@ -691,7 +705,7 @@ impl Architecture for Amd64 {
             src,
             &Destination::Register(operands::Register {
                 register: self.rcx,
-                size: 1,
+                size: self.word_size(),
             }),
             false,
         )?;
