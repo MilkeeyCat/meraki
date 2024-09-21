@@ -80,6 +80,8 @@ pub trait Architecture: ArchitectureClone {
         index: &Destination,
         size: usize,
     ) -> Result<(), ArchError>;
+    fn shl(&mut self, dest: &Destination, src: &Source) -> Result<(), ArchError>;
+    fn shr(&mut self, dest: &Destination, src: &Source) -> Result<(), ArchError>;
     fn finish(&mut self) -> Vec<u8>;
 }
 

@@ -51,6 +51,7 @@ pub struct Amd64 {
     registers: RegisterAllocator,
     rax: Register,
     rbp: Register,
+    rcx: Register,
     literals: Vec<(String, String)>,
     label_counter: usize,
 }
@@ -61,6 +62,7 @@ impl Architecture for Amd64 {
             buf: String::new(),
             rax: Register::new("al", "ax", "eax", "rax"),
             rbp: Register::new("there's no one byte one, hmmmm", "bp", "ebp", "rbp"),
+            rcx: Register::new("cl", "cx", "ecx", "rcx"),
             registers: RegisterAllocator::new(vec![
                 Register::new("r15b", "r15w", "r15d", "r15"),
                 Register::new("r14b", "r14w", "r14d", "r14"),
@@ -661,6 +663,44 @@ impl Architecture for Amd64 {
         self.mul(index, &Source::Register(r_op), false)?;
         self.add(base, &index.to_owned().into());
         self.free(r)?;
+
+        Ok(())
+    }
+
+    fn shl(&mut self, dest: &Destination, src: &Source) -> Result<(), ArchError> {
+        self.mov(
+            src,
+            &Destination::Register(operands::Register {
+                register: self.rcx,
+                size: 1,
+            }),
+            false,
+        )?;
+        self.buf.push_str(&formatdoc!(
+            "
+            \tshl {dest}, {}
+            ",
+            self.rcx.from_size(1)
+        ));
+
+        Ok(())
+    }
+
+    fn shr(&mut self, dest: &Destination, src: &Source) -> Result<(), ArchError> {
+        self.mov(
+            src,
+            &Destination::Register(operands::Register {
+                register: self.rcx,
+                size: 1,
+            }),
+            false,
+        )?;
+        self.buf.push_str(&formatdoc!(
+            "
+            \tshr {dest}, {}
+            ",
+            self.rcx.from_size(1)
+        ));
 
         Ok(())
     }

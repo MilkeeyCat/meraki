@@ -121,7 +121,9 @@ impl Expression for ExprBinary {
             | BinOp::Div
             | BinOp::Assign
             | BinOp::BitwiseAnd
-            | BinOp::BitwiseOr => {
+            | BinOp::BitwiseOr
+            | BinOp::Shl
+            | BinOp::Shr => {
                 Ok(TypeChecker::check_bin(&self.op, &self.left, &self.right, scope).unwrap())
             }
             BinOp::LessThan

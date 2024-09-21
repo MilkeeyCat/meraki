@@ -93,6 +93,9 @@ impl Lexer {
                 if self.peek() == b'=' {
                     self.read_char();
                     Token::LessEqual
+                } else if self.peek() == b'<' {
+                    self.read_char();
+                    Token::Shl
                 } else {
                     Token::LessThan
                 }
@@ -101,6 +104,9 @@ impl Lexer {
                 if self.peek() == b'=' {
                     self.read_char();
                     Token::GreaterEqual
+                } else if self.peek() == b'>' {
+                    self.read_char();
+                    Token::Shr
                 } else {
                     Token::GreaterThan
                 }

@@ -71,6 +71,8 @@ impl Parser {
                 (Token::LParen, Self::bin_expr),
                 (Token::Ampersand, Self::bin_expr),
                 (Token::Bar, Self::bin_expr),
+                (Token::Shl, Self::bin_expr),
+                (Token::Shr, Self::bin_expr),
                 (Token::Arrow, Self::pointer_access),
                 (Token::Period, Self::struct_access),
                 (Token::LBracket, Self::array_access),

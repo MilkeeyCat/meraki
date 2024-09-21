@@ -52,6 +52,8 @@ pub enum BinOp {
     LogicalOr,
     BitwiseAnd,
     BitwiseOr,
+    Shl,
+    Shr,
 }
 
 impl TryFrom<&Token> for BinOp {
@@ -74,6 +76,8 @@ impl TryFrom<&Token> for BinOp {
             Token::Or => Ok(Self::LogicalOr),
             Token::Ampersand => Ok(Self::BitwiseAnd),
             Token::Bar => Ok(Self::BitwiseOr),
+            Token::Shl => Ok(Self::Shl),
+            Token::Shr => Ok(Self::Shr),
             token => Err(OpParseError::Bin(token.to_owned())),
         }
     }

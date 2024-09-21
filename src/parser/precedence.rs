@@ -11,6 +11,7 @@ pub enum Precedence {
     BitwiseAnd,
     Comparison,
     Equality,
+    Shift,
     Sum,
     Product,
     Cast,
@@ -28,6 +29,7 @@ impl From<&Token> for Precedence {
                 Self::Comparison
             }
             Token::Equal | Token::NotEqual => Self::Equality,
+            Token::Shl | Token::Shr => Self::Shift,
             Token::Assign => Self::Assign,
             Token::LParen => Self::Call,
             Token::As => Self::Cast,
@@ -52,7 +54,8 @@ impl Precedence {
             Self::BitwiseAnd => Self::BitwiseOr,
             Self::Comparison => Self::BitwiseAnd,
             Self::Equality => Self::Comparison,
-            Self::Sum => Self::Equality,
+            Self::Shift => Self::Equality,
+            Self::Sum => Self::Shift,
             Self::Product => Self::Sum,
             Self::Prefix => Self::Product,
             Self::Cast => Self::Prefix,

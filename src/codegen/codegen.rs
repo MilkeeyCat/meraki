@@ -333,6 +333,10 @@ impl CodeGen {
     ) -> Result<(), CodeGenError> {
         let left_type = expr.left.type_(&self.scope)?;
         let right_type = expr.right.type_(&self.scope)?;
+        let size = std::cmp::max(
+            left_type.size(&self.arch, &self.scope)?,
+            right_type.size(&self.arch, &self.scope)?,
+        );
         let signed = left_type.signed() || right_type.signed();
 
         match &expr.op {
@@ -357,10 +361,6 @@ impl CodeGen {
             | BinOp::BitwiseAnd
             | BinOp::BitwiseOr => {
                 if let Some(dest) = dest {
-                    let size = std::cmp::max(
-                        left_type.size(&self.arch, &self.scope)?,
-                        right_type.size(&self.arch, &self.scope)?,
-                    );
                     self.expr(*expr.left, Some(dest.clone()), state)?;
 
                     let r = self.arch.alloc()?;
@@ -414,14 +414,6 @@ impl CodeGen {
             | BinOp::Equal
             | BinOp::NotEqual => {
                 if let Some(dest) = dest {
-                    let size = std::cmp::max(
-                        expr.left
-                            .type_(&self.scope)?
-                            .size(&self.arch, &self.scope)?,
-                        expr.right
-                            .type_(&self.scope)?
-                            .size(&self.arch, &self.scope)?,
-                    );
                     let left = self.arch.alloc()?;
                     let right = self.arch.alloc()?;
 
@@ -431,6 +423,36 @@ impl CodeGen {
                     self.arch.setcc(&dest, CmpOp::try_from(&expr.op)?);
                     self.arch.free(left)?;
                     self.arch.free(right)?;
+                }
+            }
+            BinOp::Shl => {
+                if let Some(dest) = dest {
+                    let r = self.arch.alloc()?;
+
+                    self.expr(*expr.left, Some(dest.clone()), state)?;
+                    self.expr(*expr.right, Some(r.dest(size)), state)?;
+
+                    self.arch.shl(
+                        &dest,
+                        &Source::Register(operands::Register { register: r, size }),
+                    )?;
+
+                    self.arch.free(r)?;
+                }
+            }
+            BinOp::Shr => {
+                if let Some(dest) = dest {
+                    let r = self.arch.alloc()?;
+
+                    self.expr(*expr.left, Some(dest.clone()), state)?;
+                    self.expr(*expr.right, Some(r.dest(size)), state)?;
+
+                    self.arch.shr(
+                        &dest,
+                        &Source::Register(operands::Register { register: r, size }),
+                    )?;
+
+                    self.arch.free(r)?;
                 }
             }
             BinOp::LogicalAnd | BinOp::LogicalOr => {
