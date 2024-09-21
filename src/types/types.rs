@@ -160,23 +160,15 @@ impl Type {
         }
     }
 
-    pub fn promote(mut from: Self, mut to: Self) -> Result<Self, TypeError> {
-        if from == to {
-            return Ok(from);
+    pub fn promote(from: Self, to: Self) -> Result<Self, TypeError> {
+        assert!(from.int());
+        assert!(to.int());
+
+        if from <= to {
+            Ok(to)
+        } else {
+            Err(TypeError::Promotion(from, to))
         }
-
-        if from.int() && to.int() {
-            if from.signed() || to.signed() {
-                from.to_signed();
-                to.to_signed();
-            }
-
-            if from <= to {
-                return Ok(from);
-            }
-        }
-
-        Err(TypeError::Promotion(from, to))
     }
 
     pub fn common(left: Self, right: Self) -> Result<Self, TypeError> {

@@ -331,19 +331,21 @@ impl CodeGen {
         dest: Option<Destination>,
         state: Option<&State>,
     ) -> Result<(), CodeGenError> {
+        let left_type = expr.left.type_(&self.scope)?;
+        let right_type = expr.right.type_(&self.scope)?;
+        let signed = left_type.signed() || right_type.signed();
+
         match &expr.op {
             BinOp::Assign => {
                 let lvalue_dest = expr
                     .left
                     .dest(self)?
                     .ok_or(CodeGenError::Assign(*expr.left))?;
-                let type_ = expr.right.type_(&self.scope)?;
 
                 self.expr(*expr.right, Some(lvalue_dest.clone()), state)?;
 
                 if let Some(dest) = dest {
-                    self.arch
-                        .mov(&lvalue_dest.clone().into(), &dest, type_.signed())?;
+                    self.arch.mov(&lvalue_dest.clone().into(), &dest, signed)?;
                 }
 
                 self.free(lvalue_dest)?;
@@ -355,13 +357,10 @@ impl CodeGen {
             | BinOp::BitwiseAnd
             | BinOp::BitwiseOr => {
                 if let Some(dest) = dest {
-                    let left_type = expr.left.type_(&self.scope)?;
-                    let right_type = expr.right.type_(&self.scope)?;
                     let size = std::cmp::max(
                         left_type.size(&self.arch, &self.scope)?,
                         right_type.size(&self.arch, &self.scope)?,
                     );
-                    let signed = left_type.signed() || right_type.signed();
                     self.expr(*expr.left, Some(dest.clone()), state)?;
 
                     let r = self.arch.alloc()?;

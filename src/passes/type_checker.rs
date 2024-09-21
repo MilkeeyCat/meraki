@@ -264,16 +264,22 @@ impl TypeChecker {
                     left_type.int() && right_type.int(),
                     "Math operations can be applied only to integers"
                 );
-                if Expr::int_lit_only(left) || Expr::int_lit_only(right) {
-                    if left_type > right_type {
-                        Type::promote(right_type, left_type)?
-                    } else {
-                        Type::promote(left_type, right_type)?
-                    }
-                } else {
-                    assert_eq!(left_type, right_type);
 
-                    left_type
+                match (Expr::int_lit_only(left), Expr::int_lit_only(right)) {
+                    (true, true) => {
+                        if left_type > right_type {
+                            Type::promote(right_type, left_type)?
+                        } else {
+                            Type::promote(left_type, right_type)?
+                        }
+                    }
+                    (true, false) => Type::promote(left_type, right_type)?,
+                    (false, true) => Type::promote(right_type, left_type)?,
+                    (false, false) => {
+                        assert_eq!(left_type, right_type);
+
+                        left_type
+                    }
                 }
             }
         };
