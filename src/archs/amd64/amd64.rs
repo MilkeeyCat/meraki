@@ -73,7 +73,9 @@ impl Architecture for Amd64 {
                 Register::new("r9b", "r9w", "r9d", "r9"),
                 Register::new("r8b", "r8w", "r8d", "r8"),
                 Register::new("cl", "cx", "ecx", "rcx"),
-                Register::new("dl", "dx", "edx", "rdx"),
+                // This register is commented out because it's used by imul and idiv instructions
+                // and I don't have a good way to save a value from this register if it's used
+                //Register::new("dl", "dx", "edx", "rdx"),
                 Register::new("sil", "si", "esi", "rsi"),
                 Register::new("dil", "di", "edi", "rdi"),
             ]),
