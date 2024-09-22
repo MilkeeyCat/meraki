@@ -82,7 +82,6 @@ impl CodeGen {
     }
 
     fn ret(&mut self, ret: StmtReturn) -> Result<(), CodeGenError> {
-        let label = &ret.label;
         if let Some(expr) = ret.expr {
             let type_ = expr.type_(&self.scope)?;
             let r = self.arch.alloc()?;
@@ -99,9 +98,10 @@ impl CodeGen {
                 }),
                 type_.signed(),
             )?;
+            self.arch.free(r)?;
         }
 
-        self.arch.jcc(label, Jump::Unconditional);
+        self.arch.jcc(&ret.label, Jump::Unconditional);
 
         Ok(())
     }
@@ -128,6 +128,7 @@ impl CodeGen {
             }),
             &Source::Immediate(Immediate::UInt(0)),
         );
+        self.arch.free(r)?;
 
         let consequence_label = self.arch.generate_label();
         let alternative_label = self.arch.generate_label();
