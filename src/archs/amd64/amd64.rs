@@ -624,7 +624,7 @@ impl Architecture for Amd64 {
 
                     offset = self.populate_offsets(&mut stmt.block, scope, offset)?;
                 }
-                Stmt::Return(_) | Stmt::Expr(_) => {}
+                Stmt::Return(_) | Stmt::Expr(_) | Stmt::Continue | Stmt::Break => {}
                 Stmt::Function(_) => unreachable!(),
             }
         }

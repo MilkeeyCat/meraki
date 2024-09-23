@@ -131,6 +131,7 @@ impl SymbolResolver {
                 stmt.block.scope = scope.leave();
                 Self::resolve_block(&mut stmt.block, scope)?;
             }
+            Stmt::Continue | Stmt::Break => {}
         })
     }
 

@@ -215,6 +215,7 @@ impl CodeGen {
     fn for_stmt(&mut self, stmt: StmtFor) -> Result<(), CodeGenError> {
         let start_label = self.arch.generate_label();
         let end_label = self.arch.generate_label();
+        let increment_label = self.arch.generate_label();
         let r = self.arch.alloc()?;
 
         self.scope.enter(stmt.block.scope);
@@ -237,7 +238,7 @@ impl CodeGen {
         }
 
         self.scope_infos.push(ScopeInfo::Loop {
-            start: start_label.clone(),
+            start: increment_label.clone(),
             end: end_label.clone(),
         });
 
@@ -247,6 +248,7 @@ impl CodeGen {
 
         self.scope_infos.pop();
 
+        self.arch.write_label(&increment_label);
         if let Some(increment) = stmt.increment {
             self.expr(increment, None, None)?;
         }
@@ -585,6 +587,24 @@ impl CodeGen {
             Stmt::If(stmt) => self.if_stmt(stmt),
             Stmt::While(stmt) => self.while_stmt(stmt),
             Stmt::For(stmt) => self.for_stmt(stmt),
+            Stmt::Continue => {
+                if let Some((start, _)) = self.loop_scope_info() {
+                    self.arch.jcc(&start, Jump::Unconditional);
+
+                    Ok(())
+                } else {
+                    unreachable!();
+                }
+            }
+            Stmt::Break => {
+                if let Some((_, end)) = self.loop_scope_info() {
+                    self.arch.jcc(&end, Jump::Unconditional);
+
+                    Ok(())
+                } else {
+                    unreachable!();
+                }
+            }
         }
     }
 

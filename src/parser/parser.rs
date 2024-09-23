@@ -259,6 +259,16 @@ impl Parser {
                 Token::While => stmts.push(self.while_stmt()?),
                 Token::For => stmts.push(self.for_stmt()?),
                 Token::Let => stmts.push(self.var_decl()?),
+                Token::Continue => {
+                    self.expect(&Token::Continue)?;
+                    self.expect(&Token::Semicolon)?;
+                    stmts.push(Stmt::Continue);
+                }
+                Token::Break => {
+                    self.expect(&Token::Break)?;
+                    self.expect(&Token::Semicolon)?;
+                    stmts.push(Stmt::Break);
+                }
                 Token::Fn => {
                     if let Some(stmt) = self.function(true)? {
                         stmts.push(stmt)

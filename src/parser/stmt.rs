@@ -10,6 +10,8 @@ pub enum Stmt {
     If(StmtIf),
     While(StmtWhile),
     For(StmtFor),
+    Continue,
+    Break,
 }
 
 #[derive(Debug, Clone, PartialEq)]

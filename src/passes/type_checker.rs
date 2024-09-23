@@ -76,6 +76,7 @@ impl TypeChecker {
                 }
                 Self::check_block(&stmt.block, scope)?;
             }
+            Stmt::Continue | Stmt::Break => {}
         })
     }
 

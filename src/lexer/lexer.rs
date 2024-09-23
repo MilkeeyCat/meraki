@@ -138,6 +138,8 @@ impl Lexer {
                     "else" => Token::Else,
                     "return" => Token::Return,
                     "as" => Token::As,
+                    "continue" => Token::Continue,
+                    "break" => Token::Break,
                     "u8" => Token::U8,
                     "u16" => Token::U16,
                     "u32" => Token::U32,

@@ -52,6 +52,8 @@ pub enum Token {
     Else,
     Return,
     As,
+    Continue,
+    Break,
 
     U8,
     U16,
@@ -121,6 +123,8 @@ impl Display for Token {
             Else => write!(f, "else"),
             Return => write!(f, "return"),
             As => write!(f, "as"),
+            Continue => write!(f, "continue"),
+            Break => write!(f, "break"),
             U8 => write!(f, "u8"),
             U16 => write!(f, "u16"),
             U32 => write!(f, "u32"),
