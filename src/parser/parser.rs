@@ -8,7 +8,7 @@ use super::{
 use crate::{
     lexer::{Lexer, Token},
     parser::{ExprFunctionCall, ExprStructAccess},
-    scope::Scope,
+    scope::{Scope, ScopeKind},
     symbol_table::{Symbol, SymbolFunction},
     type_table::{TypeStruct, TypeStructMethod},
     types::{Type, TypeArray, TypeError},
@@ -30,11 +30,14 @@ pub struct Parser {
 
 impl Parser {
     pub fn new(mut lexer: Lexer) -> Result<Self, ParserError> {
+        let mut scope = Scope::new();
+        scope.enter_new(ScopeKind::Global);
+
         Ok(Self {
             cur_token: lexer.next_token()?,
             peek_token: lexer.next_token()?,
             lexer,
-            scope: Scope::new(),
+            scope,
             global_stms: Vec::new(),
             prefix_fns: HashMap::from([
                 (Token::Ident(Default::default()), Self::ident as PrefixFn),
@@ -197,7 +200,7 @@ impl Parser {
                 self.expect(&Token::Arrow)?;
 
                 let type_ = self.parse_type()?;
-                let block = self.compound_statement((method_name.clone(), type_.clone()))?;
+                let block = self.compound_statement(ScopeKind::Function(type_.clone()))?;
 
                 methods.push(TypeStructMethod {
                     return_type: type_.clone(),
@@ -243,10 +246,10 @@ impl Parser {
         Ok(())
     }
 
-    fn compound_statement(&mut self, context: (String, Type)) -> Result<Block, ParserError> {
+    fn compound_statement(&mut self, scope_kind: ScopeKind) -> Result<Block, ParserError> {
         let mut stmts = Vec::new();
 
-        self.scope.enter_new(context);
+        self.scope.enter_new(scope_kind);
         self.expect(&Token::LBrace)?;
 
         while !self.cur_token_is(&Token::RBrace) {
@@ -322,24 +325,18 @@ impl Parser {
 
         self.expect(&Token::Semicolon)?;
 
-        let (name, _) = self.scope.context().unwrap();
-
-        Ok(Stmt::Return(StmtReturn {
-            expr,
-            //TODO: it's not a good idea
-            label: name.to_owned() + "_ret",
-        }))
+        Ok(Stmt::Return(StmtReturn { expr }))
     }
 
     fn if_stmt(&mut self) -> Result<Stmt, ParserError> {
         self.expect(&Token::If)?;
 
         let condition = self.expr(Precedence::default())?;
-        let consequence = self.compound_statement(self.scope.context().unwrap().to_owned())?;
+        let consequence = self.compound_statement(ScopeKind::Local)?;
         let alternative = if self.cur_token_is(&Token::Else) {
             self.expect(&Token::Else)?;
 
-            Some(self.compound_statement(self.scope.context().unwrap().to_owned())?)
+            Some(self.compound_statement(ScopeKind::Local)?)
         } else {
             None
         };
@@ -355,7 +352,7 @@ impl Parser {
         self.expect(&Token::While)?;
 
         let condition = self.expr(Precedence::default())?;
-        let block = self.compound_statement(self.scope.context().unwrap().to_owned())?;
+        let block = self.compound_statement(ScopeKind::Loop)?;
 
         Ok(Stmt::While(StmtWhile { condition, block }))
     }
@@ -388,7 +385,7 @@ impl Parser {
             Some(self.expr(Precedence::default())?)
         };
 
-        let block = self.compound_statement(self.scope.context().unwrap().to_owned())?;
+        let block = self.compound_statement(ScopeKind::Loop)?;
 
         Ok(Stmt::For(StmtFor {
             initializer: initializer.map(|initializer| Box::new(initializer)),
@@ -467,7 +464,7 @@ impl Parser {
 
         let type_ = self.parse_type()?;
         let block = if self.cur_token_is(&Token::LBrace) {
-            Some(self.compound_statement((name.clone(), type_.clone()))?)
+            Some(self.compound_statement(ScopeKind::Function(type_.clone()))?)
         } else {
             None
         };
@@ -751,6 +748,7 @@ mod test {
             BinOp, Expr, ExprBinary, ExprCast, ExprIdent, ExprLit, ExprUnary, ParserError, Stmt,
             StmtVarDecl, UIntLitRepr, UnOp,
         },
+        scope::ScopeKind,
         types::Type,
     };
 
@@ -885,9 +883,7 @@ mod test {
 
         for (input, expected) in tests {
             let mut parser = Parser::new(Lexer::new(input.to_string())).unwrap();
-            let ast = parser
-                .compound_statement(("".to_string(), Type::Void))
-                .unwrap();
+            let ast = parser.compound_statement(ScopeKind::Global).unwrap();
 
             assert_eq!(
                 &ast.statements, &expected,

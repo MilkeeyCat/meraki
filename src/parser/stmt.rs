@@ -34,7 +34,6 @@ impl StmtVarDecl {
 #[derive(Debug, Clone, PartialEq)]
 pub struct StmtReturn {
     pub expr: Option<Expr>,
-    pub label: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]

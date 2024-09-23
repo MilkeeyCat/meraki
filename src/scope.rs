@@ -1,22 +1,30 @@
 use crate::{
     symbol_table::{Symbol, SymbolTable},
-    type_table::TypeTable,
+    type_table::{self as tt, TypeTable},
     types::Type,
 };
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ScopeKind {
+    Global,
+    Local,
+    Loop,
+    Function(Type),
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScopeImpl {
     pub type_table: TypeTable,
     pub symbol_table: SymbolTable,
-    pub context: Option<(String, Type)>,
+    pub kind: ScopeKind,
 }
 
 impl ScopeImpl {
-    pub fn new(context: Option<(String, Type)>) -> Self {
+    pub fn new(kind: ScopeKind) -> Self {
         Self {
             type_table: TypeTable::new(),
             symbol_table: SymbolTable::new(),
-            context,
+            kind,
         }
     }
 }
@@ -26,11 +34,11 @@ pub struct Scope(Vec<ScopeImpl>);
 
 impl Scope {
     pub fn new() -> Self {
-        Self(vec![ScopeImpl::new(None)])
+        Self(Vec::new())
     }
 
-    pub fn enter_new(&mut self, context: (String, Type)) {
-        self.0.push(ScopeImpl::new(Some(context)));
+    pub fn enter_new(&mut self, kind: ScopeKind) {
+        self.0.push(ScopeImpl::new(kind));
     }
 
     pub fn enter(&mut self, scope_impl: ScopeImpl) {
@@ -69,7 +77,7 @@ impl Scope {
         return None;
     }
 
-    pub fn find_type(&self, name: &str) -> Option<&crate::type_table::Type> {
+    pub fn find_type(&self, name: &str) -> Option<&tt::Type> {
         for scope in &self.0 {
             let type_ = scope.type_table.find(name);
 
@@ -93,19 +101,29 @@ impl Scope {
         &mut self.0.last_mut().unwrap().type_table
     }
 
-    pub fn context(&self) -> Option<&(String, Type)> {
-        self.0.last().unwrap().context.as_ref()
+    pub fn kind(&self) -> &ScopeKind {
+        &self.0.last().unwrap().kind
     }
 
     pub fn local(&self) -> bool {
         self.0.len() > 1
+    }
+
+    pub fn return_type(&self) -> Option<&Type> {
+        self.0.iter().rev().find_map(|scope_impl| {
+            if let ScopeKind::Function(type_) = &scope_impl.kind {
+                return Some(type_);
+            } else {
+                None
+            }
+        })
     }
 }
 
 impl From<Vec<Symbol>> for Scope {
     fn from(value: Vec<Symbol>) -> Self {
         let mut scope = Self::new();
-        let mut scope_impl = ScopeImpl::new(None);
+        let mut scope_impl = ScopeImpl::new(ScopeKind::Global);
         scope_impl.symbol_table.0 = value;
         scope.enter(scope_impl);
 

@@ -56,7 +56,7 @@ impl TypeChecker {
             }
             Stmt::Return(stmt) => {
                 if let Some(expr) = &stmt.expr {
-                    Self::check_assign(scope.context().unwrap().to_owned().1, expr, scope)?;
+                    Self::check_assign(scope.return_type().unwrap().to_owned(), expr, scope)?;
                 }
             }
             Stmt::If(stmt) => {

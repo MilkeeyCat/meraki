@@ -13,6 +13,11 @@ use crate::{
 };
 use operands::{Base, Memory};
 
+enum ScopeInfo {
+    Function { label: String },
+    Loop { start: String, end: String },
+}
+
 #[derive(Debug, Clone)]
 pub struct State {
     false_label: Option<String>,
@@ -22,11 +27,16 @@ pub struct State {
 pub struct CodeGen {
     pub arch: Arch,
     pub scope: Scope,
+    scope_infos: Vec<ScopeInfo>,
 }
 
 impl CodeGen {
     pub fn new(arch: Arch, scope: Scope) -> Self {
-        Self { arch, scope }
+        Self {
+            arch,
+            scope,
+            scope_infos: Vec::new(),
+        }
     }
 
     fn declare(&mut self, variable: StmtVarDecl) -> Result<(), CodeGenError> {
@@ -70,11 +80,15 @@ impl CodeGen {
             offset,
             &self.scope,
         )?;
+        self.scope_infos.push(ScopeInfo::Function {
+            label: func.name.clone(),
+        });
 
         for stmt in func.block.statements {
             self.stmt(stmt)?;
         }
 
+        self.scope_infos.pop();
         self.arch.fn_postamble(&func.name, offset);
         self.scope.leave();
 
@@ -101,9 +115,13 @@ impl CodeGen {
             self.arch.free(r)?;
         }
 
-        self.arch.jcc(&ret.label, Jump::Unconditional);
+        if let Some(label) = self.function_scope_info() {
+            self.arch.jcc(&format!("{label}_ret"), Jump::Unconditional);
 
-        Ok(())
+            Ok(())
+        } else {
+            unreachable!();
+        }
     }
 
     fn if_stmt(&mut self, if_stmt: StmtIf) -> Result<(), CodeGenError> {
@@ -174,6 +192,10 @@ impl CodeGen {
             &Source::Immediate(Immediate::UInt(0)),
         );
         self.arch.jcc(&end_label, Jump::Equal);
+        self.scope_infos.push(ScopeInfo::Loop {
+            start: start_label.clone(),
+            end: end_label.clone(),
+        });
 
         self.scope.enter(stmt.block.scope);
         for stmt in stmt.block.statements {
@@ -181,6 +203,7 @@ impl CodeGen {
         }
         self.scope.leave();
 
+        self.scope_infos.pop();
         self.arch.jcc(&start_label, Jump::Unconditional);
         self.arch.write_label(&end_label);
 
@@ -213,9 +236,16 @@ impl CodeGen {
             self.arch.jcc(&end_label, Jump::Equal);
         }
 
+        self.scope_infos.push(ScopeInfo::Loop {
+            start: start_label.clone(),
+            end: end_label.clone(),
+        });
+
         for stmt in stmt.block.statements {
             self.stmt(stmt)?;
         }
+
+        self.scope_infos.pop();
 
         if let Some(increment) = stmt.increment {
             self.expr(increment, None, None)?;
@@ -879,5 +909,25 @@ impl CodeGen {
         }
 
         Ok(self.arch.finish())
+    }
+
+    fn function_scope_info(&self) -> Option<String> {
+        self.scope_infos.iter().rev().find_map(|info| {
+            if let ScopeInfo::Function { label } = info {
+                Some(label.to_owned())
+            } else {
+                None
+            }
+        })
+    }
+
+    fn loop_scope_info(&self) -> Option<(String, String)> {
+        self.scope_infos.iter().rev().find_map(|info| {
+            if let ScopeInfo::Loop { start, end } = info {
+                Some((start.to_owned(), end.to_owned()))
+            } else {
+                None
+            }
+        })
     }
 }
