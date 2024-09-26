@@ -57,7 +57,7 @@ impl Lexer {
                 if self.peek() == b'/' {
                     self.skip_comment();
 
-                    self.next_token()?
+                    return Ok(self.next_token()?);
                 } else {
                     Token::Slash
                 }
@@ -231,84 +231,137 @@ mod test {
     #[test]
     fn source_into_tokens() -> Result<(), LexerError> {
         let input = r#"
-            [>.<]->!-+/==!=:true,false<=>=
+            ident
+            69
+            "string"
 
-            const i8 a = 5;
-            i8 *b = &a;
-
-            if(false) {
-            } else {
+            =
+            +
+            -
+            !
+            *
+            /
+            ->
+            .
+            ~
+            &
+            |
+            ==
+            !=
+            <
+            >
+            <=
+            >=
+            &&
+            ||
+            <<
+            >>
+            ,
+            ;
+            :
+            (
+            )
+            {
             }
+            [
+            ]
 
-            i8 foo() {
-                return 69;
-            }
+            // keywords
+            // heyo :D
+            const
+            true
+            false
+            let
+            fn
+            enum
+            struct
+            if
+            while
+            for
+            else
+            return
+            as
+            continue
+            break
 
-            struct Foo {
-            }
-
-            enum Bar {
-            }
+            u8
+            u16
+            u32
+            u64
+            i8
+            i16
+            i32
+            i64
+            usize
+            isize
+            bool
+            void
+            NULL
         "#;
 
         let tokens = vec![
-            Token::LBracket,
-            Token::GreaterThan,
-            Token::Period,
-            Token::LessThan,
-            Token::RBracket,
-            Token::Arrow,
-            Token::Bang,
-            Token::Minus,
+            Token::Ident(String::from("ident")),
+            Token::Integer(String::from("69")),
+            Token::String(String::from("string")),
+            Token::Assign,
             Token::Plus,
+            Token::Minus,
+            Token::Bang,
+            Token::Asterisk,
             Token::Slash,
+            Token::Arrow,
+            Token::Period,
+            Token::Tilde,
+            Token::Ampersand,
+            Token::Bar,
             Token::Equal,
             Token::NotEqual,
-            Token::Colon,
-            Token::True,
-            Token::Comma,
-            Token::False,
+            Token::LessThan,
+            Token::GreaterThan,
             Token::LessEqual,
             Token::GreaterEqual,
+            Token::And,
+            Token::Or,
+            Token::Shl,
+            Token::Shr,
+            Token::Comma,
+            Token::Semicolon,
+            Token::Colon,
+            Token::LParen,
+            Token::RParen,
+            Token::LBrace,
+            Token::RBrace,
+            Token::LBracket,
+            Token::RBracket,
             Token::Const,
-            Token::I8,
-            Token::Ident(String::from("a")),
-            Token::Assign,
-            Token::Integer(String::from("5")),
-            Token::Semicolon,
-            Token::I8,
-            Token::Asterisk,
-            Token::Ident(String::from("b")),
-            Token::Assign,
-            Token::Ampersand,
-            Token::Ident(String::from("a")),
-            Token::Semicolon,
-            Token::If,
-            Token::LParen,
+            Token::True,
             Token::False,
-            Token::RParen,
-            Token::LBrace,
-            Token::RBrace,
-            Token::Else,
-            Token::LBrace,
-            Token::RBrace,
-            Token::I8,
-            Token::Ident(String::from("foo")),
-            Token::LParen,
-            Token::RParen,
-            Token::LBrace,
-            Token::Return,
-            Token::Integer(String::from("69")),
-            Token::Semicolon,
-            Token::RBrace,
-            Token::Struct,
-            Token::Ident(String::from("Foo")),
-            Token::LBrace,
-            Token::RBrace,
+            Token::Let,
+            Token::Fn,
             Token::Enum,
-            Token::Ident(String::from("Bar")),
-            Token::LBrace,
-            Token::RBrace,
+            Token::Struct,
+            Token::If,
+            Token::While,
+            Token::For,
+            Token::Else,
+            Token::Return,
+            Token::As,
+            Token::Continue,
+            Token::Break,
+            Token::U8,
+            Token::U16,
+            Token::U32,
+            Token::U64,
+            Token::I8,
+            Token::I16,
+            Token::I32,
+            Token::I64,
+            Token::Usize,
+            Token::Isize,
+            Token::Bool,
+            Token::Void,
+            Token::Null,
+            Token::Eof,
         ];
 
         let mut lexer = Lexer::new(input.to_string());
