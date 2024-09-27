@@ -116,6 +116,19 @@ pub enum Destination {
 }
 
 impl Destination {
+    pub fn with_size(mut self, size: usize) -> Self {
+        match &mut self {
+            Self::Memory(memory) => {
+                memory.size = size;
+            }
+            Self::Register(register) => {
+                register.size = size;
+            }
+        }
+
+        self
+    }
+
     pub fn size(&self) -> usize {
         match self {
             Self::Memory(memory) => memory.size,

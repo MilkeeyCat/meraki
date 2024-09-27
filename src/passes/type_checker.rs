@@ -309,7 +309,7 @@ impl TypeChecker {
             }
         }
 
-        if left_type.int() {
+        if left_type.int() && Expr::int_lit_only(right) {
             Type::promote(right_type, left_type)?;
         } else {
             assert_eq!(left_type, right_type);

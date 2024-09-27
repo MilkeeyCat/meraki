@@ -321,12 +321,22 @@ impl CodeGen {
                 if let Some(dest) = dest {
                     let type_ = cast_expr.expr.type_(&self.scope)?;
                     let casted_size = cast_expr.type_.size(&self.arch, &self.scope)?;
-                    let r = self.arch.alloc()?;
 
-                    self.expr(*cast_expr.expr, Some(r.dest(self.arch.word_size())), state)?;
-                    self.arch
-                        .mov(&r.source(casted_size), &dest, type_.signed())?;
-                    self.arch.free(r)?;
+                    if casted_size < type_.size(&self.arch, &self.scope)? {
+                        let (r, new) = match dest.clone() {
+                            Destination::Memory(_) => (self.arch.alloc()?, true),
+                            Destination::Register(register) => (register.register, false),
+                        };
+
+                        self.expr(*cast_expr.expr, Some(r.dest(self.arch.word_size())), state)?;
+                        if new {
+                            self.arch
+                                .mov(&r.source(casted_size), &dest, type_.signed())?;
+                            self.arch.free(r)?;
+                        }
+                    } else {
+                        self.expr(*cast_expr.expr, Some(dest), state)?;
+                    }
                 }
             }
             Expr::FunctionCall(func_call) => self.call_function(func_call, dest, state)?,
@@ -394,7 +404,19 @@ impl CodeGen {
             | BinOp::BitwiseAnd
             | BinOp::BitwiseOr => {
                 if let Some(dest) = dest {
-                    self.expr(*expr.left, Some(dest.clone()), state)?;
+                    let new_dest = if let Destination::Memory(_) = &dest {
+                        let r = self.arch.alloc()?;
+
+                        Some((r.dest(size), r))
+                    } else {
+                        None
+                    };
+                    let tmp = new_dest
+                        .clone()
+                        .map(|(dest, _)| dest)
+                        .unwrap_or_else(|| dest.clone());
+
+                    self.expr(*expr.left, Some(tmp.clone()), state)?;
 
                     let r = self.arch.alloc()?;
 
@@ -402,40 +424,39 @@ impl CodeGen {
 
                     match &expr.op {
                         BinOp::Add => {
-                            self.arch.add(
-                                &dest,
-                                &Source::Register(operands::Register { register: r, size }),
-                            );
+                            self.arch.add(&tmp, &r.source(size));
                         }
                         BinOp::Sub => {
-                            self.arch.sub(
-                                &dest,
-                                &Source::Register(operands::Register { register: r, size }),
-                            );
+                            self.arch.sub(&tmp, &r.source(size));
                         }
                         BinOp::Mul => {
-                            self.arch.mul(
-                                &dest,
-                                &Source::Register(operands::Register { register: r, size }),
-                                signed,
-                            )?;
+                            self.arch.mul(&tmp, &r.source(size), signed)?;
                         }
                         BinOp::Div => {
-                            self.arch.div(
-                                &dest,
-                                &Source::Register(operands::Register { register: r, size }),
-                                signed,
-                            )?;
+                            self.arch.div(&tmp, &r.source(size), signed)?;
                         }
                         BinOp::BitwiseAnd | BinOp::BitwiseOr => {
                             self.arch.bitwise(
-                                &dest,
-                                &Source::Register(operands::Register { register: r, size }),
+                                &tmp,
+                                &r.source(size),
                                 BitwiseOp::try_from(&expr.op).unwrap(),
                             );
                         }
                         _ => unreachable!(),
                     };
+
+                    if let Some((new_dest, r)) = new_dest {
+                        let source = if dest.size() != size {
+                            self.arch
+                                .mov(&r.source(size), &r.dest(dest.size()), signed)?;
+                            r.source(dest.size())
+                        } else {
+                            new_dest.into()
+                        };
+
+                        self.arch.mov(&source, &dest, signed)?;
+                        self.arch.free(r)?;
+                    }
 
                     self.arch.free(r)?;
                 }
