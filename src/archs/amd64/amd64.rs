@@ -287,24 +287,18 @@ impl Architecture for Amd64 {
 
     //NOTE: if mafs doesn't works, probably because of this xd
     fn div(&mut self, dest: &Destination, src: &Source, signed: bool) -> Result<(), ArchError> {
-        self.mov(
-            &dest.to_owned().into(),
-            &Destination::Register(operands::Register {
-                register: self.rax,
-                size: WORD_SIZE,
-            }),
-            signed,
-        )?;
+        self.mov(&dest.to_owned().into(), &self.rax.dest(WORD_SIZE), signed)?;
+        self.mov(src, dest, signed)?;
         self.buf.push_str(&formatdoc!(
             "
             \tcqo
-            \tidiv {src}
+            \tidiv {dest}
             ",
         ));
         self.mov(
             &Source::Register(operands::Register {
                 register: self.rax,
-                size: src.size().unwrap_or(WORD_SIZE),
+                size: dest.size(),
             }),
             dest,
             signed,

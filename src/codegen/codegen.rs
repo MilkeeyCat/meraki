@@ -411,36 +411,38 @@ impl CodeGen {
                     } else {
                         None
                     };
-                    let tmp = new_dest
+                    let lhs = new_dest
                         .clone()
                         .map(|(dest, _)| dest)
                         .unwrap_or_else(|| dest.clone());
 
-                    self.expr(*expr.left, Some(tmp.clone()), state)?;
+                    self.expr(*expr.left, Some(lhs.clone()), state)?;
 
-                    let r = self.arch.alloc()?;
+                    let (src, r) = if let Expr::Lit(lit) = *expr.right {
+                        (Source::Immediate(lit.into()), None)
+                    } else {
+                        let r = self.arch.alloc()?;
 
-                    self.expr(*expr.right, Some(r.dest(size)), state)?;
+                        self.expr(*expr.right, Some(r.dest(size)), state)?;
+                        (r.source(size), Some(r))
+                    };
 
                     match &expr.op {
                         BinOp::Add => {
-                            self.arch.add(&tmp, &r.source(size));
+                            self.arch.add(&lhs, &src);
                         }
                         BinOp::Sub => {
-                            self.arch.sub(&tmp, &r.source(size));
+                            self.arch.sub(&lhs, &src);
                         }
                         BinOp::Mul => {
-                            self.arch.mul(&tmp, &r.source(size), signed)?;
+                            self.arch.mul(&lhs, &src, signed)?;
                         }
                         BinOp::Div => {
-                            self.arch.div(&tmp, &r.source(size), signed)?;
+                            self.arch.div(&lhs, &src, signed)?;
                         }
                         BinOp::BitwiseAnd | BinOp::BitwiseOr => {
-                            self.arch.bitwise(
-                                &tmp,
-                                &r.source(size),
-                                BitwiseOp::try_from(&expr.op).unwrap(),
-                            );
+                            self.arch
+                                .bitwise(&lhs, &src, BitwiseOp::try_from(&expr.op).unwrap());
                         }
                         _ => unreachable!(),
                     };
@@ -458,7 +460,9 @@ impl CodeGen {
                         self.arch.free(r)?;
                     }
 
-                    self.arch.free(r)?;
+                    if let Some(r) = r {
+                        self.arch.free(r)?;
+                    }
                 }
             }
             BinOp::LessThan
