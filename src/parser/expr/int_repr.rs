@@ -119,7 +119,7 @@ impl Display for IntLitReprError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::TooLarge(bits) => write!(f, "{bits} bits integers are not supported"),
-            Self::ParseInt(e) => write!(f, "{e}"),
+            Self::ParseInt(e) => e.fmt(f),
         }
     }
 }

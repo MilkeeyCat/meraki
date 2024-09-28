@@ -20,11 +20,11 @@ impl std::error::Error for CodeGenError {}
 impl std::fmt::Display for CodeGenError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::OpParse(e) => write!(f, "{e}"),
-            Self::Type(e) => write!(f, "{e}"),
-            Self::Allocator(e) => write!(f, "{e}"),
-            Self::Assign(e) => write!(f, "Can't assign to rvalue expression {:?}", e),
-            Self::SymbolTable(e) => write!(f, "{e}"),
+            Self::OpParse(e) => e.fmt(f),
+            Self::Type(e) => e.fmt(f),
+            Self::Allocator(e) => e.fmt(f),
+            Self::Assign(expr) => write!(f, "Can't assign to rvalue expression {expr:?}"),
+            Self::SymbolTable(e) => e.fmt(f),
         }
     }
 }

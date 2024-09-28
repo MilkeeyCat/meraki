@@ -12,7 +12,7 @@ impl std::fmt::Display for SymbolTableError {
         match self {
             Self::Redeclaration(name) => write!(f, "Redeclaration of '{name}'"),
             Self::NotFound(name) => write!(f, "Symbol '{name}' not found"),
-            Self::Type(e) => write!(f, "{e}"),
+            Self::Type(e) => e.fmt(f),
         }
     }
 }

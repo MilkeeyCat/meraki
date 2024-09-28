@@ -131,7 +131,7 @@ impl SymbolResolver {
                 stmt.block.scope = scope.leave();
                 Self::resolve_block(&mut stmt.block, scope)?;
             }
-            Stmt::Continue | Stmt::Break => {}
+            Stmt::Continue | Stmt::Break => (),
         })
     }
 
@@ -147,7 +147,7 @@ impl SymbolResolver {
             Expr::Cast(expr) => {
                 Self::resolve_expr(expr.expr.as_ref(), scope)?;
             }
-            Expr::Lit(_) => {}
+            Expr::Lit(_) => (),
             Expr::Ident(expr) => {
                 scope
                     .find_symbol(&expr.0)

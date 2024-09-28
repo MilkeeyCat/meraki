@@ -16,16 +16,15 @@ pub enum TypeError {
 impl std::fmt::Display for TypeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::IdentNotFound(ident) => write!(f, "Ident {} not found", ident),
+            Self::IdentNotFound(ident) => write!(f, "Ident {ident} not found"),
             Self::Promotion(lhs, rhs) => {
-                write!(f, "Operation between {} and {} are not allowed", lhs, rhs)
+                write!(f, "Operation between {lhs} and {rhs} are not allowed")
             }
-            Self::Assignment(lhs, rhs) => write!(f, "Can't assign {} to {}", lhs, rhs),
-            Self::Cast(from, to) => write!(f, "Can't cast {} into {}", from, to),
+            Self::Assignment(lhs, rhs) => write!(f, "Can't assign {lhs} to {rhs}"),
+            Self::Cast(from, to) => write!(f, "Can't cast {from} into {to}"),
             Self::Return(left, right) => write!(
                 f,
-                "Expected return value of type {},  got {} instead",
-                right, left
+                "Expected return value of type {right},  got {left} instead",
             ),
             Self::VoidVariable => write!(f, "Variable can't be of type void"),
             Self::Nonexistent(name) => write!(f, "Type '{name}' doens't exits"),

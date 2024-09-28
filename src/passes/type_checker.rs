@@ -76,7 +76,7 @@ impl TypeChecker {
                 }
                 Self::check_block(&stmt.block, scope)?;
             }
-            Stmt::Continue | Stmt::Break => {}
+            Stmt::Continue | Stmt::Break => (),
         })
     }
 
@@ -106,14 +106,14 @@ impl TypeChecker {
                         panic!("Can't get address of {expr:?}");
                     }
                 }
-                _ => {}
+                _ => (),
             },
             Expr::Cast(expr) => {
                 Self::check_type(&expr.type_, scope)?;
                 Self::check_expr(&expr.expr, scope)?;
             }
-            Expr::Lit(_) => {}
-            Expr::Ident(expr) => {}
+            Expr::Lit(_) => (),
+            Expr::Ident(expr) => (),
             Expr::Struct(expr) => {
                 Self::check_type(&expr.type_(scope)?, scope)?;
 
@@ -134,9 +134,9 @@ impl TypeChecker {
                     panic!("Types only of the same type allowed in an array expression")
                 }
             }
-            Expr::StructAccess(expr) => {}
-            Expr::StructMethod(expr) => {}
-            Expr::ArrayAccess(expr) => {}
+            Expr::StructAccess(expr) => (),
+            Expr::StructMethod(expr) => (),
+            Expr::ArrayAccess(expr) => (),
             Expr::FunctionCall(expr) => {
                 let fn_name = &expr.name;
                 let symbol = scope.find_symbol(&expr.name).unwrap().function_unchecked();
@@ -191,7 +191,7 @@ impl TypeChecker {
                     return Err(ParserError::Type(TypeError::Nonexistent(name.to_owned())));
                 }
             }
-            _ => {}
+            _ => (),
         })
     }
 

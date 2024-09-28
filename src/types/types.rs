@@ -103,7 +103,7 @@ impl Type {
             Self::Usize => {
                 *self = Self::Isize;
             }
-            _ => {}
+            _ => (),
         }
     }
 

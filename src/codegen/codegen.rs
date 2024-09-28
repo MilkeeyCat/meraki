@@ -927,7 +927,7 @@ impl CodeGen {
             Destination::Memory(memory) => {
                 match memory.effective_address.base {
                     Base::Register(register) => self.arch.free(register)?,
-                    Base::Label(_) => {}
+                    Base::Label(_) => (),
                 }
                 if let Some(index) = memory.effective_address.index {
                     self.arch.free(index)?;

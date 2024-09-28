@@ -27,21 +27,20 @@ impl std::fmt::Display for ParserError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::UnexpectedToken(expected, actual) => {
-                write!(f, "Expected token {}, got {}", expected, actual)
+                write!(f, "Expected token {expected}, got {actual}")
             }
-            Self::ParseType(token) => write!(f, "Failed to parse type, found {}", token),
-            Self::Prefix(token) => write!(f, "Failed to parse prefix token {}", token),
-            Self::Infix(token) => write!(f, "Failed to parse infix token {}", token),
-            Self::Lexer(e) => write!(f, "{}", e),
-            Self::Type(e) => write!(f, "{}", e),
-            Self::Operator(e) => write!(f, "{}", e),
-            Self::Int(e) => write!(f, "{}", e),
-            Self::SymbolTable(e) => write!(f, "{}", e),
+            Self::ParseType(token) => write!(f, "Failed to parse type, found {token}"),
+            Self::Prefix(token) => write!(f, "Failed to parse prefix token {token}"),
+            Self::Infix(token) => write!(f, "Failed to parse infix token {token}"),
+            Self::Lexer(e) => e.fmt(f),
+            Self::Type(e) => e.fmt(f),
+            Self::Operator(e) => e.fmt(f),
+            Self::Int(e) => e.fmt(f),
+            Self::SymbolTable(e) => e.fmt(f),
             Self::UndeclaredFunction(name) => write!(f, "Call to undeclared function {name}"),
             Self::FunctionArguments(name, expected, actual) => write!(
                 f,
-                "Function {} has signature ({}), got called with ({})",
-                name,
+                "Function {name} has signature ({}), got called with ({})",
                 expected
                     .iter()
                     .map(|type_| type_.to_string())
