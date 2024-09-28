@@ -395,17 +395,13 @@ impl CodeGen {
             | BinOp::BitwiseAnd
             | BinOp::BitwiseOr => {
                 if let Some(dest) = dest {
-                    let new_dest = if let Destination::Memory(_) = dest {
-                        let r = self.arch.alloc()?;
-
-                        Some((r.dest(size), r))
-                    } else {
-                        None
+                    let (lhs, new) = match dest {
+                        Destination::Memory(_) => (self.arch.alloc()?.dest(size), true),
+                        Destination::Register(register) if register.size != size => {
+                            (dest.to_owned().with_size(size), false)
+                        }
+                        _ => (dest.to_owned(), false),
                     };
-                    let lhs = new_dest
-                        .clone()
-                        .map(|(dest, _)| dest)
-                        .unwrap_or_else(|| dest.clone());
 
                     self.expr(*expr.left, Some(&lhs), state)?;
 
@@ -438,19 +434,20 @@ impl CodeGen {
                         _ => unreachable!(),
                     };
 
-                    if let Some((new_dest, r)) = new_dest {
-                        let source = if dest.size() != size {
-                            self.arch
-                                .mov(&r.source(size), &r.dest(dest.size()), signed)?;
-                            r.source(dest.size())
-                        } else {
-                            new_dest.into()
-                        };
-
-                        self.arch.mov(&source, dest, signed)?;
-                        self.arch.free(r)?;
+                    if lhs.size() != dest.size() {
+                        self.arch.mov(
+                            &lhs.clone().into(),
+                            &lhs.clone().with_size(dest.size()),
+                            signed,
+                        )?;
                     }
-
+                    if &lhs != dest {
+                        self.arch
+                            .mov(&lhs.clone().with_size(dest.size()).into(), dest, signed)?;
+                    }
+                    if new {
+                        self.free(lhs)?;
+                    }
                     if let Some(r) = r {
                         self.arch.free(r)?;
                     }
