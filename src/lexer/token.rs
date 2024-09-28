@@ -77,9 +77,9 @@ impl Display for Token {
 
         match self {
             Eof => write!(f, "EOF"),
-            Ident(ident) => write!(f, "ident({})", ident),
-            Integer(integer) => write!(f, "int({})", integer),
-            String(string) => write!(f, "string({})", string),
+            Ident(ident) => write!(f, "ident({ident})"),
+            Integer(integer) => write!(f, "int({integer})"),
+            String(string) => write!(f, "string({string})"),
             Assign => write!(f, "="),
             Plus => write!(f, "+"),
             Minus => write!(f, "-"),

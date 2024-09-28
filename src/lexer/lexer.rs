@@ -2,19 +2,19 @@ use super::{LexerError, Token};
 
 #[derive(Debug)]
 pub struct Lexer {
-    input: Vec<u8>,
+    input: String,
     position: usize,
     read_position: usize,
-    ch: u8,
+    ch: char,
 }
 
 impl Lexer {
     pub fn new(input: String) -> Self {
         let mut lexer = Self {
-            input: input.into_bytes(),
-            ch: 0,
-            read_position: 0,
+            input,
+            ch: '\0',
             position: 0,
+            read_position: 0,
         };
         lexer.read_char();
 
@@ -22,39 +22,41 @@ impl Lexer {
     }
 
     fn read_char(&mut self) {
-        if self.read_position >= self.input.len() {
-            self.ch = 0;
-        } else {
-            self.ch = self.input[self.read_position];
+        match self.input[self.read_position..].chars().next() {
+            Some(ch) => {
+                self.ch = ch;
+                self.position = self.read_position;
+                self.read_position += ch.len_utf8();
+            }
+            None => {
+                self.ch = '\0';
+            }
         }
-
-        self.position = self.read_position;
-        self.read_position += 1;
     }
 
     pub fn next_token(&mut self) -> Result<Token, LexerError> {
         self.skip_whitespace();
 
         let token = match self.ch {
-            b'=' => {
-                if self.peek() == b'=' {
+            '=' => {
+                if self.peek() == Some('=') {
                     self.read_char();
                     Token::Equal
                 } else {
                     Token::Assign
                 }
             }
-            b'-' => {
-                if self.peek() == b'>' {
+            '-' => {
+                if self.peek() == Some('>') {
                     self.read_char();
                     Token::Arrow
                 } else {
                     Token::Minus
                 }
             }
-            b'+' => Token::Plus,
-            b'/' => {
-                if self.peek() == b'/' {
+            '+' => Token::Plus,
+            '/' => {
+                if self.peek() == Some('/') {
                     self.skip_comment();
 
                     return Ok(self.next_token()?);
@@ -62,66 +64,70 @@ impl Lexer {
                     Token::Slash
                 }
             }
-            b'.' => Token::Period,
-            b'~' => Token::Tilde,
-            b'&' => {
-                if self.peek() == b'&' {
+            '.' => Token::Period,
+            '~' => Token::Tilde,
+            '&' => {
+                if self.peek() == Some('&') {
                     self.read_char();
                     Token::And
                 } else {
                     Token::Ampersand
                 }
             }
-            b'|' => {
-                if self.peek() == b'|' {
+            '|' => {
+                if self.peek() == Some('|') {
                     self.read_char();
                     Token::Or
                 } else {
                     Token::Bar
                 }
             }
-            b'!' => {
-                if self.peek() == b'=' {
+            '!' => {
+                if self.peek() == Some('=') {
                     self.read_char();
                     Token::NotEqual
                 } else {
                     Token::Bang
                 }
             }
-            b'*' => Token::Asterisk,
-            b'<' => {
-                if self.peek() == b'=' {
+            '*' => Token::Asterisk,
+            '<' => match self.peek() {
+                Some('=') => {
                     self.read_char();
                     Token::LessEqual
-                } else if self.peek() == b'<' {
+                }
+                Some('<') => {
                     self.read_char();
                     Token::Shl
-                } else {
-                    Token::LessThan
                 }
-            }
-            b'>' => {
-                if self.peek() == b'=' {
+                _ => Token::LessThan,
+            },
+            '>' => match self.peek() {
+                Some('=') => {
                     self.read_char();
                     Token::GreaterEqual
-                } else if self.peek() == b'>' {
+                }
+                Some('>') => {
                     self.read_char();
                     Token::Shr
-                } else {
-                    Token::GreaterThan
                 }
+                _ => Token::GreaterThan,
+            },
+            ';' => Token::Semicolon,
+            '(' => Token::LParen,
+            ')' => Token::RParen,
+            '{' => Token::LBrace,
+            '}' => Token::RBrace,
+            '[' => Token::LBracket,
+            ']' => Token::RBracket,
+            ',' => Token::Comma,
+            ':' => Token::Colon,
+            '"' => Token::String(self.read_string()),
+            '0'..='9' => {
+                return Ok(Token::Integer(self.read_int()));
             }
-            b';' => Token::Semicolon,
-            b'(' => Token::LParen,
-            b')' => Token::RParen,
-            b'{' => Token::LBrace,
-            b'}' => Token::RBrace,
-            b'[' => Token::LBracket,
-            b']' => Token::RBracket,
-            b',' => Token::Comma,
-            b':' => Token::Colon,
-            b'"' => Token::String(self.read_string()),
-            b'a'..=b'z' | b'A'..=b'Z' | b'_' => {
+            '\0' => Token::Eof,
+            ch if ch.is_alphanumeric() || ch == '_' => {
                 let ident = self.read_ident();
 
                 return Ok(match ident.as_str() {
@@ -156,11 +162,9 @@ impl Lexer {
                     _ => Token::Ident(ident),
                 });
             }
-            b'0'..=b'9' => {
-                return Ok(Token::Integer(self.read_int()));
+            ch => {
+                return Err(LexerError::UnknownCharacter(ch));
             }
-            0 => Token::Eof,
-            c => return Err(LexerError::UnknownCharacter(char::from(c))),
         };
 
         self.read_char();
@@ -168,22 +172,18 @@ impl Lexer {
         Ok(token)
     }
 
-    fn peek(&self) -> u8 {
-        if self.read_position >= self.input.len() {
-            return 0;
-        }
-
-        self.input[self.read_position]
+    fn peek(&self) -> Option<char> {
+        self.input[self.read_position..].chars().next()
     }
 
     fn read_ident(&mut self) -> String {
         let pos = self.position;
 
-        while self.ch.is_ascii_alphanumeric() || self.ch == b'_' {
+        while self.ch.is_alphanumeric() || self.ch == '_' {
             self.read_char();
         }
 
-        String::from_utf8_lossy(&self.input[pos..self.position]).to_string()
+        self.input[pos..self.position].to_string()
     }
 
     fn read_int(&mut self) -> String {
@@ -193,7 +193,7 @@ impl Lexer {
             self.read_char();
         }
 
-        String::from_utf8_lossy(&self.input[pos..self.position]).to_string()
+        self.input[pos..self.position].to_string()
     }
 
     fn read_string(&mut self) -> String {
@@ -202,12 +202,10 @@ impl Lexer {
         loop {
             self.read_char();
 
-            if self.ch == b'"' || self.ch == 0 {
-                break;
+            if self.ch == '"' || self.ch == '\0' {
+                break self.input[pos..self.position].to_string();
             }
         }
-
-        String::from_utf8_lossy(&self.input[pos..self.position]).to_string()
     }
 
     fn skip_whitespace(&mut self) {
@@ -217,7 +215,7 @@ impl Lexer {
     }
 
     fn skip_comment(&mut self) {
-        while self.ch != b'\n' {
+        while self.ch != '\n' {
             self.read_char();
         }
     }
