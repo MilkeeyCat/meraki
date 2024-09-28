@@ -336,7 +336,7 @@ impl LValue for ExprArrayAccess {
         codegen
             .expr(
                 *self.index.clone(),
-                Some(index.dest(codegen.arch.word_size())),
+                Some(&index.dest(codegen.arch.word_size())),
                 None,
             )
             .unwrap();

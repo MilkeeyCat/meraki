@@ -102,7 +102,7 @@ impl CodeGen {
 
             self.expr(
                 expr,
-                Some(r.dest(type_.size(&self.arch, &self.scope)?)),
+                Some(&r.dest(type_.size(&self.arch, &self.scope)?)),
                 None,
             )?;
             self.arch.ret(
@@ -131,14 +131,7 @@ impl CodeGen {
             .type_(&self.scope)?
             .size(&self.arch, &self.scope)?;
 
-        self.expr(
-            if_stmt.condition,
-            Some(Destination::Register(operands::Register {
-                register: r,
-                size: expr_size,
-            })),
-            None,
-        )?;
+        self.expr(if_stmt.condition, Some(&r.dest(expr_size)), None)?;
         self.arch.cmp(
             &Destination::Register(operands::Register {
                 register: r,
@@ -183,7 +176,7 @@ impl CodeGen {
         let r = self.arch.alloc()?;
 
         self.arch.write_label(&start_label);
-        self.expr(stmt.condition, Some(r.dest(1)), None)?;
+        self.expr(stmt.condition, Some(&r.dest(1)), None)?;
         self.arch.cmp(
             &Destination::Register(operands::Register {
                 register: r,
@@ -226,7 +219,7 @@ impl CodeGen {
 
         self.arch.write_label(&start_label);
         if let Some(condition) = stmt.condition {
-            self.expr(condition, Some(r.dest(1)), None)?;
+            self.expr(condition, Some(&r.dest(1)), None)?;
             self.arch.cmp(
                 &Destination::Register(operands::Register {
                     register: r,
@@ -266,7 +259,7 @@ impl CodeGen {
     pub fn expr(
         &mut self,
         expr: Expr,
-        dest: Option<Destination>,
+        dest: Option<&Destination>,
         state: Option<&State>,
     ) -> Result<(), CodeGenError> {
         match expr {
@@ -277,13 +270,11 @@ impl CodeGen {
                         let label = self.arch.define_literal(literal.to_owned());
 
                         self.arch
-                            .mov(&Source::Immediate(Immediate::Label(label)), &dest, false)?;
+                            .mov(&Source::Immediate(Immediate::Label(label)), dest, false)?;
                     } else {
-                        self.arch.mov(
-                            &Source::Immediate(lit.clone().into()),
-                            &dest,
-                            lit.signed(),
-                        )?
+                        let signed = lit.signed();
+                        self.arch
+                            .mov(&Source::Immediate(lit.into()), dest, signed)?
                     }
                 }
             }
@@ -310,10 +301,10 @@ impl CodeGen {
 
                         self.arch
                             .lea(&Destination::Register(r_op.clone()), &dst.into());
-                        self.arch.mov(&Source::Register(r_op), &dest, false)?;
+                        self.arch.mov(&Source::Register(r_op), dest, false)?;
                         self.arch.free(r)?;
                     } else {
-                        self.arch.mov(&dst.into(), &dest, false)?;
+                        self.arch.mov(&dst.into(), dest, false)?;
                     }
                 }
             }
@@ -323,15 +314,15 @@ impl CodeGen {
                     let casted_size = cast_expr.type_.size(&self.arch, &self.scope)?;
 
                     if casted_size < type_.size(&self.arch, &self.scope)? {
-                        let (r, new) = match dest.clone() {
+                        let (r, new) = match dest {
                             Destination::Memory(_) => (self.arch.alloc()?, true),
                             Destination::Register(register) => (register.register, false),
                         };
 
-                        self.expr(*cast_expr.expr, Some(r.dest(self.arch.word_size())), state)?;
+                        self.expr(*cast_expr.expr, Some(&r.dest(self.arch.word_size())), state)?;
                         if new {
                             self.arch
-                                .mov(&r.source(casted_size), &dest, type_.signed())?;
+                                .mov(&r.source(casted_size), dest, type_.signed())?;
                             self.arch.free(r)?;
                         }
                     } else {
@@ -371,7 +362,7 @@ impl CodeGen {
     fn bin_expr(
         &mut self,
         expr: ExprBinary,
-        dest: Option<Destination>,
+        dest: Option<&Destination>,
         state: Option<&State>,
     ) -> Result<(), CodeGenError> {
         let left_type = expr.left.type_(&self.scope)?;
@@ -389,10 +380,10 @@ impl CodeGen {
                     .dest(self)?
                     .ok_or(CodeGenError::Assign(*expr.left))?;
 
-                self.expr(*expr.right, Some(lvalue_dest.clone()), state)?;
+                self.expr(*expr.right, Some(&lvalue_dest), state)?;
 
                 if let Some(dest) = dest {
-                    self.arch.mov(&lvalue_dest.clone().into(), &dest, signed)?;
+                    self.arch.mov(&lvalue_dest.clone().into(), dest, signed)?;
                 }
 
                 self.free(lvalue_dest)?;
@@ -404,7 +395,7 @@ impl CodeGen {
             | BinOp::BitwiseAnd
             | BinOp::BitwiseOr => {
                 if let Some(dest) = dest {
-                    let new_dest = if let Destination::Memory(_) = &dest {
+                    let new_dest = if let Destination::Memory(_) = dest {
                         let r = self.arch.alloc()?;
 
                         Some((r.dest(size), r))
@@ -416,14 +407,14 @@ impl CodeGen {
                         .map(|(dest, _)| dest)
                         .unwrap_or_else(|| dest.clone());
 
-                    self.expr(*expr.left, Some(lhs.clone()), state)?;
+                    self.expr(*expr.left, Some(&lhs), state)?;
 
                     let (src, r) = if let Expr::Lit(lit) = *expr.right {
                         (Source::Immediate(lit.into()), None)
                     } else {
                         let r = self.arch.alloc()?;
 
-                        self.expr(*expr.right, Some(r.dest(size)), state)?;
+                        self.expr(*expr.right, Some(&r.dest(size)), state)?;
                         (r.source(size), Some(r))
                     };
 
@@ -456,7 +447,7 @@ impl CodeGen {
                             new_dest.into()
                         };
 
-                        self.arch.mov(&source, &dest, signed)?;
+                        self.arch.mov(&source, dest, signed)?;
                         self.arch.free(r)?;
                     }
 
@@ -475,10 +466,10 @@ impl CodeGen {
                     let left = self.arch.alloc()?;
                     let right = self.arch.alloc()?;
 
-                    self.expr(*expr.left, Some(left.dest(size)), state)?;
-                    self.expr(*expr.right, Some(right.dest(size)), state)?;
+                    self.expr(*expr.left, Some(&left.dest(size)), state)?;
+                    self.expr(*expr.right, Some(&right.dest(size)), state)?;
                     self.arch.cmp(&left.dest(size), &right.source(size));
-                    self.arch.setcc(&dest, CmpOp::try_from(&expr.op)?);
+                    self.arch.setcc(dest, CmpOp::try_from(&expr.op)?);
                     self.arch.free(left)?;
                     self.arch.free(right)?;
                 }
@@ -487,11 +478,11 @@ impl CodeGen {
                 if let Some(dest) = dest {
                     let r = self.arch.alloc()?;
 
-                    self.expr(*expr.left, Some(dest.clone()), state)?;
-                    self.expr(*expr.right, Some(r.dest(size)), state)?;
+                    self.expr(*expr.left, Some(dest), state)?;
+                    self.expr(*expr.right, Some(&r.dest(size)), state)?;
 
                     self.arch.shl(
-                        &dest,
+                        dest,
                         &Source::Register(operands::Register { register: r, size }),
                     )?;
 
@@ -502,11 +493,11 @@ impl CodeGen {
                 if let Some(dest) = dest {
                     let r = self.arch.alloc()?;
 
-                    self.expr(*expr.left, Some(dest.clone()), state)?;
-                    self.expr(*expr.right, Some(r.dest(size)), state)?;
+                    self.expr(*expr.left, Some(dest), state)?;
+                    self.expr(*expr.right, Some(&r.dest(size)), state)?;
 
                     self.arch.shr(
-                        &dest,
+                        dest,
                         &Source::Register(operands::Register { register: r, size }),
                     )?;
 
@@ -546,17 +537,17 @@ impl CodeGen {
 
                             match &expr {
                                 Expr::Binary(ExprBinary { op, .. }) if op == opposite => {
-                                    codegen.expr(expr, Some(dest.clone()), None)?;
+                                    codegen.expr(expr, Some(dest), None)?;
                                 }
                                 _ => {
-                                    codegen.expr(expr, Some(dest.clone()), Some(&state))?;
+                                    codegen.expr(expr, Some(dest), Some(&state))?;
                                 }
                             }
 
                             if cmp {
                                 codegen
                                     .arch
-                                    .cmp(&dest, &Source::Immediate(Immediate::UInt(0)));
+                                    .cmp(dest, &Source::Immediate(Immediate::UInt(0)));
 
                                 if op == &BinOp::LogicalAnd {
                                     codegen
@@ -578,20 +569,20 @@ impl CodeGen {
                     if parent {
                         if expr.op == BinOp::LogicalAnd {
                             self.arch
-                                .mov(&Source::Immediate(Immediate::UInt(1)), &dest, false)?;
+                                .mov(&Source::Immediate(Immediate::UInt(1)), dest, false)?;
                             self.arch
                                 .jcc(state.end_label.as_ref().unwrap(), Jump::Unconditional);
                             self.arch.write_label(state.false_label.as_ref().unwrap());
                             self.arch
-                                .mov(&Source::Immediate(Immediate::UInt(0)), &dest, false)?;
+                                .mov(&Source::Immediate(Immediate::UInt(0)), dest, false)?;
                         } else {
                             self.arch
-                                .mov(&Source::Immediate(Immediate::UInt(0)), &dest, false)?;
+                                .mov(&Source::Immediate(Immediate::UInt(0)), dest, false)?;
                             self.arch
                                 .jcc(state.end_label.as_ref().unwrap(), Jump::Unconditional);
                             self.arch.write_label(state.false_label.as_ref().unwrap());
                             self.arch
-                                .mov(&Source::Immediate(Immediate::UInt(1)), &dest, false)?;
+                                .mov(&Source::Immediate(Immediate::UInt(1)), dest, false)?;
                         }
 
                         self.arch.write_label(state.end_label.as_ref().unwrap());
@@ -636,13 +627,13 @@ impl CodeGen {
     fn unary_expr(
         &mut self,
         unary_expr: ExprUnary,
-        dest: Destination,
+        dest: &Destination,
         state: Option<&State>,
     ) -> Result<(), CodeGenError> {
         match unary_expr.op {
             UnOp::Negative => {
-                self.expr(*unary_expr.expr, Some(dest.clone()), state)?;
-                self.arch.negate(&dest);
+                self.expr(*unary_expr.expr, Some(dest), state)?;
+                self.arch.negate(dest);
             }
             UnOp::LogicalNot => {
                 let type_ = unary_expr.type_(&self.scope)?;
@@ -650,11 +641,11 @@ impl CodeGen {
 
                 self.expr(
                     *unary_expr.expr,
-                    Some(r.dest(type_.size(&self.arch, &self.scope)?)),
+                    Some(&r.dest(type_.size(&self.arch, &self.scope)?)),
                     state,
                 )?;
                 self.arch
-                    .not(&r.dest(type_.size(&self.arch, &self.scope)?), &dest);
+                    .not(&r.dest(type_.size(&self.arch, &self.scope)?), dest);
                 self.arch.free(r)?;
             }
             UnOp::Address => {
@@ -673,7 +664,7 @@ impl CodeGen {
                         register: r,
                         size: self.arch.word_size(),
                     }),
-                    &dest,
+                    dest,
                     unary_expr.expr.type_(&self.scope)?.signed(),
                 )?;
                 self.free(expr_dest)?;
@@ -683,15 +674,15 @@ impl CodeGen {
 
                 self.arch.mov(
                     &expr_dest.clone().into(),
-                    &dest,
+                    dest,
                     unary_expr.expr.type_(&self.scope)?.signed(),
                 )?;
                 self.free(expr_dest)?;
             }
             UnOp::BitwiseNot => {
-                self.expr(*unary_expr.expr, Some(dest.clone()), state)?;
+                self.expr(*unary_expr.expr, Some(dest), state)?;
 
-                self.arch.bitwise_not(&dest);
+                self.arch.bitwise_not(dest);
             }
         };
 
@@ -701,7 +692,7 @@ impl CodeGen {
     fn call_function(
         &mut self,
         call: ExprFunctionCall,
-        dest: Option<Destination>,
+        dest: Option<&Destination>,
         state: Option<&State>,
     ) -> Result<(), CodeGenError> {
         let mut preceding = Vec::new();
@@ -711,7 +702,7 @@ impl CodeGen {
             let type_ = expr.type_(&self.scope)?;
             let r = self.arch.alloc()?;
 
-            self.expr(expr, Some(r.dest(self.arch.word_size())), state)?;
+            self.expr(expr, Some(&r.dest(self.arch.word_size())), state)?;
             stack_size += self.arch.push_arg(
                 Source::Register(operands::Register {
                     register: r,
@@ -735,7 +726,7 @@ impl CodeGen {
         };
         self.arch.call_fn(
             &call.name,
-            dest.as_ref(),
+            dest,
             function.return_type.signed(),
             function.return_type.size(&self.arch, &self.scope)?,
         )?;
@@ -749,7 +740,7 @@ impl CodeGen {
     fn struct_expr(
         &mut self,
         expr: ExprStruct,
-        dest: Destination,
+        dest: &Destination,
         state: Option<&State>,
     ) -> Result<(), CodeGenError> {
         let type_struct = match self
@@ -771,7 +762,7 @@ impl CodeGen {
 
             self.expr(
                 expr,
-                Some(match dest.clone() {
+                Some(&match dest.clone() {
                     Destination::Memory(mut memory) => {
                         memory.effective_address.displacement = Some(
                             &memory
@@ -796,7 +787,7 @@ impl CodeGen {
     fn array_expr(
         &mut self,
         expr: ExprArray,
-        dest: Destination,
+        dest: &Destination,
         state: Option<&State>,
     ) -> Result<(), CodeGenError> {
         for (i, expr) in expr.0.into_iter().enumerate() {
@@ -811,7 +802,7 @@ impl CodeGen {
                 false,
             )?;
 
-            match &dest {
+            match dest {
                 Destination::Memory(memory) => {
                     self.arch.lea(&r_loc, &memory.effective_address);
                 }
@@ -823,7 +814,7 @@ impl CodeGen {
 
             self.expr(
                 expr,
-                Some(Destination::Memory(Memory {
+                Some(&Destination::Memory(Memory {
                     effective_address: EffectiveAddress {
                         base: Base::Register(r),
                         index: None,
@@ -844,13 +835,13 @@ impl CodeGen {
     fn struct_access(
         &mut self,
         expr: ExprStructAccess,
-        dest: Destination,
+        dest: &Destination,
     ) -> Result<(), CodeGenError> {
         let expr_dest = expr.dest(self)?;
 
         self.arch.mov(
             &expr_dest.clone().into(),
-            &dest,
+            dest,
             expr.type_(&self.scope)?.signed(),
         )?;
         self.free(expr_dest)
@@ -859,7 +850,7 @@ impl CodeGen {
     fn struct_call_method(
         &mut self,
         expr: ExprStructMethod,
-        dest: Option<Destination>,
+        dest: Option<&Destination>,
         state: Option<&State>,
     ) -> Result<(), CodeGenError> {
         let struct_name = expr.expr.type_(&self.scope)?.struct_unchecked();
@@ -885,7 +876,7 @@ impl CodeGen {
             let type_ = expr.type_(&self.scope)?;
             let r = self.arch.alloc()?;
 
-            self.expr(expr, Some(r.dest(self.arch.word_size())), state)?;
+            self.expr(expr, Some(&r.dest(self.arch.word_size())), state)?;
             stack_size += self.arch.push_arg(
                 Source::Register(operands::Register {
                     register: r,
@@ -903,7 +894,7 @@ impl CodeGen {
         };
         self.arch.call_fn(
             &format!("{struct_name}__{}", expr.method),
-            dest.as_ref(),
+            dest,
             method.return_type.signed(),
             method.return_type.size(&self.arch, &self.scope)?,
         )?;
@@ -919,13 +910,13 @@ impl CodeGen {
     fn array_access(
         &mut self,
         expr: ExprArrayAccess,
-        dest: Destination,
+        dest: &Destination,
     ) -> Result<(), CodeGenError> {
         let expr_dest = expr.dest(self)?;
 
         self.arch.mov(
             &expr_dest.clone().into(),
-            &dest,
+            dest,
             expr.type_(&self.scope)?.signed(),
         )?;
         self.free(expr_dest)
