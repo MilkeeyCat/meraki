@@ -67,10 +67,6 @@ impl Type {
         }
     }
 
-    fn bool(&self) -> bool {
-        matches!(self, Self::Bool)
-    }
-
     pub fn ptr(&self) -> bool {
         matches!(self, Self::Ptr(..))
     }
@@ -107,24 +103,20 @@ impl Type {
         }
     }
 
-    pub fn cast(self, type_: Self) -> Result<Self, TypeError> {
-        if (self == type_) || (self.int() && type_.int()) {
-            return Ok(type_);
+    pub fn cast(from: Self, to: Self) -> Result<Self, TypeError> {
+        match (from, to) {
+            (from, to) if from.int() && to.int() => Ok(to),
+            (from, to) if from == Self::Bool && to.int() || from.int() && to == Type::Bool => {
+                Ok(to)
+            }
+            (from, to)
+                if from.arr() && to.ptr() && from.inner().unwrap() == to.inner().unwrap() =>
+            {
+                Ok(to)
+            }
+            (from, to) if from.ptr() && to.ptr() => Ok(to),
+            (from, to) => Err(TypeError::Cast(from, to)),
         }
-
-        if (self.bool() && type_.int()) || (self.int() && type_.bool()) {
-            return Ok(type_);
-        }
-
-        if self.arr() && type_.ptr() && self.inner()? == type_.inner()? {
-            return Ok(type_);
-        }
-
-        if self.ptr() && type_.ptr() {
-            return Ok(type_);
-        }
-
-        Err(TypeError::Cast(self, type_))
     }
 
     pub fn size(&self, arch: &Arch, scope: &Scope) -> Result<usize, TypeError> {

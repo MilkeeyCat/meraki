@@ -291,9 +291,7 @@ pub struct ExprCast {
 }
 
 impl Expression for ExprCast {
-    fn type_(&self, scope: &Scope) -> Result<Type, ExprError> {
-        let expr_type = self.expr.type_(scope)?;
-
-        Ok(expr_type.cast(self.type_.clone())?)
+    fn type_(&self, _: &Scope) -> Result<Type, ExprError> {
+        Ok(self.type_.to_owned())
     }
 }

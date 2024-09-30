@@ -89,6 +89,7 @@ impl TypeChecker {
             }) => {
                 assert!(left.lvalue());
                 Self::check_expr(left, scope)?;
+                Self::check_expr(right, scope)?;
                 Self::check_assign(left.type_(scope)?, right, scope)?;
             }
             Expr::Binary(expr) => {
@@ -111,6 +112,7 @@ impl TypeChecker {
             Expr::Cast(expr) => {
                 Self::check_type(&expr.type_, scope)?;
                 Self::check_expr(&expr.expr, scope)?;
+                Type::cast(expr.expr.type_(&scope)?, expr.type_.clone())?;
             }
             Expr::Lit(_) => (),
             Expr::Ident(expr) => (),
