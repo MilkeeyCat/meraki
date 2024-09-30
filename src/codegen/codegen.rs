@@ -4,7 +4,7 @@ use crate::{
     parser::{
         BinOp, BitwiseOp, CmpOp, Expr, ExprArray, ExprArrayAccess, ExprBinary, ExprFunctionCall,
         ExprIdent, ExprLit, ExprStruct, ExprStructAccess, ExprStructMethod, ExprUnary, Expression,
-        LValue, Stmt, StmtFor, StmtFunction, StmtIf, StmtReturn, StmtVarDecl, StmtWhile, UnOp,
+        Stmt, StmtFor, StmtFunction, StmtIf, StmtReturn, StmtVarDecl, StmtWhile, UnOp,
     },
     scope::Scope,
     symbol_table::{Symbol, SymbolTableError},
@@ -375,10 +375,9 @@ impl CodeGen {
 
         match &expr.op {
             BinOp::Assign => {
-                let lvalue_dest = expr
-                    .left
-                    .dest(self)?
-                    .ok_or(CodeGenError::Assign(*expr.left))?;
+                let lvalue_dest = self
+                    .expr_dest(&expr.left)
+                    .map_err(|_| CodeGenError::Assign(*expr.left))?;
 
                 self.expr(*expr.right, Some(&lvalue_dest), state)?;
 
@@ -646,7 +645,7 @@ impl CodeGen {
                 self.arch.free(r)?;
             }
             UnOp::Address => {
-                let expr_dest = unary_expr.expr.dest(self)?.unwrap();
+                let expr_dest = self.expr_dest(&unary_expr.expr)?;
                 let r = self.arch.alloc()?;
 
                 self.arch.lea(
@@ -667,13 +666,10 @@ impl CodeGen {
                 self.free(expr_dest)?;
             }
             UnOp::Deref => {
-                let expr_dest = unary_expr.dest(self)?;
+                let signed = unary_expr.expr.type_(&self.scope)?.signed();
+                let expr_dest = self.expr_dest(&Expr::Unary(unary_expr))?;
 
-                self.arch.mov(
-                    &expr_dest.clone().into(),
-                    dest,
-                    unary_expr.expr.type_(&self.scope)?.signed(),
-                )?;
+                self.arch.mov(&expr_dest.clone().into(), dest, signed)?;
                 self.free(expr_dest)?;
             }
             UnOp::BitwiseNot => {
@@ -834,13 +830,10 @@ impl CodeGen {
         expr: ExprStructAccess,
         dest: &Destination,
     ) -> Result<(), CodeGenError> {
-        let expr_dest = expr.dest(self)?;
+        let signed = expr.type_(&self.scope)?.signed();
+        let expr_dest = self.expr_dest(&Expr::StructAccess(expr))?;
 
-        self.arch.mov(
-            &expr_dest.clone().into(),
-            dest,
-            expr.type_(&self.scope)?.signed(),
-        )?;
+        self.arch.mov(&expr_dest.clone().into(), dest, signed)?;
         self.free(expr_dest)
     }
 
@@ -851,7 +844,7 @@ impl CodeGen {
         state: Option<&State>,
     ) -> Result<(), CodeGenError> {
         let struct_name = expr.expr.type_(&self.scope)?.struct_unchecked();
-        let expr_dest = expr.expr.dest(self)?.unwrap();
+        let expr_dest = self.expr_dest(&expr.expr)?;
         let r = self.arch.alloc()?;
         let effective_address = match expr_dest.clone() {
             Destination::Memory(memory) => memory.effective_address,
@@ -909,13 +902,10 @@ impl CodeGen {
         expr: ExprArrayAccess,
         dest: &Destination,
     ) -> Result<(), CodeGenError> {
-        let expr_dest = expr.dest(self)?;
+        let signed = expr.type_(&self.scope)?.signed();
+        let expr_dest = self.expr_dest(&Expr::ArrayAccess(expr))?;
 
-        self.arch.mov(
-            &expr_dest.clone().into(),
-            dest,
-            expr.type_(&self.scope)?.signed(),
-        )?;
+        self.arch.mov(&expr_dest.clone().into(), dest, signed)?;
         self.free(expr_dest)
     }
 
@@ -962,5 +952,116 @@ impl CodeGen {
                 None
             }
         })
+    }
+
+    fn expr_dest(&mut self, expr: &Expr) -> Result<Destination, CodeGenError> {
+        match expr {
+            Expr::Ident(expr) => Ok(self
+                .scope
+                .find_symbol(&expr.0)
+                .ok_or(SymbolTableError::NotFound(expr.0.clone()))?
+                .dest(&self.arch, &self.scope)?),
+            Expr::StructAccess(expr) => {
+                let (field_offset, field_size) = match expr.expr.type_(&self.scope)? {
+                    Type::Struct(s) => {
+                        match self.scope.find_type(&s).ok_or(TypeError::Nonexistent(s))? {
+                            tt::Type::Struct(type_struct) => (
+                                type_struct.offset(&self.arch, &expr.field, &self.scope)?,
+                                type_struct
+                                    .get_field_type(&expr.field)
+                                    .unwrap()
+                                    .size(&self.arch, &self.scope)?,
+                            ),
+                        }
+                    }
+                    type_ => panic!("{type_:?}"),
+                };
+
+                Ok(match self.expr_dest(&expr.expr)? {
+                    Destination::Memory(mut memory) => {
+                        memory.effective_address.displacement =
+                            if let Some(displacement) = memory.effective_address.displacement {
+                                Some(&displacement + &field_offset)
+                            } else {
+                                Some(field_offset)
+                            };
+                        memory.size = field_size;
+
+                        Destination::Memory(memory)
+                    }
+                    Destination::Register(register) => Destination::Memory(Memory {
+                        effective_address: EffectiveAddress {
+                            base: Base::Register(register.register),
+                            index: None,
+                            scale: None,
+                            displacement: Some(field_offset),
+                        },
+                        size: field_size,
+                    }),
+                })
+            }
+            Expr::ArrayAccess(expr) => {
+                let base = self.expr_dest(&expr.expr)?;
+                let index = self.arch.alloc()?;
+                let r = self.arch.alloc()?;
+                let r_loc = r.dest(self.arch.word_size());
+
+                self.expr(
+                    *expr.index.clone(),
+                    Some(&index.dest(self.arch.word_size())),
+                    None,
+                )
+                .unwrap();
+                match base {
+                    Destination::Memory(memory) => {
+                        self.arch.lea(&r_loc, &memory.effective_address);
+                    }
+                    Destination::Register(_) => unreachable!(),
+                }
+                self.arch.array_offset(
+                    &r_loc,
+                    &index.dest(self.arch.word_size()),
+                    expr.type_(&self.scope)?.size(&self.arch, &self.scope)?,
+                )?;
+
+                Ok(Destination::Memory(Memory {
+                    effective_address: EffectiveAddress {
+                        base: Base::Register(r),
+                        index: None,
+                        scale: None,
+                        displacement: None,
+                    },
+                    size: expr.type_(&self.scope)?.size(&self.arch, &self.scope)?,
+                }))
+            }
+            Expr::Unary(expr) if expr.op == UnOp::Deref => {
+                let dest = self.expr_dest(&expr.expr)?;
+                let r = self.arch.alloc().unwrap();
+                let type_ = expr.expr.type_(&self.scope)?;
+
+                self.arch
+                    .mov(
+                        &dest.into(),
+                        &r.dest(type_.size(&self.arch, &self.scope)?),
+                        type_.signed(),
+                    )
+                    .unwrap();
+
+                Ok(Destination::Memory(Memory {
+                    effective_address: EffectiveAddress {
+                        base: Base::Register(r),
+                        index: None,
+                        scale: None,
+                        displacement: None,
+                    },
+                    size: expr
+                        .expr
+                        .type_(&self.scope)?
+                        .inner()?
+                        .size(&self.arch, &self.scope)?,
+                }))
+            }
+            _ => unreachable!("Can't get address of rvalue"),
+        }
     }
 }

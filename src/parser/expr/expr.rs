@@ -1,7 +1,5 @@
 use super::{int_repr::UIntLitRepr, ExprError, IntLitRepr};
 use crate::{
-    archs::ArchError,
-    codegen::{operands, CodeGen, Destination},
     parser::op::{BinOp, UnOp},
     passes::TypeChecker,
     scope::Scope,
@@ -9,14 +7,9 @@ use crate::{
     type_table,
     types::{Type, TypeArray, TypeError},
 };
-use operands::{Base, EffectiveAddress, Memory};
 
 pub trait Expression {
     fn type_(&self, scope: &Scope) -> Result<Type, ExprError>;
-}
-
-pub trait LValue {
-    fn dest(&self, codegen: &mut CodeGen) -> Result<Destination, ArchError>;
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -70,16 +63,6 @@ impl Expr {
                 op: UnOp::Deref, ..
             }) => true,
             _ => false,
-        }
-    }
-
-    pub fn dest(&self, codegen: &mut CodeGen) -> Result<Option<Destination>, ArchError> {
-        match self {
-            Expr::Ident(expr) => expr.dest(codegen).map(|d| Some(d)),
-            Expr::StructAccess(expr) => expr.dest(codegen).map(|d| Some(d)),
-            Expr::Unary(expr) => expr.dest(codegen).map(|d| Some(d)),
-            Expr::ArrayAccess(expr) => expr.dest(codegen).map(|d| Some(d)),
-            _ => Ok(None),
         }
     }
 
@@ -185,16 +168,6 @@ impl Expression for ExprIdent {
     }
 }
 
-impl LValue for ExprIdent {
-    fn dest(&self, codegen: &mut CodeGen) -> Result<Destination, ArchError> {
-        Ok(codegen
-            .scope
-            .find_symbol(&self.0)
-            .ok_or(SymbolTableError::NotFound(self.0.clone()))?
-            .dest(&codegen.arch, &codegen.scope)?)
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprStruct {
     pub name: String,
@@ -234,50 +207,6 @@ impl Expression for ExprStructAccess {
             }
             _ => unreachable!(),
         }
-    }
-}
-
-impl LValue for ExprStructAccess {
-    fn dest(&self, codegen: &mut CodeGen) -> Result<Destination, ArchError> {
-        let (field_offset, field_size) = match self.expr.type_(&codegen.scope)? {
-            Type::Struct(s) => match codegen
-                .scope
-                .find_type(&s)
-                .ok_or(TypeError::Nonexistent(s))?
-            {
-                type_table::Type::Struct(type_struct) => (
-                    type_struct.offset(&codegen.arch, &self.field, &codegen.scope)?,
-                    type_struct
-                        .get_field_type(&self.field)
-                        .unwrap()
-                        .size(&codegen.arch, &codegen.scope)?,
-                ),
-            },
-            type_ => panic!("{type_:?}"),
-        };
-
-        Ok(match self.expr.dest(codegen)?.expect("Uh oh") {
-            Destination::Memory(mut memory) => {
-                memory.effective_address.displacement =
-                    if let Some(displacement) = memory.effective_address.displacement {
-                        Some(&displacement + &field_offset)
-                    } else {
-                        Some(field_offset)
-                    };
-                memory.size = field_size;
-
-                Destination::Memory(memory)
-            }
-            Destination::Register(register) => Destination::Memory(Memory {
-                effective_address: EffectiveAddress {
-                    base: Base::Register(register.register),
-                    index: None,
-                    scale: None,
-                    displacement: Some(field_offset),
-                },
-                size: field_size,
-            }),
-        })
     }
 }
 
@@ -326,47 +255,6 @@ impl Expression for ExprArrayAccess {
     }
 }
 
-impl LValue for ExprArrayAccess {
-    fn dest(&self, codegen: &mut CodeGen) -> Result<Destination, ArchError> {
-        let base = self.expr.dest(codegen)?.unwrap();
-        let index = codegen.arch.alloc()?;
-        let r = codegen.arch.alloc()?;
-        let r_loc = r.dest(codegen.arch.word_size());
-
-        codegen
-            .expr(
-                *self.index.clone(),
-                Some(&index.dest(codegen.arch.word_size())),
-                None,
-            )
-            .unwrap();
-        match base {
-            Destination::Memory(memory) => {
-                codegen.arch.lea(&r_loc, &memory.effective_address);
-            }
-            Destination::Register(_) => unreachable!(),
-        }
-        codegen.arch.array_offset(
-            &r_loc,
-            &index.dest(codegen.arch.word_size()),
-            self.type_(&codegen.scope)?
-                .size(&codegen.arch, &codegen.scope)?,
-        )?;
-
-        Ok(Destination::Memory(Memory {
-            effective_address: EffectiveAddress {
-                base: Base::Register(r),
-                index: None,
-                scale: None,
-                displacement: None,
-            },
-            size: self
-                .type_(&codegen.scope)?
-                .size(&codegen.arch, &codegen.scope)?,
-        }))
-    }
-}
-
 impl Expression for ExprStruct {
     fn type_(&self, _: &Scope) -> Result<Type, ExprError> {
         Ok(Type::Struct(self.name.clone()))
@@ -377,43 +265,6 @@ impl Expression for ExprStruct {
 pub struct ExprUnary {
     pub op: UnOp,
     pub expr: Box<Expr>,
-}
-
-impl LValue for ExprUnary {
-    fn dest(&self, codegen: &mut CodeGen) -> Result<Destination, ArchError> {
-        assert_eq!(self.op, UnOp::Deref);
-        let dest = self.expr.dest(codegen)?.unwrap();
-        let r = codegen.arch.alloc().unwrap();
-
-        codegen
-            .arch
-            .mov(
-                &dest.into(),
-                &Destination::Register(operands::Register {
-                    register: r,
-                    size: self
-                        .expr
-                        .type_(&codegen.scope)?
-                        .size(&codegen.arch, &codegen.scope)?,
-                }),
-                self.expr.type_(&codegen.scope)?.signed(),
-            )
-            .unwrap();
-
-        Ok(Destination::Memory(Memory {
-            effective_address: EffectiveAddress {
-                base: Base::Register(r),
-                index: None,
-                scale: None,
-                displacement: None,
-            },
-            size: self
-                .expr
-                .type_(&codegen.scope)?
-                .inner()?
-                .size(&codegen.arch, &codegen.scope)?,
-        }))
-    }
 }
 
 impl Expression for ExprUnary {
