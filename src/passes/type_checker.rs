@@ -3,7 +3,7 @@ use crate::{
     parser::{BinOp, Block, Expr, ExprBinary, Expression, ParserError, Stmt, UnOp},
     scope::Scope,
     type_table::{self as tt, TypeTable},
-    types::{Type, TypeError},
+    types::{Type, TypeError, UintType},
 };
 use std::collections::HashSet;
 
@@ -149,9 +149,7 @@ impl TypeChecker {
                     .collect::<std::result::Result<Vec<_>, _>>()?;
 
                 for (expr, type_) in expr.arguments.iter().zip(&symbol.parameters) {
-                    if let Err(_) =
-                        Self::check_if_expr_assignable_to_type(expr, scope, type_.to_owned())
-                    {
+                    if let Err(_) = Self::check_assign(type_.to_owned(), expr, scope) {
                         return Err(ParserError::FunctionArguments(
                             fn_name.clone(),
                             symbol.parameters.to_owned(),
@@ -171,19 +169,6 @@ impl TypeChecker {
         } else {
             Ok(())
         }
-    }
-
-    fn check_if_expr_assignable_to_type(expr: &Expr, scope: &Scope, target: Type) -> Result<()> {
-        let type_ = expr.type_(scope)?;
-        if type_ == target {
-            return Ok(());
-        }
-
-        if Expr::int_lit_only(expr) {
-            Type::promote(type_.clone(), target.clone())?;
-        }
-
-        Err(ParserError::Type(TypeError::Mismatched(type_, target)))
     }
 
     fn check_type(type_: &Type, scope: &Scope) -> Result<()> {
@@ -243,12 +228,12 @@ impl TypeChecker {
                         (right_type, left_type, left)
                     };
 
-                    if int != Type::Usize && !Expr::int_lit_only(int_expr) {
+                    if int != Type::UInt(UintType::Usize) && !Expr::int_lit_only(int_expr) {
                         panic!("Only interger of type usize is allowed in pointer arithmetic");
                     }
 
                     if Expr::int_lit_only(int_expr) {
-                        Type::promote(int, Type::Usize)?;
+                        Type::promote(int, Type::UInt(UintType::Usize))?;
                     }
 
                     ptr

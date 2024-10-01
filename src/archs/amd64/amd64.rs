@@ -1,5 +1,5 @@
 use crate::{
-    archs::{Arch, ArchError, Architecture, Jump},
+    archs::{ArchError, Architecture, Jump},
     codegen::{
         operands::{self, Base, EffectiveAddress, Immediate, Memory, Offset},
         Destination, Source,
@@ -11,7 +11,7 @@ use crate::{
     },
     scope::Scope,
     symbol_table::Symbol,
-    types::Type,
+    types::{IntType, Type, UintType},
 };
 use indoc::formatdoc;
 use std::collections::HashMap;
@@ -27,19 +27,9 @@ enum ParamClass {
 impl From<&Type> for ParamClass {
     fn from(value: &Type) -> Self {
         match value {
-            Type::U8
-            | Type::I8
-            | Type::U16
-            | Type::I16
-            | Type::U32
-            | Type::I32
-            | Type::U64
-            | Type::I64
-            | Type::Usize
-            | Type::Isize
-            | Type::Bool
-            | Type::Ptr(_)
-            | Type::Array(_) => Self::Integer,
+            Type::Int(_) | Type::UInt(_) | Type::Bool | Type::Ptr(_) | Type::Array(_) => {
+                Self::Integer
+            }
             _ => unreachable!("Unsupported parameter type"),
         }
     }
@@ -94,10 +84,16 @@ impl Architecture for Amd64 {
         STACK_ALIGNMENT
     }
 
-    fn size(&self, type_: &Type) -> usize {
+    fn size(&self, type_: &Type, scope: &Scope) -> usize {
         match type_ {
-            Type::Ptr(_) | Type::Null | Type::Usize | Type::Isize => WORD_SIZE,
-            _ => unreachable!(),
+            Type::Ptr(_) | Type::Null | Type::UInt(UintType::Usize) | Type::Int(IntType::Isize) => {
+                WORD_SIZE
+            }
+            Type::Struct(structure) => match scope.find_type(structure).unwrap() {
+                crate::type_table::Type::Struct(structure) => self.struct_size(structure, scope),
+            },
+            Type::Array(array) => self.size(&array.type_, scope) * array.length,
+            type_ => type_.size().expect("Failed to get size of type {type_}"),
         }
     }
 
@@ -394,7 +390,7 @@ impl Architecture for Amd64 {
                 ParamClass::Integer => {
                     if *n <= 6 {
                         let n = *n;
-                        let size = type_.size(&(Box::new(self.clone()) as Arch), scope)?;
+                        let size = self.size(type_, scope);
                         offset = &offset - (size as isize);
 
                         self.mov(
@@ -565,10 +561,7 @@ impl Architecture for Amd64 {
             *n += 1;
 
             if *n <= 6 {
-                offset -= param
-                    .type_
-                    .size(&(Box::new(self.clone()) as Arch), &scope)?
-                    as isize;
+                offset -= self.size(&param.type_, scope) as isize;
                 param.offset = Offset(offset);
             } else {
                 // When call instruction is called it pushes return address on da stack
@@ -579,10 +572,7 @@ impl Architecture for Amd64 {
         for stmt in &mut block.statements {
             match stmt {
                 Stmt::VarDecl(stmt2) => {
-                    offset -= stmt2
-                        .type_
-                        .size(&(Box::new(self.clone()) as Arch), &scope)?
-                        as isize;
+                    offset -= self.size(&stmt2.type_, scope) as isize;
 
                     match block.scope.symbol_table.find_mut(&stmt2.name).unwrap() {
                         Symbol::Local(local) => {
@@ -603,10 +593,7 @@ impl Architecture for Amd64 {
                 }
                 Stmt::For(stmt) => {
                     if let Some(Stmt::VarDecl(stmt2)) = stmt.initializer.as_deref() {
-                        offset -= stmt2
-                            .type_
-                            .size(&(Box::new(self.clone()) as Arch), &scope)?
-                            as isize;
+                        offset -= self.size(&stmt2.type_, scope) as isize;
 
                         match stmt.block.scope.symbol_table.find_mut(&stmt2.name).unwrap() {
                             Symbol::Local(local) => {

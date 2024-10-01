@@ -1,4 +1,4 @@
-use crate::types::Type;
+use crate::types::{IntType, Type, UintType};
 use std::{fmt::Display, num::ParseIntError};
 
 const I8_MIN: i64 = i8::MIN as i64;
@@ -31,10 +31,10 @@ impl IntLitRepr {
 
     pub fn type_(&self) -> Type {
         match self.inner {
-            I8_MIN..=I8_MAX => Type::I8,
-            I16_MIN..=I16_MAX => Type::I16,
-            I32_MIN..=I32_MAX => Type::I32,
-            I64_MIN..=I64_MAX => Type::I64,
+            I8_MIN..=I8_MAX => Type::Int(IntType::I8),
+            I16_MIN..=I16_MAX => Type::Int(IntType::I16),
+            I32_MIN..=I32_MAX => Type::Int(IntType::I32),
+            I64_MIN..=I64_MAX => Type::Int(IntType::I64),
         }
     }
 
@@ -75,10 +75,10 @@ impl UIntLitRepr {
 
     pub fn type_(&self) -> Type {
         match self.inner {
-            U8_MIN..=U8_MAX => Type::U8,
-            U16_MIN..=U16_MAX => Type::U16,
-            U32_MIN..=U32_MAX => Type::U32,
-            U64_MIN..=U64_MAX => Type::U64,
+            U8_MIN..=U8_MAX => Type::UInt(UintType::U8),
+            U16_MIN..=U16_MAX => Type::UInt(UintType::U16),
+            U32_MIN..=U32_MAX => Type::UInt(UintType::U32),
+            U64_MIN..=U64_MAX => Type::UInt(UintType::U64),
         }
     }
 

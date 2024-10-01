@@ -5,7 +5,7 @@ use crate::{
     scope::Scope,
     symbol_table::{Symbol, SymbolTableError},
     type_table,
-    types::{Type, TypeArray, TypeError},
+    types::{IntType, Type, TypeArray, TypeError, UintType},
 };
 
 pub trait Expression {
@@ -136,7 +136,7 @@ impl Expression for ExprLit {
             ExprLit::Int(int) => Ok(int.type_()),
             ExprLit::UInt(uint) => Ok(uint.type_()),
             ExprLit::Bool(_) => Ok(Type::Bool),
-            ExprLit::String(_) => Ok(Type::Ptr(Box::new(Type::I8))),
+            ExprLit::String(_) => Ok(Type::Ptr(Box::new(Type::Int(IntType::I8)))),
             ExprLit::Null => Ok(Type::Null),
         }
     }
@@ -270,12 +270,10 @@ pub struct ExprUnary {
 impl Expression for ExprUnary {
     fn type_(&self, scope: &Scope) -> Result<Type, ExprError> {
         Ok(match &self.op {
-            UnOp::Negative => {
-                let mut expr_type = self.expr.type_(scope)?;
-                expr_type.to_signed();
-
-                expr_type
-            }
+            UnOp::Negative => match self.expr.type_(scope)? {
+                Type::UInt(uint) => Type::Int(uint.to_signed()),
+                type_ => type_,
+            },
             UnOp::LogicalNot => Type::Bool,
             UnOp::Address => Type::Ptr(Box::new(self.expr.type_(scope)?)),
             UnOp::Deref => self.expr.type_(scope)?.inner()?,

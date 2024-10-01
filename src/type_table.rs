@@ -25,30 +25,11 @@ pub struct TypeStructMethod {
 }
 
 impl TypeStruct {
-    pub fn size(&self, arch: &Arch, scope: &Scope) -> Result<usize, TypeError> {
-        let mut offset: usize = 0;
-        let mut largest = 0;
-
-        for (_, type_) in &self.fields {
-            let size = type_.size(arch, scope)?;
-
-            offset = offset.next_multiple_of(size);
-            offset += size;
-
-            if size > largest {
-                largest = size;
-            }
-        }
-
-        // Align to the largest element in the struct
-        Ok(offset.next_multiple_of(largest))
-    }
-
     pub fn offset(&self, arch: &Arch, name: &str, scope: &Scope) -> Result<Offset, TypeError> {
         let mut offset: usize = 0;
 
         for (field_name, type_) in &self.fields {
-            let size = type_.size(arch, scope)?;
+            let size = arch.size(type_, scope);
             offset = offset.next_multiple_of(size);
             if name == field_name {
                 break;
@@ -73,6 +54,10 @@ impl TypeStruct {
 
     pub fn contains(&self, field: &str) -> bool {
         self.fields.iter().any(|(name, _)| name == field)
+    }
+
+    pub fn types(&self) -> Vec<&types::Type> {
+        self.fields.iter().map(|(_, type_)| type_).collect()
     }
 }
 

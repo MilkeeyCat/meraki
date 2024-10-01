@@ -41,10 +41,8 @@ impl CodeGen {
 
     fn declare(&mut self, variable: StmtVarDecl) -> Result<(), CodeGenError> {
         if !self.scope.local() {
-            self.arch.declare(
-                &variable.name,
-                variable.type_.size(&self.arch, &self.scope)?,
-            );
+            self.arch
+                .declare(&variable.name, self.arch.size(&variable.type_, &self.scope));
         }
 
         if let Some(expr) = variable.value {
@@ -102,13 +100,13 @@ impl CodeGen {
 
             self.expr(
                 expr,
-                Some(&r.dest(type_.size(&self.arch, &self.scope)?)),
+                Some(&r.dest(self.arch.size(&type_, &self.scope))),
                 None,
             )?;
             self.arch.ret(
                 &Source::Register(operands::Register {
                     register: r,
-                    size: type_.size(&self.arch, &self.scope)?,
+                    size: self.arch.size(&type_, &self.scope),
                 }),
                 type_.signed(),
             )?;
@@ -126,10 +124,9 @@ impl CodeGen {
 
     fn if_stmt(&mut self, if_stmt: StmtIf) -> Result<(), CodeGenError> {
         let r = self.arch.alloc()?;
-        let expr_size = if_stmt
-            .condition
-            .type_(&self.scope)?
-            .size(&self.arch, &self.scope)?;
+        let expr_size = self
+            .arch
+            .size(&if_stmt.condition.type_(&self.scope)?, &self.scope);
 
         self.expr(if_stmt.condition, Some(&r.dest(expr_size)), None)?;
         self.arch.cmp(
@@ -311,9 +308,9 @@ impl CodeGen {
             Expr::Cast(cast_expr) => {
                 if let Some(dest) = dest {
                     let type_ = cast_expr.expr.type_(&self.scope)?;
-                    let casted_size = cast_expr.type_.size(&self.arch, &self.scope)?;
+                    let casted_size = self.arch.size(&cast_expr.type_, &self.scope);
 
-                    if casted_size < type_.size(&self.arch, &self.scope)? {
+                    if casted_size < self.arch.size(&type_, &self.scope) {
                         let (r, new) = match dest {
                             Destination::Memory(_) => (self.arch.alloc()?, true),
                             Destination::Register(register) => (register.register, false),
@@ -368,8 +365,8 @@ impl CodeGen {
         let left_type = expr.left.type_(&self.scope)?;
         let right_type = expr.right.type_(&self.scope)?;
         let size = std::cmp::max(
-            left_type.size(&self.arch, &self.scope)?,
-            right_type.size(&self.arch, &self.scope)?,
+            self.arch.size(&left_type, &self.scope),
+            self.arch.size(&right_type, &self.scope),
         );
         let signed = left_type.signed() || right_type.signed();
 
@@ -637,11 +634,11 @@ impl CodeGen {
 
                 self.expr(
                     *unary_expr.expr,
-                    Some(&r.dest(type_.size(&self.arch, &self.scope)?)),
+                    Some(&r.dest(self.arch.size(&type_, &self.scope))),
                     state,
                 )?;
                 self.arch
-                    .not(&r.dest(type_.size(&self.arch, &self.scope)?), dest);
+                    .not(&r.dest(self.arch.size(&type_, &self.scope)), dest);
                 self.arch.free(r)?;
             }
             UnOp::Address => {
@@ -721,7 +718,7 @@ impl CodeGen {
             &call.name,
             dest,
             function.return_type.signed(),
-            function.return_type.size(&self.arch, &self.scope)?,
+            self.arch.size(&function.return_type, &self.scope),
         )?;
         if stack_size > 0 {
             self.arch.shrink_stack(stack_size);
@@ -748,10 +745,9 @@ impl CodeGen {
 
         for (name, expr) in expr.fields.into_iter() {
             let offset = type_struct.offset(&self.arch, &name, &self.scope)?;
-            let field_size = type_struct
-                .get_field_type(&name)
-                .unwrap()
-                .size(&self.arch, &self.scope)?;
+            let field_size = self
+                .arch
+                .size(&type_struct.get_field_type(&name).unwrap(), &self.scope);
 
             self.expr(
                 expr,
@@ -784,7 +780,7 @@ impl CodeGen {
         state: Option<&State>,
     ) -> Result<(), CodeGenError> {
         for (i, expr) in expr.0.into_iter().enumerate() {
-            let size = expr.type_(&self.scope)?.size(&self.arch, &self.scope)?;
+            let size = self.arch.size(&expr.type_(&self.scope)?, &self.scope);
             let index = self.arch.alloc()?;
             let r = self.arch.alloc()?;
             let r_loc = r.dest(self.arch.word_size());
@@ -886,7 +882,7 @@ impl CodeGen {
             &format!("{struct_name}__{}", expr.method),
             dest,
             method.return_type.signed(),
-            method.return_type.size(&self.arch, &self.scope)?,
+            self.arch.size(&method.return_type, &self.scope),
         )?;
         if stack_size > 0 {
             self.arch.shrink_stack(stack_size);
@@ -967,10 +963,10 @@ impl CodeGen {
                         match self.scope.find_type(&s).ok_or(TypeError::Nonexistent(s))? {
                             tt::Type::Struct(type_struct) => (
                                 type_struct.offset(&self.arch, &expr.field, &self.scope)?,
-                                type_struct
-                                    .get_field_type(&expr.field)
-                                    .unwrap()
-                                    .size(&self.arch, &self.scope)?,
+                                self.arch.size(
+                                    &type_struct.get_field_type(&expr.field).unwrap(),
+                                    &self.scope,
+                                ),
                             ),
                         }
                     }
@@ -1021,7 +1017,7 @@ impl CodeGen {
                 self.arch.array_offset(
                     &r_loc,
                     &index.dest(self.arch.word_size()),
-                    expr.type_(&self.scope)?.size(&self.arch, &self.scope)?,
+                    self.arch.size(&expr.type_(&self.scope)?, &self.scope),
                 )?;
 
                 Ok(Destination::Memory(Memory {
@@ -1031,7 +1027,7 @@ impl CodeGen {
                         scale: None,
                         displacement: None,
                     },
-                    size: expr.type_(&self.scope)?.size(&self.arch, &self.scope)?,
+                    size: self.arch.size(&expr.type_(&self.scope)?, &self.scope),
                 }))
             }
             Expr::Unary(expr) if expr.op == UnOp::Deref => {
@@ -1042,7 +1038,7 @@ impl CodeGen {
                 self.arch
                     .mov(
                         &dest.into(),
-                        &r.dest(type_.size(&self.arch, &self.scope)?),
+                        &r.dest(self.arch.size(&type_, &self.scope)),
                         type_.signed(),
                     )
                     .unwrap();
@@ -1054,11 +1050,9 @@ impl CodeGen {
                         scale: None,
                         displacement: None,
                     },
-                    size: expr
-                        .expr
-                        .type_(&self.scope)?
-                        .inner()?
-                        .size(&self.arch, &self.scope)?,
+                    size: self
+                        .arch
+                        .size(&expr.expr.type_(&self.scope)?.inner()?, &self.scope),
                 }))
             }
             _ => unreachable!("Can't get address of rvalue"),

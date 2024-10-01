@@ -11,7 +11,7 @@ use crate::{
     scope::{Scope, ScopeKind},
     symbol_table::{Symbol, SymbolFunction},
     type_table::{TypeStruct, TypeStructMethod},
-    types::{Type, TypeArray, TypeError},
+    types::{IntType, Type, TypeArray, TypeError, UintType},
 };
 use std::collections::HashMap;
 
@@ -300,16 +300,16 @@ impl Parser {
         }
 
         let mut base = match self.next_token()? {
-            Token::U8 => Ok(Type::U8),
-            Token::U16 => Ok(Type::U16),
-            Token::U32 => Ok(Type::U32),
-            Token::U64 => Ok(Type::U64),
-            Token::I8 => Ok(Type::I8),
-            Token::I16 => Ok(Type::I16),
-            Token::I32 => Ok(Type::I32),
-            Token::I64 => Ok(Type::I64),
-            Token::Usize => Ok(Type::Usize),
-            Token::Isize => Ok(Type::Isize),
+            Token::U8 => Ok(Type::UInt(UintType::U8)),
+            Token::U16 => Ok(Type::UInt(UintType::U16)),
+            Token::U32 => Ok(Type::UInt(UintType::U32)),
+            Token::U64 => Ok(Type::UInt(UintType::U64)),
+            Token::I8 => Ok(Type::Int(IntType::I8)),
+            Token::I16 => Ok(Type::Int(IntType::I16)),
+            Token::I32 => Ok(Type::Int(IntType::I32)),
+            Token::I64 => Ok(Type::Int(IntType::I64)),
+            Token::Usize => Ok(Type::UInt(UintType::Usize)),
+            Token::Isize => Ok(Type::Int(IntType::Isize)),
             Token::Bool => Ok(Type::Bool),
             Token::Void => Ok(Type::Void),
             Token::Ident(ident) => Ok(Type::Struct(ident)),
@@ -759,7 +759,7 @@ mod test {
             StmtVarDecl, UIntLitRepr, UnOp,
         },
         scope::ScopeKind,
-        types::Type,
+        types::{IntType, Type, UintType},
     };
 
     #[test]
@@ -785,7 +785,7 @@ mod test {
                             op: BinOp::Add,
                             left: Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(4)))),
                             right: Box::new(Expr::Cast(ExprCast {
-                                type_: Type::U8,
+                                type_: Type::UInt(UintType::U8),
                                 expr: Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(1)))),
                             })),
                         })),
@@ -800,14 +800,18 @@ mod test {
                 }
                 ",
                 vec![
-                    Stmt::VarDecl(StmtVarDecl::new(Type::U8, "foo".to_owned(), None)),
+                    Stmt::VarDecl(StmtVarDecl::new(
+                        Type::UInt(UintType::U8),
+                        "foo".to_owned(),
+                        None,
+                    )),
                     Stmt::Expr(Expr::Binary(ExprBinary {
                         op: BinOp::Assign,
                         left: Box::new(Expr::Ident(ExprIdent("foo".to_owned()))),
                         right: Box::new(Expr::Binary(ExprBinary {
                             op: BinOp::Add,
                             left: Box::new(Expr::Cast(ExprCast {
-                                type_: Type::U8,
+                                type_: Type::UInt(UintType::U8),
                                 expr: Box::new(Expr::Unary(ExprUnary {
                                     op: UnOp::Negative,
                                     expr: Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(1)))),
@@ -827,15 +831,23 @@ mod test {
                 }
                 ",
                 vec![
-                    Stmt::VarDecl(StmtVarDecl::new(Type::U8, "foo".to_owned(), None)),
-                    Stmt::VarDecl(StmtVarDecl::new(Type::I8, "bar".to_owned(), None)),
+                    Stmt::VarDecl(StmtVarDecl::new(
+                        Type::UInt(UintType::U8),
+                        "foo".to_owned(),
+                        None,
+                    )),
+                    Stmt::VarDecl(StmtVarDecl::new(
+                        Type::Int(IntType::I8),
+                        "bar".to_owned(),
+                        None,
+                    )),
                     Stmt::Expr(Expr::Binary(ExprBinary {
                         op: BinOp::Assign,
                         left: Box::new(Expr::Ident(ExprIdent("bar".to_owned()))),
                         right: Box::new(Expr::Binary(ExprBinary {
                             op: BinOp::Add,
                             left: Box::new(Expr::Cast(ExprCast {
-                                type_: Type::I8,
+                                type_: Type::Int(IntType::I8),
                                 expr: Box::new(Expr::Ident(ExprIdent("foo".to_owned()))),
                             })),
                             right: Box::new(Expr::Binary(ExprBinary {
@@ -856,7 +868,7 @@ mod test {
                 vec![Stmt::Expr(Expr::Binary(ExprBinary {
                     op: BinOp::Add,
                     left: Box::new(Expr::Cast(ExprCast {
-                        type_: Type::I8,
+                        type_: Type::Int(IntType::I8),
                         expr: Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(1)))),
                     })),
                     right: Box::new(Expr::Binary(ExprBinary {
@@ -876,8 +888,16 @@ mod test {
                 }
                 ",
                 vec![
-                    Stmt::VarDecl(StmtVarDecl::new(Type::U8, "a".to_owned(), None)),
-                    Stmt::VarDecl(StmtVarDecl::new(Type::U8, "b".to_owned(), None)),
+                    Stmt::VarDecl(StmtVarDecl::new(
+                        Type::UInt(UintType::U8),
+                        "a".to_owned(),
+                        None,
+                    )),
+                    Stmt::VarDecl(StmtVarDecl::new(
+                        Type::UInt(UintType::U8),
+                        "b".to_owned(),
+                        None,
+                    )),
                     Stmt::Expr(Expr::Binary(ExprBinary {
                         op: BinOp::Assign,
                         left: Box::new(Expr::Ident(ExprIdent("a".to_owned()))),

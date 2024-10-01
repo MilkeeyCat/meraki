@@ -4,6 +4,7 @@ use crate::{
     parser::{BitwiseOp, Block, CmpOp},
     register::{allocator::AllocatorError, Register},
     scope::Scope,
+    type_table as tt,
     types::Type,
 };
 
@@ -27,7 +28,25 @@ pub trait Architecture: ArchitectureClone {
         Self: Sized;
     fn word_size(&self) -> usize;
     fn stack_alignment(&self) -> usize;
-    fn size(&self, type_: &Type) -> usize;
+    fn size(&self, type_: &Type, scope: &Scope) -> usize;
+    fn struct_size(&self, type_struct: &tt::TypeStruct, scope: &Scope) -> usize {
+        let mut offset: usize = 0;
+        let mut largest = 0;
+
+        for type_ in type_struct.types() {
+            let size = self.size(type_, scope);
+
+            offset = offset.next_multiple_of(size);
+            offset += size;
+
+            if size > largest {
+                largest = size;
+            }
+        }
+
+        // Align to the largest element in the struct
+        offset.next_multiple_of(largest)
+    }
     fn alloc(&mut self) -> Result<Register, AllocatorError>;
     fn free(&mut self, register: Register) -> Result<(), AllocatorError>;
     fn size_name(size: usize) -> &'static str

@@ -62,7 +62,7 @@ impl Symbol {
                     scale: None,
                     displacement: Some(symbol.offset.clone()),
                 },
-                size: symbol.type_.size(arch, scope)?,
+                size: arch.size(&symbol.type_, scope),
             }),
             Self::Global(symbol) => Destination::Memory(Memory {
                 effective_address: EffectiveAddress {
@@ -71,7 +71,7 @@ impl Symbol {
                     scale: None,
                     displacement: None,
                 },
-                size: symbol.type_.size(arch, scope)?,
+                size: arch.size(&symbol.type_, scope),
             }),
             Self::Param(symbol) => Destination::Memory(Memory {
                 effective_address: EffectiveAddress {
@@ -80,7 +80,7 @@ impl Symbol {
                     scale: None,
                     displacement: Some(symbol.offset.clone()),
                 },
-                size: symbol.type_.size(arch, scope)?,
+                size: arch.size(&symbol.type_, scope),
             }),
             Self::Function(_) => unreachable!(),
         })
