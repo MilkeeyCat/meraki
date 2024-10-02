@@ -977,7 +977,7 @@ impl CodeGen {
                     field_size = self.arch.word_size();
                 }
 
-                Ok(match self.expr_dest(&expr.expr)? {
+                let dest = match self.expr_dest(&expr.expr)? {
                     Destination::Memory(mut memory) => {
                         memory.effective_address.displacement =
                             if let Some(displacement) = memory.effective_address.displacement {
@@ -998,7 +998,18 @@ impl CodeGen {
                         },
                         size: field_size,
                     }),
-                })
+                };
+
+                //TODO: dis looks ugly, refactor it plz
+                if let Type::Array(_) = expr.type_(&self.scope)? {
+                    let r = self.arch.alloc()?;
+
+                    self.arch.lea(&r.dest(self.arch.word_size()), &dest.into());
+
+                    Ok(r.dest(self.arch.word_size()))
+                } else {
+                    Ok(dest)
+                }
             }
             Expr::ArrayAccess(expr) => {
                 let base = self.expr_dest(&expr.expr)?;
@@ -1016,7 +1027,9 @@ impl CodeGen {
                     Destination::Memory(memory) => {
                         self.arch.lea(&r_loc, &memory.effective_address);
                     }
-                    Destination::Register(_) => unreachable!(),
+                    Destination::Register(register) => {
+                        self.arch.mov(&Source::Register(register), &r_loc, false)?;
+                    }
                 }
                 self.arch.array_offset(
                     &r_loc,
