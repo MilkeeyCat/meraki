@@ -958,7 +958,7 @@ impl CodeGen {
                 .ok_or(SymbolTableError::NotFound(expr.0.clone()))?
                 .dest(&self.arch, &self.scope)?),
             Expr::StructAccess(expr) => {
-                let (field_offset, field_size) = match expr.expr.type_(&self.scope)? {
+                let (field_offset, mut field_size) = match expr.expr.type_(&self.scope)? {
                     Type::Struct(s) => {
                         match self.scope.find_type(&s).ok_or(TypeError::Nonexistent(s))? {
                             tt::Type::Struct(type_struct) => (
@@ -972,6 +972,10 @@ impl CodeGen {
                     }
                     type_ => panic!("{type_:?}"),
                 };
+
+                if let Type::Array(_) = expr.type_(&self.scope)? {
+                    field_size = self.arch.word_size();
+                }
 
                 Ok(match self.expr_dest(&expr.expr)? {
                     Destination::Memory(mut memory) => {
