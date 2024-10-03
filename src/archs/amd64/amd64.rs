@@ -42,17 +42,21 @@ pub struct Amd64 {
     rax: Register,
     rbp: Register,
     rcx: Register,
+    rdx: Register,
     literals: Vec<(String, String)>,
     label_counter: usize,
 }
 
 impl Architecture for Amd64 {
     fn new() -> Self {
+        let rdx = Register::new("dl", "dx", "edx", "rdx");
+
         Self {
             buf: String::new(),
             rax: Register::new("al", "ax", "eax", "rax"),
             rbp: Register::new("there's no one byte one, hmmmm", "bp", "ebp", "rbp"),
             rcx: Register::new("cl", "cx", "ecx", "rcx"),
+            rdx,
             registers: RegisterAllocator::new(vec![
                 Register::new("r15b", "r15w", "r15d", "r15"),
                 Register::new("r14b", "r14w", "r14d", "r14"),
@@ -63,9 +67,7 @@ impl Architecture for Amd64 {
                 Register::new("r9b", "r9w", "r9d", "r9"),
                 Register::new("r8b", "r8w", "r8d", "r8"),
                 Register::new("cl", "cx", "ecx", "rcx"),
-                // This register is commented out because it's used by imul and idiv instructions
-                // and I don't have a good way to save a value from this register if it's used
-                //Register::new("dl", "dx", "edx", "rdx"),
+                rdx,
                 Register::new("sil", "si", "esi", "rsi"),
                 Register::new("dil", "di", "edi", "rdi"),
             ]),
@@ -261,22 +263,26 @@ impl Architecture for Amd64 {
     }
 
     fn mul(&mut self, dest: &Destination, src: &Source, signed: bool) -> Result<(), ArchError> {
-        let register = operands::Register {
-            register: self.rax,
-            size: src.size().unwrap(),
-        };
-
         self.mov(
             &dest.to_owned().into(),
-            &Destination::Register(register.clone()),
+            &self
+                .rax
+                .dest(src.size().unwrap_or_else(|| self.word_size())),
             signed,
         )?;
+        self.mov(src, dest, signed)?;
+        if self.registers.is_used(&self.rdx) {
+            self.push(&self.rdx.source(self.word_size()));
+        }
         self.buf.push_str(&formatdoc!(
             "
-            \timul {src}
+            \timul {dest}
             ",
         ));
-        self.mov(&Source::Register(register), dest, signed)?;
+        if self.registers.is_used(&self.rdx) {
+            self.pop(&self.rdx.dest(self.word_size()));
+        }
+        self.mov(&self.rax.source(dest.size()), dest, signed)?;
 
         Ok(())
     }
@@ -285,12 +291,18 @@ impl Architecture for Amd64 {
     fn div(&mut self, dest: &Destination, src: &Source, signed: bool) -> Result<(), ArchError> {
         self.mov(&dest.to_owned().into(), &self.rax.dest(WORD_SIZE), signed)?;
         self.mov(src, dest, signed)?;
+        if self.registers.is_used(&self.rdx) {
+            self.push(&self.rdx.source(self.word_size()));
+        }
         self.buf.push_str(&formatdoc!(
             "
             \tcqo
             \tidiv {dest}
             ",
         ));
+        if self.registers.is_used(&self.rdx) {
+            self.pop(&self.rdx.dest(self.word_size()));
+        }
         self.mov(
             &Source::Register(operands::Register {
                 register: self.rax,
@@ -507,26 +519,16 @@ impl Architecture for Amd64 {
         match class {
             ParamClass::Integer => match occurences.get(&class).unwrap_or(&0) + 1 {
                 n if n <= 6 => {
-                    self.mov(
-                        &src,
-                        &Destination::Register(operands::Register {
-                            register: self.registers.get(self.registers.len() - n).unwrap(),
-                            size: WORD_SIZE,
-                        }),
-                        type_.signed(),
-                    )
-                    .unwrap();
+                    let r = self.registers.alloc_nth(self.registers.len() - n).unwrap();
+                    self.mov(&src, &r.dest(self.word_size()), type_.signed())
+                        .unwrap();
 
                     0
                 }
                 _ => {
-                    self.buf.push_str(&formatdoc!(
-                        "
-                        \tpush {src}
-                        ",
-                    ));
+                    self.push(&src);
 
-                    WORD_SIZE
+                    self.word_size()
                 }
             },
         }
@@ -716,6 +718,22 @@ impl Architecture for Amd64 {
         });
         self.buf.insert_str(0, ".section .text\n");
         self.buf.as_bytes().to_vec()
+    }
+
+    fn push(&mut self, src: &Source) {
+        self.buf.push_str(&formatdoc!(
+            "
+            \tpush {src}
+            "
+        ));
+    }
+
+    fn pop(&mut self, dest: &Destination) {
+        self.buf.push_str(&formatdoc!(
+            "
+            \tpop {dest}
+            "
+        ));
     }
 }
 

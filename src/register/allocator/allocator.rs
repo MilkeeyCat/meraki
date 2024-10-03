@@ -27,6 +27,16 @@ impl RegisterAllocator {
         Err(AllocatorError::RanOutOfRegisters)
     }
 
+    pub fn alloc_nth(&mut self, n: usize) -> Result<Register, AllocatorError> {
+        if self.used.contains(&n) {
+            Err(AllocatorError::AlreadyInUse(self.registers[n]))
+        } else {
+            self.used.push(n);
+
+            Ok(self.registers[n])
+        }
+    }
+
     pub fn free(&mut self, r: Register) -> Result<(), AllocatorError> {
         for (i, register) in self.registers.iter().enumerate() {
             if &r == register {
@@ -49,5 +59,17 @@ impl RegisterAllocator {
 
     pub fn get(&self, n: usize) -> Option<Register> {
         self.registers.get(n).cloned()
+    }
+
+    pub fn is_used(&self, r: &Register) -> bool {
+        match self
+            .registers
+            .iter()
+            .enumerate()
+            .find_map(|(i, reg)| if reg == r { Some(i) } else { None })
+        {
+            Some(i) => self.used.contains(&i),
+            None => false,
+        }
     }
 }

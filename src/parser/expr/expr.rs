@@ -5,7 +5,7 @@ use crate::{
     scope::Scope,
     symbol_table::{Symbol, SymbolTableError},
     type_table,
-    types::{IntType, Type, TypeArray, TypeError, UintType},
+    types::{IntType, Type, TypeArray, TypeError},
 };
 
 pub trait Expression {

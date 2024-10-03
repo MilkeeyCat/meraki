@@ -101,6 +101,8 @@ pub trait Architecture: ArchitectureClone {
     ) -> Result<(), ArchError>;
     fn shl(&mut self, dest: &Destination, src: &Source) -> Result<(), ArchError>;
     fn shr(&mut self, dest: &Destination, src: &Source) -> Result<(), ArchError>;
+    fn push(&mut self, src: &Source);
+    fn pop(&mut self, dest: &Destination);
     fn finish(&mut self) -> Vec<u8>;
 }
 
