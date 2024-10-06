@@ -301,12 +301,14 @@ impl CodeGen {
                         };
 
                         self.arch
-                            .lea(&Destination::Register(r_op.clone()), &dst.into());
+                            .lea(&Destination::Register(r_op.clone()), &dst.clone().into());
                         self.arch.mov(&Source::Register(r_op), dest, false)?;
                         self.arch.free(r)?;
                     } else {
-                        self.arch.mov(&dst.into(), dest, false)?;
+                        self.arch.mov(&dst.clone().into(), dest, false)?;
                     }
+
+                    self.free(dst)?;
                 }
             }
             Expr::Cast(cast_expr) => {
@@ -448,22 +450,22 @@ impl CodeGen {
 
                     match &expr.op {
                         BinOp::Add => {
-                            self.arch.add(&lhs, &rhs, dest, signed)?;
+                            self.arch.add(&lhs, &rhs, &expr_dest, signed)?;
                         }
                         BinOp::Sub => {
-                            self.arch.sub(&lhs, &rhs, dest, signed)?;
+                            self.arch.sub(&lhs, &rhs, &expr_dest, signed)?;
                         }
                         BinOp::Mul => {
-                            self.arch.mul(&lhs, &rhs, dest, signed)?;
+                            self.arch.mul(&lhs, &rhs, &expr_dest, signed)?;
                         }
                         BinOp::Div => {
-                            self.arch.div(&lhs, &rhs, dest, signed)?;
+                            self.arch.div(&lhs, &rhs, &expr_dest, signed)?;
                         }
                         BinOp::BitwiseAnd | BinOp::BitwiseOr => {
                             self.arch.bitwise(
                                 &lhs,
                                 &rhs,
-                                dest,
+                                &expr_dest,
                                 BitwiseOp::try_from(&expr.op).unwrap(),
                                 signed,
                             )?;
@@ -472,7 +474,18 @@ impl CodeGen {
                     };
 
                     if dest.size() != expr_dest.size() {
-                        self.arch.mov(&expr_dest.into(), dest, signed)?;
+                        self.arch.mov(
+                            &expr_dest.clone().into(),
+                            &expr_dest.clone().with_size(dest.size()),
+                            signed,
+                        )?;
+                    }
+                    if let Destination::Memory(_) = dest {
+                        self.arch.mov(
+                            &expr_dest.clone().with_size(dest.size()).into(),
+                            dest,
+                            signed,
+                        )?;
                     }
                     if let Some(r) = dest_r {
                         self.arch.free(r)?;
@@ -693,6 +706,8 @@ impl CodeGen {
                     dest,
                     unary_expr.expr.type_(&self.scope)?.signed(),
                 )?;
+
+                self.arch.free(r)?;
                 self.free(expr_dest)?;
             }
             UnOp::Deref => {
@@ -1067,7 +1082,9 @@ impl CodeGen {
                 if let Type::Array(_) = expr.type_(&self.scope)? {
                     let r = self.arch.alloc()?;
 
-                    self.arch.lea(&r.dest(self.arch.word_size()), &dest.into());
+                    self.arch
+                        .lea(&r.dest(self.arch.word_size()), &dest.clone().into());
+                    self.free(dest)?;
 
                     Ok(r.dest(self.arch.word_size()))
                 } else {
@@ -1085,12 +1102,13 @@ impl CodeGen {
                     Some(&index.dest(self.arch.word_size())),
                     None,
                 )?;
-                match base {
+                match &base {
                     Destination::Memory(memory) => {
                         self.arch.lea(&r_loc, &memory.effective_address);
                     }
                     Destination::Register(register) => {
-                        self.arch.mov(&Source::Register(register), &r_loc, false)?;
+                        self.arch
+                            .mov(&Source::Register(register.to_owned()), &r_loc, false)?;
                     }
                 }
                 self.arch.array_offset(
@@ -1099,6 +1117,9 @@ impl CodeGen {
                     self.arch.size(&expr.type_(&self.scope)?, &self.scope),
                     &r_loc,
                 )?;
+
+                self.free(base)?;
+                self.arch.free(index)?;
 
                 Ok(Destination::Memory(Memory {
                     effective_address: EffectiveAddress {

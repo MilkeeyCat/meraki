@@ -1,7 +1,7 @@
 use super::AllocatorError;
 use crate::register::Register;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct RegisterAllocator {
     registers: Vec<Register>,
     used: Vec<usize>,
@@ -71,5 +71,9 @@ impl RegisterAllocator {
             Some(i) => self.used.contains(&i),
             None => false,
         }
+    }
+
+    pub fn used(&self) -> &[usize] {
+        &self.used
     }
 }

@@ -506,6 +506,13 @@ impl Architecture for Amd64 {
     }
 
     fn fn_postamble(&mut self, name: &str, stackframe: usize) {
+        assert_eq!(
+            self.registers.used().len(),
+            0,
+            "Function '{name}' didn't free all registers. {:?} are still allocated",
+            self.registers.used()
+        );
+
         self.buf.push_str(&formatdoc!(
             "
             {name}_ret:
