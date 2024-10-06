@@ -1138,11 +1138,13 @@ impl CodeGen {
 
                 self.arch
                     .mov(
-                        &dest.into(),
+                        &dest.clone().into(),
                         &r.dest(self.arch.size(&type_, &self.scope)),
                         type_.signed(),
                     )
                     .unwrap();
+
+                self.free(dest)?;
 
                 Ok(Destination::Memory(Memory {
                     effective_address: EffectiveAddress {
