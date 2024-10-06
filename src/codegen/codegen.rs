@@ -1,5 +1,6 @@
 use super::{
-    operands, CodeGenError, Destination, EffectiveAddress, Immediate, Offset, SethiUllman, Source,
+    operands, Argument, CodeGenError, Destination, EffectiveAddress, Immediate, Offset,
+    SethiUllman, Source,
 };
 use crate::{
     archs::{Arch, Jump},
@@ -719,13 +720,14 @@ impl CodeGen {
     ) -> Result<(), CodeGenError> {
         let mut preceding = Vec::new();
         let mut stack_size = 0;
+        let mut arg_registers = Vec::new();
 
         for expr in call.arguments.into_iter() {
             let type_ = expr.type_(&self.scope)?;
             let r = self.arch.alloc()?;
 
             self.expr(expr, Some(&r.dest(self.arch.word_size())), state)?;
-            stack_size += self.arch.push_arg(
+            let arg = self.arch.push_arg(
                 Source::Register(operands::Register {
                     register: r,
                     size: self.arch.word_size(),
@@ -733,6 +735,12 @@ impl CodeGen {
                 &type_,
                 &preceding,
             );
+
+            match arg {
+                Argument::Stack(size) => stack_size += size,
+                Argument::Register(r) => arg_registers.push(r),
+            };
+
             self.arch.free(r)?;
             preceding.push(type_);
         }
@@ -752,6 +760,9 @@ impl CodeGen {
             function.return_type.signed(),
             self.arch.size(&function.return_type, &self.scope),
         )?;
+        for r in arg_registers {
+            self.arch.free(r)?;
+        }
         if stack_size > 0 {
             self.arch.shrink_stack(stack_size);
         }
@@ -889,17 +900,24 @@ impl CodeGen {
         let this = Type::Ptr(Box::new(Type::Struct(struct_name.clone())));
         let mut preceding = Vec::new();
         let mut stack_size = 0;
+        let mut arg_registers = Vec::new();
 
-        self.arch
+        let arg = self
+            .arch
             .push_arg(r.source(self.arch.word_size()), &this, &preceding);
         preceding.push(this);
+
+        match arg {
+            Argument::Stack(size) => stack_size += size,
+            Argument::Register(r) => arg_registers.push(r),
+        };
 
         for expr in expr.arguments.into_iter() {
             let type_ = expr.type_(&self.scope)?;
             let r = self.arch.alloc()?;
 
             self.expr(expr, Some(&r.dest(self.arch.word_size())), state)?;
-            stack_size += self.arch.push_arg(
+            let arg = self.arch.push_arg(
                 Source::Register(operands::Register {
                     register: r,
                     size: self.arch.word_size(),
@@ -907,6 +925,12 @@ impl CodeGen {
                 &type_,
                 &preceding,
             );
+
+            match arg {
+                Argument::Stack(size) => stack_size += size,
+                Argument::Register(r) => arg_registers.push(r),
+            };
+
             self.arch.free(r)?;
             preceding.push(type_);
         }
@@ -920,6 +944,9 @@ impl CodeGen {
             method.return_type.signed(),
             self.arch.size(&method.return_type, &self.scope),
         )?;
+        for r in arg_registers {
+            self.arch.free(r)?;
+        }
         if stack_size > 0 {
             self.arch.shrink_stack(stack_size);
         }

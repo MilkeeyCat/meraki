@@ -2,7 +2,7 @@ use crate::{
     archs::{ArchError, Architecture, Jump},
     codegen::{
         operands::{self, Base, EffectiveAddress, Immediate, Memory, Offset},
-        Destination, Source,
+        Argument, Destination, Source,
     },
     parser::{BitwiseOp, Block, CmpOp, Stmt},
     register::{
@@ -577,7 +577,7 @@ impl Architecture for Amd64 {
         Ok(())
     }
 
-    fn push_arg(&mut self, src: Source, type_: &Type, preceding: &[Type]) -> usize {
+    fn push_arg(&mut self, src: Source, type_: &Type, preceding: &[Type]) -> Argument {
         let mut occurences: HashMap<ParamClass, usize> = HashMap::new();
         let class = ParamClass::from(type_);
 
@@ -592,12 +592,12 @@ impl Architecture for Amd64 {
                     self.mov(&src, &r.dest(self.word_size()), type_.signed())
                         .unwrap();
 
-                    0
+                    Argument::Register(r)
                 }
                 _ => {
                     self.push(&src);
 
-                    self.word_size()
+                    Argument::Stack(self.word_size())
                 }
             },
         }

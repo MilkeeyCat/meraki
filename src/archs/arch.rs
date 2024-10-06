@@ -1,6 +1,6 @@
 use super::ArchError;
 use crate::{
-    codegen::{Destination, EffectiveAddress, Source},
+    codegen::{Argument, Destination, EffectiveAddress, Source},
     parser::{BitwiseOp, Block, CmpOp},
     register::{allocator::AllocatorError, Register},
     scope::Scope,
@@ -112,7 +112,7 @@ pub trait Architecture: ArchitectureClone {
         signed: bool,
         size: usize,
     ) -> Result<(), ArchError>;
-    fn push_arg(&mut self, src: Source, type_: &Type, preceding: &[Type]) -> usize;
+    fn push_arg(&mut self, src: Source, type_: &Type, preceding: &[Type]) -> Argument;
     fn populate_offsets(
         &mut self,
         block: &mut Block,
