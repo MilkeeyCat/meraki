@@ -168,3 +168,19 @@ impl Into<Base> for Destination {
         }
     }
 }
+
+impl PartialEq<&Source> for &Destination {
+    fn eq(&self, other: &&Source) -> bool {
+        match (self, other) {
+            (Destination::Memory(lhs), Source::Memory(rhs)) if lhs == rhs => true,
+            (Destination::Register(lhs), Source::Register(rhs)) if lhs == rhs => true,
+            _ => false,
+        }
+    }
+}
+
+impl PartialEq<&Destination> for &Source {
+    fn eq(&self, other: &&Destination) -> bool {
+        other == self
+    }
+}

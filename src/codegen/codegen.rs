@@ -1,4 +1,6 @@
-use super::{operands, CodeGenError, Destination, EffectiveAddress, Immediate, Offset, Source};
+use super::{
+    operands, CodeGenError, Destination, EffectiveAddress, Immediate, Offset, SethiUllman, Source,
+};
 use crate::{
     archs::{Arch, Jump},
     parser::{
@@ -6,6 +8,7 @@ use crate::{
         ExprIdent, ExprLit, ExprStruct, ExprStructAccess, ExprStructMethod, ExprUnary, Expression,
         Stmt, StmtFor, StmtFunction, StmtIf, StmtReturn, StmtVarDecl, StmtWhile, UnOp,
     },
+    register::Register,
     scope::Scope,
     symbol_table::{Symbol, SymbolTableError},
     type_table as tt,
@@ -391,60 +394,89 @@ impl CodeGen {
             | BinOp::BitwiseAnd
             | BinOp::BitwiseOr => {
                 if let Some(dest) = dest {
-                    let (lhs, new) = match dest {
-                        Destination::Memory(_) => (self.arch.alloc()?.dest(size), true),
-                        Destination::Register(register) if register.size != size => {
-                            (dest.to_owned().with_size(size), false)
-                        }
-                        _ => (dest.to_owned(), false),
+                    let expr_src = |codegen: &mut Self,
+                                  expr: Expr,
+                                  size: usize,
+                                  dest: Option<Destination>,
+                                  state: Option<&State>|
+                     -> Result<(Source, Option<Register>), CodeGenError> {
+                        let (dest, r) = match dest{
+                            Some(dest) => (dest, None),
+                            None => {
+                                let r =codegen.arch.alloc()?;
+
+                                (r.dest(size), Some(r))
+                            }
+                        };
+
+                        Ok(match expr {
+                            Expr::Lit(lit) => (Source::Immediate(lit.into()),r),
+                            _ => {
+                                codegen.expr(expr, Some(&dest), state)?;
+
+                                (dest.into(), r)
+                            }
+                        })
                     };
 
-                    self.expr(*expr.left, Some(&lhs), state)?;
+                    let (expr_dest, dest_r) = match dest {
+                        Destination::Memory(_) => {
+                            let r = self.arch.alloc()?;
 
-                    let (src, r) = if let Expr::Lit(lit) = *expr.right {
-                        (Source::Immediate(lit.into()), None)
+                            (r.dest(size), Some(r))
+                        }
+                        Destination::Register(register) if register.size != size => {
+                            (dest.to_owned().with_size(size), None)
+                        }
+                        _ => (dest.to_owned(), None),
+                    };
+
+                    let (lhs, rhs, expr_r) = if expr.left.r_num() > expr.right.r_num() {
+                        let (lhs, _) =
+                            expr_src(self, *expr.left, size, Some(expr_dest.clone()), state)?;
+                        let (rhs, r) = expr_src(self, *expr.right, size, None, state)?;
+
+                        (lhs, rhs, r)
                     } else {
-                        let r = self.arch.alloc()?;
+                        let (rhs, _) =
+                            expr_src(self, *expr.right, size, Some(expr_dest.clone()), state)?;
+                        let (lhs, r) = expr_src(self, *expr.left, size, None, state)?;
 
-                        self.expr(*expr.right, Some(&r.dest(size)), state)?;
-                        (r.source(size), Some(r))
+                        (lhs, rhs, r)
                     };
 
                     match &expr.op {
                         BinOp::Add => {
-                            self.arch.add(&lhs, &src);
+                            self.arch.add(&lhs, &rhs, dest, signed)?;
                         }
                         BinOp::Sub => {
-                            self.arch.sub(&lhs, &src);
+                            self.arch.sub(&lhs, &rhs, dest, signed)?;
                         }
                         BinOp::Mul => {
-                            self.arch.mul(&lhs, &src, signed)?;
+                            self.arch.mul(&lhs, &rhs, dest, signed)?;
                         }
                         BinOp::Div => {
-                            self.arch.div(&lhs, &src, signed)?;
+                            self.arch.div(&lhs, &rhs, dest, signed)?;
                         }
                         BinOp::BitwiseAnd | BinOp::BitwiseOr => {
-                            self.arch
-                                .bitwise(&lhs, &src, BitwiseOp::try_from(&expr.op).unwrap());
+                            self.arch.bitwise(
+                                &lhs,
+                                &rhs,
+                                dest,
+                                BitwiseOp::try_from(&expr.op).unwrap(),
+                                signed,
+                            )?;
                         }
                         _ => unreachable!(),
                     };
 
-                    if lhs.size() != dest.size() {
-                        self.arch.mov(
-                            &lhs.clone().into(),
-                            &lhs.clone().with_size(dest.size()),
-                            signed,
-                        )?;
+                    if dest.size() != expr_dest.size() {
+                        self.arch.mov(&expr_dest.into(), dest, signed)?;
                     }
-                    if &lhs != dest {
-                        self.arch
-                            .mov(&lhs.clone().with_size(dest.size()).into(), dest, signed)?;
+                    if let Some(r) = dest_r {
+                        self.arch.free(r)?;
                     }
-                    if new {
-                        self.free(lhs)?;
-                    }
-                    if let Some(r) = r {
+                    if let Some(r) = expr_r {
                         self.arch.free(r)?;
                     }
                 }
@@ -798,8 +830,12 @@ impl CodeGen {
                 Destination::Register(_) => unreachable!(),
             }
 
-            self.arch
-                .array_offset(&r_loc, &index.dest(self.arch.word_size()), size)?;
+            self.arch.array_offset(
+                &r_loc.clone().into(),
+                &index.source(self.arch.word_size()),
+                size,
+                &r_loc,
+            )?;
 
             self.expr(
                 expr,
@@ -1021,8 +1057,7 @@ impl CodeGen {
                     *expr.index.clone(),
                     Some(&index.dest(self.arch.word_size())),
                     None,
-                )
-                .unwrap();
+                )?;
                 match base {
                     Destination::Memory(memory) => {
                         self.arch.lea(&r_loc, &memory.effective_address);
@@ -1032,9 +1067,10 @@ impl CodeGen {
                     }
                 }
                 self.arch.array_offset(
-                    &r_loc,
-                    &index.dest(self.arch.word_size()),
+                    &r_loc.clone().into(),
+                    &index.source(self.arch.word_size()),
                     self.arch.size(&expr.type_(&self.scope)?, &self.scope),
+                    &r_loc,
                 )?;
 
                 Ok(Destination::Memory(Memory {

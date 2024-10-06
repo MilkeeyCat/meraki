@@ -56,11 +56,42 @@ pub trait Architecture: ArchitectureClone {
     fn mov(&mut self, src: &Source, dest: &Destination, signed: bool) -> Result<(), ArchError>;
     fn negate(&mut self, dest: &Destination);
     fn not(&mut self, dest: &Destination, dest2: &Destination);
-    fn add(&mut self, dest: &Destination, src: &Source);
-    fn sub(&mut self, dest: &Destination, src: &Source);
-    fn mul(&mut self, dest: &Destination, src: &Source, signed: bool) -> Result<(), ArchError>;
-    fn div(&mut self, dest: &Destination, src: &Source, signed: bool) -> Result<(), ArchError>;
-    fn bitwise(&mut self, dest: &Destination, src: &Source, op: BitwiseOp);
+    fn add(
+        &mut self,
+        lhs: &Source,
+        rhs: &Source,
+        dest: &Destination,
+        signed: bool,
+    ) -> Result<(), ArchError>;
+    fn sub(
+        &mut self,
+        lhs: &Source,
+        rhs: &Source,
+        dest: &Destination,
+        signed: bool,
+    ) -> Result<(), ArchError>;
+    fn mul(
+        &mut self,
+        lhs: &Source,
+        rhs: &Source,
+        dest: &Destination,
+        signed: bool,
+    ) -> Result<(), ArchError>;
+    fn div(
+        &mut self,
+        lhs: &Source,
+        rhs: &Source,
+        dest: &Destination,
+        signed: bool,
+    ) -> Result<(), ArchError>;
+    fn bitwise(
+        &mut self,
+        lhs: &Source,
+        rhs: &Source,
+        dest: &Destination,
+        op: BitwiseOp,
+        signed: bool,
+    ) -> Result<(), ArchError>;
     fn bitwise_not(&mut self, dest: &Destination);
     fn cmp(&mut self, dest: &Destination, src: &Source);
     fn setcc(&mut self, dest: &Destination, condition: CmpOp);
@@ -95,9 +126,10 @@ pub trait Architecture: ArchitectureClone {
     fn define_literal(&mut self, literal: String) -> String;
     fn array_offset(
         &mut self,
-        base: &Destination,
-        index: &Destination,
+        base: &Source,
+        index: &Source,
         size: usize,
+        dest: &Destination,
     ) -> Result<(), ArchError>;
     fn shl(&mut self, dest: &Destination, src: &Source) -> Result<(), ArchError>;
     fn shr(&mut self, dest: &Destination, src: &Source) -> Result<(), ArchError>;

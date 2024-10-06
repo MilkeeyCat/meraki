@@ -246,31 +246,89 @@ impl Architecture for Amd64 {
         ));
     }
 
-    fn add(&mut self, dest: &Destination, src: &Source) {
+    fn add(
+        &mut self,
+        lhs: &Source,
+        rhs: &Source,
+        dest: &Destination,
+        signed: bool,
+    ) -> Result<(), ArchError> {
+        lhs.size().map(|size| assert_eq!(size, dest.size()));
+        rhs.size().map(|size| assert_eq!(size, dest.size()));
+        assert!(!(lhs == dest && rhs == dest));
+
+        let lhs = if let Source::Immediate(_) = lhs {
+            self.mov(lhs, &self.rax.dest(dest.size()), signed)?;
+            &self.rax.source(dest.size())
+        } else {
+            lhs
+        };
+
         self.buf.push_str(&formatdoc!(
             "
-            \tadd {dest}, {src}
+            \tadd {lhs}, {rhs}
             "
         ));
+
+        if lhs != dest {
+            self.mov(lhs, dest, signed)?;
+        }
+
+        Ok(())
     }
 
-    fn sub(&mut self, dest: &Destination, src: &Source) {
+    fn sub(
+        &mut self,
+        lhs: &Source,
+        rhs: &Source,
+        dest: &Destination,
+        signed: bool,
+    ) -> Result<(), ArchError> {
+        lhs.size().map(|size| assert_eq!(size, dest.size()));
+        rhs.size().map(|size| assert_eq!(size, dest.size()));
+        assert!(!(lhs == dest && rhs == dest));
+
+        let lhs = if let Source::Immediate(_) = lhs {
+            self.mov(lhs, &self.rax.dest(dest.size()), signed)?;
+            &self.rax.source(dest.size())
+        } else {
+            lhs
+        };
+
         self.buf.push_str(&formatdoc!(
             "
-            \tsub {dest}, {src}
-            ",
+            \tsub {lhs}, {rhs}
+            "
         ));
+
+        if lhs != dest {
+            self.mov(lhs, dest, signed)?;
+        }
+
+        Ok(())
     }
 
-    fn mul(&mut self, dest: &Destination, src: &Source, signed: bool) -> Result<(), ArchError> {
+    fn mul(
+        &mut self,
+        lhs: &Source,
+        rhs: &Source,
+        dest: &Destination,
+        signed: bool,
+    ) -> Result<(), ArchError> {
+        lhs.size().map(|size| assert_eq!(size, dest.size()));
+        rhs.size().map(|size| assert_eq!(size, dest.size()));
+        assert!(!(lhs == dest && rhs == dest));
+
         self.mov(
-            &dest.to_owned().into(),
+            lhs,
             &self
                 .rax
-                .dest(src.size().unwrap_or_else(|| self.word_size())),
+                .dest(lhs.size().unwrap_or_else(|| self.word_size())),
             signed,
         )?;
-        self.mov(src, dest, signed)?;
+        if rhs != dest {
+            self.mov(rhs, dest, signed)?;
+        }
         if self.registers.is_used(&self.rdx) {
             self.push(&self.rdx.source(self.word_size()));
         }
@@ -288,9 +346,19 @@ impl Architecture for Amd64 {
     }
 
     //NOTE: if mafs doesn't works, probably because of this xd
-    fn div(&mut self, dest: &Destination, src: &Source, signed: bool) -> Result<(), ArchError> {
-        self.mov(&dest.to_owned().into(), &self.rax.dest(WORD_SIZE), signed)?;
-        self.mov(src, dest, signed)?;
+    fn div(
+        &mut self,
+        lhs: &Source,
+        rhs: &Source,
+        dest: &Destination,
+        signed: bool,
+    ) -> Result<(), ArchError> {
+        lhs.size().map(|size| assert_eq!(size, dest.size()));
+        rhs.size().map(|size| assert_eq!(size, dest.size()));
+        assert!(!(lhs == dest && rhs == dest));
+
+        self.mov(lhs, &self.rax.dest(self.word_size()), signed)?;
+        self.mov(rhs, dest, signed)?;
         if self.registers.is_used(&self.rdx) {
             self.push(&self.rdx.source(self.word_size()));
         }
@@ -303,35 +371,52 @@ impl Architecture for Amd64 {
         if self.registers.is_used(&self.rdx) {
             self.pop(&self.rdx.dest(self.word_size()));
         }
-        self.mov(
-            &Source::Register(operands::Register {
-                register: self.rax,
-                size: dest.size(),
-            }),
-            dest,
-            signed,
-        )?;
+        self.mov(&self.rax.source(dest.size()), dest, signed)?;
 
         Ok(())
     }
 
-    fn bitwise(&mut self, dest: &Destination, src: &Source, op: BitwiseOp) {
+    fn bitwise(
+        &mut self,
+        lhs: &Source,
+        rhs: &Source,
+        dest: &Destination,
+        op: BitwiseOp,
+        signed: bool,
+    ) -> Result<(), ArchError> {
+        lhs.size().map(|size| assert_eq!(size, dest.size()));
+        rhs.size().map(|size| assert_eq!(size, dest.size()));
+        assert!(!(lhs == dest && rhs == dest));
+
+        let lhs = if let Source::Immediate(_) = lhs {
+            self.mov(lhs, &self.rax.dest(dest.size()), signed)?;
+            &self.rax.source(dest.size())
+        } else {
+            lhs
+        };
+
         match op {
             BitwiseOp::And => {
                 self.buf.push_str(&formatdoc!(
                     "
-                    \tand {dest}, {src}
+                    \tand {lhs}, {rhs}
                     "
                 ));
             }
             BitwiseOp::Or => {
                 self.buf.push_str(&formatdoc!(
                     "
-                    \tor {dest}, {src}
+                    \tor {lhs}, {rhs}
                     "
                 ));
             }
+        };
+
+        if lhs != dest {
+            self.mov(lhs, dest, signed)?;
         }
+
+        Ok(())
     }
 
     fn bitwise_not(&mut self, dest: &Destination) {
@@ -644,23 +729,21 @@ impl Architecture for Amd64 {
 
     fn array_offset(
         &mut self,
-        base: &Destination,
-        index: &Destination,
+        base: &Source,
+        index: &Source,
         size: usize,
+        dest: &Destination,
     ) -> Result<(), ArchError> {
-        let r = self.alloc().unwrap();
-        let r_op = operands::Register {
-            register: r,
-            size: WORD_SIZE,
-        };
+        let r = self.alloc()?;
 
-        self.mov(
+        self.mul(
+            index,
             &Source::Immediate(Immediate::UInt(size as u64)),
-            &Destination::Register(r_op.clone()),
+            &r.dest(dest.size()),
             false,
         )?;
-        self.mul(index, &Source::Register(r_op), false)?;
-        self.add(base, &index.to_owned().into());
+        self.add(base, &r.source(dest.size()), dest, false)?;
+
         self.free(r)?;
 
         Ok(())
