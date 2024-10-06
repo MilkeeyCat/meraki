@@ -16,9 +16,6 @@ use crate::{
 use indoc::formatdoc;
 use std::collections::HashMap;
 
-const WORD_SIZE: usize = 8;
-const STACK_ALIGNMENT: usize = 16;
-
 #[derive(Eq, PartialEq, Hash)]
 enum ParamClass {
     Integer,
@@ -78,18 +75,18 @@ impl Architecture for Amd64 {
 
     #[inline]
     fn word_size(&self) -> usize {
-        WORD_SIZE
+        8
     }
 
     #[inline]
     fn stack_alignment(&self) -> usize {
-        STACK_ALIGNMENT
+        16
     }
 
     fn size(&self, type_: &Type, scope: &Scope) -> usize {
         match type_ {
             Type::Ptr(_) | Type::Null | Type::UInt(UintType::Usize) | Type::Int(IntType::Isize) => {
-                WORD_SIZE
+                self.word_size()
             }
             Type::Struct(structure) => match scope.find_type(structure).unwrap() {
                 crate::type_table::Type::Struct(structure) => self.struct_size(structure, scope),
@@ -123,13 +120,7 @@ impl Architecture for Amd64 {
                 let size = src.size;
                 let r = self.alloc()?;
 
-                self.lea(
-                    &Destination::Register(operands::Register {
-                        register: r,
-                        size: WORD_SIZE,
-                    }),
-                    &src.effective_address,
-                );
+                self.lea(&r.dest(self.word_size()), &src.effective_address);
 
                 for chunk_size in Self::size_iter(size) {
                     let r_tmp = self.alloc()?;
@@ -179,7 +170,7 @@ impl Architecture for Amd64 {
             }
             (dest, src) => {
                 let dest_size = dest.size();
-                let src_size = src.size().unwrap_or(WORD_SIZE);
+                let src_size = src.size().unwrap_or_else(|| self.word_size());
 
                 if dest_size == 8 && src_size == 4 {
                     // On x86_64 you can move 32bit value in 32bit register, and upper 32bits of the register will be zeroed
@@ -538,14 +529,7 @@ impl Architecture for Amd64 {
     }
 
     fn ret(&mut self, src: &Source, signed: bool) -> Result<(), ArchError> {
-        self.mov(
-            &src,
-            &Destination::Register(operands::Register {
-                register: self.rax,
-                size: WORD_SIZE,
-            }),
-            signed,
-        )
+        self.mov(&src, &self.rax.dest(self.word_size()), signed)
     }
 
     fn jcc(&mut self, label: &str, kind: Jump) {
@@ -652,7 +636,7 @@ impl Architecture for Amd64 {
                 param.offset = Offset(offset);
             } else {
                 // When call instruction is called it pushes return address on da stack
-                param.offset = Offset(((*n - 6) * WORD_SIZE + 8) as isize);
+                param.offset = Offset(((*n - 6) * self.word_size() + 8) as isize);
             }
         }
 
