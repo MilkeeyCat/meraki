@@ -24,9 +24,12 @@ enum ParamClass {
 impl From<&Type> for ParamClass {
     fn from(value: &Type) -> Self {
         match value {
-            Type::Int(_) | Type::UInt(_) | Type::Bool | Type::Ptr(_) | Type::Array(_) => {
-                Self::Integer
-            }
+            Type::Int(_)
+            | Type::UInt(_)
+            | Type::Bool
+            | Type::Ptr(_)
+            | Type::Array(_)
+            | Type::Null => Self::Integer,
             _ => unreachable!("Unsupported parameter type"),
         }
     }
