@@ -148,6 +148,14 @@ impl TypeChecker {
                     .map(|expr| expr.type_(scope))
                     .collect::<std::result::Result<Vec<_>, _>>()?;
 
+                if symbol.parameters.len() != expr.arguments.len() {
+                    return Err(ParserError::FunctionArguments(
+                        fn_name.clone(),
+                        symbol.parameters.to_owned(),
+                        args_types,
+                    ));
+                }
+
                 for (expr, type_) in expr.arguments.iter().zip(&symbol.parameters) {
                     if let Err(_) = Self::check_assign(type_.to_owned(), expr, scope) {
                         return Err(ParserError::FunctionArguments(
