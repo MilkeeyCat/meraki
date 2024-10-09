@@ -1,7 +1,6 @@
 use super::{int_repr::UIntLitRepr, ExprError, IntLitRepr};
 use crate::{
     parser::op::{BinOp, UnOp},
-    passes::TypeChecker,
     scope::Scope,
     symbol_table::{Symbol, SymbolTableError},
     type_table,
@@ -106,9 +105,10 @@ impl Expression for ExprBinary {
             | BinOp::BitwiseAnd
             | BinOp::BitwiseOr
             | BinOp::Shl
-            | BinOp::Shr => {
-                Ok(TypeChecker::check_bin(&self.op, &self.left, &self.right, scope).unwrap())
-            }
+            | BinOp::Shr => Ok(Type::common_type(
+                self.left.type_(scope)?,
+                self.right.type_(scope)?,
+            )),
             BinOp::LessThan
             | BinOp::GreaterThan
             | BinOp::LessEqual

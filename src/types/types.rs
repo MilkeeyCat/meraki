@@ -143,15 +143,6 @@ impl Type {
         }
     }
 
-    pub fn promote(from: Self, to: Self) -> Result<Self, TypeError> {
-        Ok(match (from, to) {
-            (Type::UInt(lhs), Type::UInt(rhs)) if lhs <= rhs => Type::UInt(rhs),
-            (Type::Int(lhs), Type::Int(rhs)) if lhs <= rhs => Type::Int(rhs),
-            (Type::UInt(uint), Type::Int(int)) if uint.clone().to_signed() <= int => Type::Int(int),
-            (from, to) => return Err(TypeError::Promotion(from, to)),
-        })
-    }
-
     pub fn size(&self) -> Option<usize> {
         match self {
             Type::Void => Some(0),
@@ -174,6 +165,36 @@ impl Type {
         match self {
             Type::Struct(name) => name,
             _ => unreachable!(),
+        }
+    }
+
+    pub fn common_type(lhs: Type, rhs: Type) -> Type {
+        match (lhs, rhs) {
+            (type_ @ Type::Ptr(_), int) | (int, type_ @ Type::Ptr(_)) if int.int() => type_,
+            (Type::UInt(lhs), Type::UInt(rhs)) => {
+                if lhs > rhs {
+                    Type::UInt(lhs)
+                } else {
+                    Type::UInt(rhs)
+                }
+            }
+            (Type::Int(lhs), Type::Int(rhs)) => {
+                if lhs > rhs {
+                    Type::Int(lhs)
+                } else {
+                    Type::Int(rhs)
+                }
+            }
+            (Type::UInt(uint), Type::Int(int)) | (Type::Int(int), Type::UInt(uint)) => {
+                let uint_int = uint.to_signed();
+
+                if uint_int <= int {
+                    Type::Int(int)
+                } else {
+                    Type::Int(uint_int)
+                }
+            }
+            (lhs, rhs) => unreachable!("Failed to get common type for {lhs} and {rhs}"),
         }
     }
 }
