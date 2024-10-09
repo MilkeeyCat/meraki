@@ -378,9 +378,7 @@ impl CodeGen {
 
         match &expr.op {
             BinOp::Assign => {
-                let lvalue_dest = self
-                    .expr_dest(&expr.left)
-                    .map_err(|_| CodeGenError::Assign(*expr.left))?;
+                let lvalue_dest = self.expr_dest(*expr.left)?;
 
                 self.expr(*expr.right, Some(&lvalue_dest), state)?;
 
@@ -688,7 +686,8 @@ impl CodeGen {
                 self.arch.free(r)?;
             }
             UnOp::Address => {
-                let expr_dest = self.expr_dest(&unary_expr.expr)?;
+                let signed = unary_expr.expr.type_(&self.scope)?.signed();
+                let expr_dest = self.expr_dest(*unary_expr.expr)?;
                 let r = self.arch.alloc()?;
 
                 self.arch.lea(
@@ -704,7 +703,7 @@ impl CodeGen {
                         size: self.arch.word_size(),
                     }),
                     dest,
-                    unary_expr.expr.type_(&self.scope)?.signed(),
+                    signed,
                 )?;
 
                 self.arch.free(r)?;
@@ -712,7 +711,7 @@ impl CodeGen {
             }
             UnOp::Deref => {
                 let signed = unary_expr.expr.type_(&self.scope)?.signed();
-                let expr_dest = self.expr_dest(&Expr::Unary(unary_expr))?;
+                let expr_dest = self.expr_dest(Expr::Unary(unary_expr))?;
 
                 self.arch.mov(&expr_dest.clone().into(), dest, signed)?;
                 self.free(expr_dest)?;
@@ -889,7 +888,7 @@ impl CodeGen {
         dest: &Destination,
     ) -> Result<(), CodeGenError> {
         let signed = expr.type_(&self.scope)?.signed();
-        let expr_dest = self.expr_dest(&Expr::StructAccess(expr))?;
+        let expr_dest = self.expr_dest(Expr::StructAccess(expr))?;
 
         self.arch.mov(&expr_dest.clone().into(), dest, signed)?;
         self.free(expr_dest)
@@ -902,7 +901,7 @@ impl CodeGen {
         state: Option<&State>,
     ) -> Result<(), CodeGenError> {
         let struct_name = expr.expr.type_(&self.scope)?.struct_unchecked();
-        let expr_dest = self.expr_dest(&expr.expr)?;
+        let expr_dest = self.expr_dest(*expr.expr)?;
         let r = self.arch.alloc()?;
         let effective_address = match expr_dest.clone() {
             Destination::Memory(memory) => memory.effective_address,
@@ -977,7 +976,7 @@ impl CodeGen {
         dest: &Destination,
     ) -> Result<(), CodeGenError> {
         let signed = expr.type_(&self.scope)?.signed();
-        let expr_dest = self.expr_dest(&Expr::ArrayAccess(expr))?;
+        let expr_dest = self.expr_dest(Expr::ArrayAccess(expr))?;
 
         self.arch.mov(&expr_dest.clone().into(), dest, signed)?;
         self.free(expr_dest)
@@ -1028,7 +1027,7 @@ impl CodeGen {
         })
     }
 
-    fn expr_dest(&mut self, expr: &Expr) -> Result<Destination, CodeGenError> {
+    fn expr_dest(&mut self, expr: Expr) -> Result<Destination, CodeGenError> {
         match expr {
             Expr::Ident(expr) => Ok(self
                 .scope
@@ -1036,6 +1035,7 @@ impl CodeGen {
                 .ok_or(SymbolTableError::NotFound(expr.0.clone()))?
                 .dest(&self.arch, &self.scope)?),
             Expr::StructAccess(expr) => {
+                let type_ = expr.type_(&self.scope)?;
                 let (field_offset, mut field_size) = match expr.expr.type_(&self.scope)? {
                     Type::Struct(s) => {
                         match self.scope.find_type(&s).ok_or(TypeError::Nonexistent(s))? {
@@ -1055,7 +1055,7 @@ impl CodeGen {
                     field_size = self.arch.word_size();
                 }
 
-                let dest = match self.expr_dest(&expr.expr)? {
+                let dest = match self.expr_dest(*expr.expr)? {
                     Destination::Memory(mut memory) => {
                         memory.effective_address.displacement =
                             if let Some(displacement) = memory.effective_address.displacement {
@@ -1079,7 +1079,7 @@ impl CodeGen {
                 };
 
                 //TODO: dis looks ugly, refactor it plz
-                if let Type::Array(_) = expr.type_(&self.scope)? {
+                if let Type::Array(_) = type_ {
                     let r = self.arch.alloc()?;
 
                     self.arch
@@ -1092,7 +1092,8 @@ impl CodeGen {
                 }
             }
             Expr::ArrayAccess(expr) => {
-                let base = self.expr_dest(&expr.expr)?;
+                let type_ = expr.type_(&self.scope)?;
+                let base = self.expr_dest(*expr.expr)?;
                 let index = self.arch.alloc()?;
                 let r = self.arch.alloc()?;
                 let r_loc = r.dest(self.arch.word_size());
@@ -1114,7 +1115,7 @@ impl CodeGen {
                 self.arch.array_offset(
                     &r_loc.clone().into(),
                     &index.source(self.arch.word_size()),
-                    self.arch.size(&expr.type_(&self.scope)?, &self.scope),
+                    self.arch.size(&type_, &self.scope),
                     &r_loc,
                 )?;
 
@@ -1128,23 +1129,15 @@ impl CodeGen {
                         scale: None,
                         displacement: None,
                     },
-                    size: self.arch.size(&expr.type_(&self.scope)?, &self.scope),
+                    size: self.arch.size(&type_, &self.scope),
                 }))
             }
             Expr::Unary(expr) if expr.op == UnOp::Deref => {
-                let dest = self.expr_dest(&expr.expr)?;
-                let r = self.arch.alloc().unwrap();
                 let type_ = expr.expr.type_(&self.scope)?;
+                let r = self.arch.alloc()?;
+                let dest = r.dest(self.arch.size(&type_, &self.scope));
 
-                self.arch
-                    .mov(
-                        &dest.clone().into(),
-                        &r.dest(self.arch.size(&type_, &self.scope)),
-                        type_.signed(),
-                    )
-                    .unwrap();
-
-                self.free(dest)?;
+                self.expr(*expr.expr, Some(&dest), None)?;
 
                 Ok(Destination::Memory(Memory {
                     effective_address: EffectiveAddress {
@@ -1153,9 +1146,7 @@ impl CodeGen {
                         scale: None,
                         displacement: None,
                     },
-                    size: self
-                        .arch
-                        .size(&expr.expr.type_(&self.scope)?.inner()?, &self.scope),
+                    size: self.arch.size(&type_.inner()?, &self.scope),
                 }))
             }
             _ => unreachable!("Can't get address of rvalue"),
