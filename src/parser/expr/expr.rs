@@ -121,6 +121,25 @@ impl Expression for ExprBinary {
     }
 }
 
+impl ExprBinary {
+    pub fn canonicalize(&mut self, scope: &Scope) {
+        let type_ = self.type_(scope).unwrap();
+
+        match self {
+            ExprBinary {
+                left,
+                right,
+                op: BinOp::Add,
+            } => {
+                if type_.ptr() && right.type_(scope).unwrap().ptr() {
+                    std::mem::swap(left.as_mut(), right.as_mut());
+                }
+            }
+            _ => (),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExprLit {
     Int(IntLitRepr),

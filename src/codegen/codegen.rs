@@ -7,7 +7,7 @@ use crate::{
     parser::{
         BinOp, BitwiseOp, CmpOp, Expr, ExprArray, ExprArrayAccess, ExprBinary, ExprFunctionCall,
         ExprIdent, ExprLit, ExprStruct, ExprStructAccess, ExprStructMethod, ExprUnary, Expression,
-        Stmt, StmtFor, StmtFunction, StmtIf, StmtReturn, StmtVarDecl, StmtWhile, UnOp,
+        Stmt, StmtFor, StmtFunction, StmtIf, StmtReturn, StmtVarDecl, StmtWhile, UIntLitRepr, UnOp,
     },
     register::Register,
     scope::Scope,
@@ -364,17 +364,16 @@ impl CodeGen {
 
     fn bin_expr(
         &mut self,
-        expr: ExprBinary,
+        mut expr: ExprBinary,
         dest: Option<&Destination>,
         state: Option<&State>,
     ) -> Result<(), CodeGenError> {
-        let left_type = expr.left.type_(&self.scope)?;
-        let right_type = expr.right.type_(&self.scope)?;
-        let size = std::cmp::max(
-            self.arch.size(&left_type, &self.scope),
-            self.arch.size(&right_type, &self.scope),
+        let type_ = Type::common_type(
+            expr.left.type_(&self.scope)?,
+            expr.right.type_(&self.scope)?,
         );
-        let signed = left_type.signed() || right_type.signed();
+        let size = self.arch.size(&type_, &self.scope);
+        let signed = type_.signed();
 
         match &expr.op {
             BinOp::Assign => {
@@ -419,6 +418,28 @@ impl CodeGen {
                             }
                         })
                     };
+
+                    expr.canonicalize(&self.scope);
+
+                    if type_.ptr() {
+                        match expr.op {
+                            BinOp::Add | BinOp::Sub => {
+                                if !expr.right.type_(&self.scope)?.ptr() {
+                                    expr.right = Box::new(Expr::Binary(ExprBinary {
+                                        left: expr.right,
+                                        right: Box::new(Expr::Lit(ExprLit::UInt(
+                                            UIntLitRepr::new(
+                                                self.arch.size(&type_.inner().unwrap(), &self.scope)
+                                                    as u64,
+                                            ),
+                                        ))),
+                                        op: BinOp::Mul,
+                                    }));
+                                }
+                            }
+                            _ => (),
+                        };
+                    }
 
                     let (expr_dest, dest_r) = match dest {
                         Destination::Memory(_) => {
