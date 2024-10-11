@@ -207,72 +207,6 @@ impl TypeChecker {
         Ok(())
     }
 
-    pub fn check_add<'a>(mut lhs: &'a Expr, mut rhs: &'a Expr, scope: &Scope) -> Result<()> {
-        let mut left_type = lhs.type_(scope)?;
-        let mut right_type = rhs.type_(scope)?;
-
-        // Canonicalize `offset + ptr` to `ptr + offset`
-        if !left_type.ptr() && right_type.ptr() {
-            std::mem::swap(&mut lhs, &mut rhs);
-            std::mem::swap(&mut left_type, &mut right_type);
-        }
-
-        if left_type.ptr() {
-            if !Expr::int_lit_only(rhs) {
-                assert_eq!(right_type, Type::UInt(UintType::Usize));
-            }
-
-            return Ok(());
-        }
-
-        if left_type.int() && right_type.int() {
-            Self::check_bin_num_with_lit(lhs, rhs, scope)?;
-
-            return Ok(());
-        }
-
-        panic!("Invalid operands");
-    }
-
-    pub fn check_sub(lhs: &Expr, rhs: &Expr, scope: &Scope) -> Result<()> {
-        let left_type = lhs.type_(scope)?;
-        let right_type = rhs.type_(scope)?;
-
-        if left_type.ptr() {
-            if !Expr::int_lit_only(rhs) {
-                assert_eq!(right_type, Type::UInt(UintType::Usize));
-            }
-
-            return Ok(());
-        }
-
-        if left_type.int() && right_type.int() {
-            Self::check_bin_num_with_lit(lhs, rhs, scope)?;
-
-            return Ok(());
-        }
-
-        panic!("Invalid operands");
-    }
-
-    pub fn check_bin_num_with_lit(lhs: &Expr, rhs: &Expr, scope: &Scope) -> Result<()> {
-        let left_type = lhs.type_(scope)?;
-        let right_type = rhs.type_(scope)?;
-
-        assert!(left_type.int() && right_type.int());
-
-        Ok(match (Expr::int_lit_only(lhs), Expr::int_lit_only(rhs)) {
-            (true, false) => {
-                assert!(Type::common_type(left_type, right_type.clone()) <= right_type);
-            }
-            (false, true) => {
-                assert!(Type::common_type(left_type.clone(), right_type) <= left_type);
-            }
-            (false, false) => assert_eq!(left_type, right_type),
-            (true, true) => (),
-        })
-    }
-
     pub fn check_bin(op: &BinOp, left: &Expr, right: &Expr, scope: &Scope) -> Result<()> {
         Self::check_expr(left, scope)?;
         Self::check_expr(right, scope)?;
@@ -281,8 +215,52 @@ impl TypeChecker {
         let right_type = right.type_(scope)?;
 
         Ok(match op {
-            BinOp::Add => Self::check_add(left, right, scope)?,
-            BinOp::Sub => Self::check_sub(left, right, scope)?,
+            BinOp::Add => match ((left, left_type), (right, right_type)) {
+                // T* + T*
+                ((_, Type::Ptr(lhs)), (_, Type::Ptr(rhs))) if lhs == rhs => (),
+                // T* + 10 / 10 + T* / T* + foo / foo + T*
+                ((_, Type::Ptr(_)), (expr, offset)) | ((expr, offset), (_, Type::Ptr(_)))
+                    if Expr::int_lit_only(expr) || offset == Type::UInt(UintType::Usize) =>
+                {
+                    ()
+                }
+                // foo + 10 / 10 + foo
+                ((_, type_), (expr, expr_type)) | ((expr, expr_type), (_, type_))
+                    if type_.int()
+                        && Expr::int_lit_only(expr)
+                        && type_ >= Type::common_type(type_.clone(), expr_type.clone()) =>
+                {
+                    ()
+                }
+                // foo + bar
+                ((_, lhs), (_, rhs)) if lhs.int() && rhs.int() && lhs == rhs => (),
+                ((_, left_type), (_, right_type)) => {
+                    panic!("Can't add {left_type} to {right_type}")
+                }
+            },
+            BinOp::Sub => match ((left, left_type), (right, right_type)) {
+                // T* - T*
+                ((_, Type::Ptr(lhs)), (_, Type::Ptr(rhs))) if lhs == rhs => (),
+                // T* - 10 / T* - foo
+                ((_, Type::Ptr(_)), (expr, offset))
+                    if Expr::int_lit_only(expr) || offset == Type::UInt(UintType::Usize) =>
+                {
+                    ()
+                }
+                // foo - 10 / 10 - foo
+                ((_, type_), (expr, expr_type)) | ((expr, expr_type), (_, type_))
+                    if type_.int()
+                        && Expr::int_lit_only(expr)
+                        && type_ >= Type::common_type(type_.clone(), expr_type.clone()) =>
+                {
+                    ()
+                }
+                // foo - bar
+                ((_, lhs), (_, rhs)) if lhs.int() && rhs.int() && lhs == rhs => (),
+                ((_, left_type), (_, right_type)) => {
+                    panic!("Can't subtract {left_type} from {right_type}")
+                }
+            },
             BinOp::Mul
             | BinOp::Div
             | BinOp::LessThan
@@ -292,19 +270,41 @@ impl TypeChecker {
             | BinOp::BitwiseOr
             | BinOp::BitwiseAnd
             | BinOp::Shl
-            | BinOp::Shr => Self::check_bin_num_with_lit(left, right, scope)?,
+            | BinOp::Shr => match ((left, left_type), (right, right_type)) {
+                // foo _op_ 10 / 10 _op_ foo
+                ((_, type_), (expr, expr_type)) | ((expr, expr_type), (_, type_))
+                    if type_.int()
+                        && Expr::int_lit_only(expr)
+                        && type_ >= Type::common_type(type_.clone(), expr_type.clone()) =>
+                {
+                    ()
+                }
+                // foo _op_ bar
+                ((_, lhs), (_, rhs)) if lhs.int() && rhs.int() && lhs == rhs => (),
+                ((_, left_type), (_, right_type)) => {
+                    panic!("Can't perform mafs operation between {left_type} and {right_type}")
+                }
+            },
             BinOp::LogicalAnd | BinOp::LogicalOr => {
                 assert_eq!(left_type, Type::Bool);
                 assert_eq!(right_type, Type::Bool);
             }
             BinOp::Assign => unreachable!(),
-            BinOp::Equal | BinOp::NotEqual => {
-                if left_type.int() && right_type.int() {
-                    Self::check_bin_num_with_lit(left, right, scope)?;
-                } else {
-                    assert!(left_type == right_type);
+            BinOp::Equal | BinOp::NotEqual => match ((left, left_type), (right, right_type)) {
+                // foo _op_ 10 / 10 _op_ foo
+                ((_, type_), (expr, expr_type)) | ((expr, expr_type), (_, type_))
+                    if type_.int()
+                        && Expr::int_lit_only(expr)
+                        && type_ >= Type::common_type(type_.clone(), expr_type.clone()) =>
+                {
+                    ()
                 }
-            }
+                // foo _op_ bar
+                ((_, lhs), (_, rhs)) if lhs.int() && rhs.int() && lhs == rhs => (),
+                ((_, left_type), (_, right_type)) => {
+                    panic!("Can't check equality between {left_type} and {right_type}")
+                }
+            },
         })
     }
 
