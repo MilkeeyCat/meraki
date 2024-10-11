@@ -457,14 +457,14 @@ impl Architecture for Amd64 {
             "
             .global {name}
             {name}:
-                push rbp
-                mov rbp, rsp
             ",
         ));
 
         if stackframe > 0 {
             self.buf.push_str(&formatdoc!(
                 "
+                \tpush rbp
+                \tmov rbp, rsp
                 \tsub rsp, {stackframe}
                 "
             ));
@@ -525,14 +525,13 @@ impl Architecture for Amd64 {
         if stackframe > 0 {
             self.buf.push_str(&formatdoc!(
                 "
-                \tadd rsp, {stackframe}
+                \tleave
                 "
             ));
         }
 
         self.buf.push_str(&formatdoc!(
             "
-            \tleave
             \tret
             "
         ))
