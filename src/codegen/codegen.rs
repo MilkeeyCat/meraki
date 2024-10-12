@@ -368,10 +368,9 @@ impl CodeGen {
         dest: Option<&Destination>,
         state: Option<&State>,
     ) -> Result<(), CodeGenError> {
-        let type_ = Type::common_type(
-            expr.left.type_(&self.scope)?,
-            expr.right.type_(&self.scope)?,
-        );
+        let type_ = expr.type_(&self.scope)?;
+        let left_type = expr.left.type_(&self.scope)?;
+        let right_type = expr.right.type_(&self.scope)?;
         let size = self.arch.size(&type_, &self.scope);
         let signed = type_.signed();
 
@@ -419,26 +418,11 @@ impl CodeGen {
                         })
                     };
 
-                    expr.canonicalize(&self.scope);
-
-                    if type_.ptr() {
-                        match expr.op {
-                            BinOp::Add | BinOp::Sub => {
-                                if !expr.right.type_(&self.scope)?.ptr() {
-                                    expr.right = Box::new(Expr::Binary(ExprBinary {
-                                        left: expr.right,
-                                        right: Box::new(Expr::Lit(ExprLit::UInt(
-                                            UIntLitRepr::new(
-                                                self.arch.size(&type_.inner().unwrap(), &self.scope)
-                                                    as u64,
-                                            ),
-                                        ))),
-                                        op: BinOp::Mul,
-                                    }));
-                                }
-                            }
-                            _ => (),
-                        };
+                    if expr.op == BinOp::Add {
+                        // Canonicalize foo + T* to T* + foo
+                        if type_.ptr() && expr.right.type_(&self.scope).unwrap().ptr() {
+                            std::mem::swap(expr.left.as_mut(), expr.right.as_mut());
+                        }
                     }
 
                     let (expr_dest, dest_r) = match dest {
@@ -468,12 +452,59 @@ impl CodeGen {
                     };
 
                     match &expr.op {
-                        BinOp::Add => {
-                            self.arch.add(&lhs, &rhs, &expr_dest, signed)?;
-                        }
-                        BinOp::Sub => {
-                            self.arch.sub(&lhs, &rhs, &expr_dest, signed)?;
-                        }
+                        BinOp::Add => match (left_type, right_type) {
+                            (Type::Ptr(type_), _) => {
+                                let r = self.arch.alloc()?;
+
+                                self.arch.mul(
+                                    &Source::Immediate(Immediate::UInt(
+                                        self.arch.size(&type_, &self.scope) as u64,
+                                    )),
+                                    &rhs,
+                                    &r.dest(size),
+                                    signed,
+                                )?;
+                                self.arch.add(&lhs, &r.source(size), &expr_dest, false)?;
+
+                                self.arch.free(r)?;
+                            }
+                            _ => self.arch.add(&lhs, &rhs, &expr_dest, signed)?,
+                        },
+                        BinOp::Sub => match (left_type, right_type) {
+                            // type_ and _ are the same
+                            (Type::Ptr(type_), Type::Ptr(_)) => {
+                                let r = self.arch.alloc()?;
+
+                                self.arch.sub(&lhs, &rhs, &expr_dest, signed)?;
+                                self.arch.div(
+                                    &expr_dest.clone().into(),
+                                    &Source::Immediate(Immediate::UInt(
+                                        self.arch.size(&type_, &self.scope) as u64,
+                                    )),
+                                    &r.dest(size),
+                                    true,
+                                )?;
+                                self.arch.mov(&r.source(size), &expr_dest, true)?;
+
+                                self.arch.free(r)?;
+                            }
+                            (Type::Ptr(type_), _) => {
+                                let r = self.arch.alloc()?;
+
+                                self.arch.mul(
+                                    &Source::Immediate(Immediate::UInt(
+                                        self.arch.size(&type_, &self.scope) as u64,
+                                    )),
+                                    &rhs,
+                                    &r.dest(size),
+                                    signed,
+                                )?;
+                                self.arch.sub(&lhs, &r.source(size), &expr_dest, false)?;
+
+                                self.arch.free(r)?;
+                            }
+                            _ => self.arch.sub(&lhs, &rhs, &expr_dest, signed)?,
+                        },
                         BinOp::Mul => {
                             self.arch.mul(&lhs, &rhs, &expr_dest, signed)?;
                         }

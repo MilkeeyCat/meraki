@@ -97,8 +97,14 @@ pub struct ExprBinary {
 impl Expression for ExprBinary {
     fn type_(&self, scope: &Scope) -> Result<Type, ExprError> {
         match &self.op {
+            BinOp::Sub => match (
+                (&self.left, self.left.type_(scope)?),
+                (&self.right, self.right.type_(scope)?),
+            ) {
+                ((_, Type::Ptr(_)), (_, Type::Ptr(_))) => Ok(Type::Int(IntType::Isize)),
+                ((_, lhs), (_, rhs)) => Ok(Type::common_type(lhs, rhs)),
+            },
             BinOp::Add
-            | BinOp::Sub
             | BinOp::Mul
             | BinOp::Div
             | BinOp::Assign
@@ -117,25 +123,6 @@ impl Expression for ExprBinary {
             | BinOp::NotEqual
             | BinOp::LogicalAnd
             | BinOp::LogicalOr => Ok(Type::Bool),
-        }
-    }
-}
-
-impl ExprBinary {
-    pub fn canonicalize(&mut self, scope: &Scope) {
-        let type_ = self.type_(scope).unwrap();
-
-        match self {
-            ExprBinary {
-                left,
-                right,
-                op: BinOp::Add,
-            } => {
-                if type_.ptr() && right.type_(scope).unwrap().ptr() {
-                    std::mem::swap(left.as_mut(), right.as_mut());
-                }
-            }
-            _ => (),
         }
     }
 }
