@@ -194,7 +194,7 @@ impl Parser {
                     0,
                     (
                         "this".to_owned(),
-                        Type::Ptr(Box::new(Type::Struct(name.clone()))),
+                        Type::Ptr(Box::new(Type::Custom(name.clone()))),
                     ),
                 );
                 self.expect(&Token::Arrow)?;
@@ -312,7 +312,7 @@ impl Parser {
             Token::Isize => Ok(Type::Int(IntType::Isize)),
             Token::Bool => Ok(Type::Bool),
             Token::Void => Ok(Type::Void),
-            Token::Ident(ident) => Ok(Type::Struct(ident)),
+            Token::Ident(ident) => Ok(Type::Custom(ident)),
             token => Err(ParserError::ParseType(token)),
         }?;
 

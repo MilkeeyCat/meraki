@@ -91,7 +91,7 @@ impl Architecture for Amd64 {
             Type::Ptr(_) | Type::Null | Type::UInt(UintType::Usize) | Type::Int(IntType::Isize) => {
                 self.word_size()
             }
-            Type::Struct(structure) => match scope.find_type(structure).unwrap() {
+            Type::Custom(structure) => match scope.find_type(structure).unwrap() {
                 crate::type_table::Type::Struct(structure) => self.struct_size(structure, scope),
             },
             Type::Array(array) => self.size(&array.type_, scope) * array.length,

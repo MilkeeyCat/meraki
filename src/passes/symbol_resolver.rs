@@ -178,7 +178,7 @@ impl SymbolResolver {
                 Self::resolve_expr(expr.expr.as_ref(), scope)?;
 
                 let type_name = match expr.expr.type_(scope)? {
-                    Type::Struct(name) => name,
+                    Type::Custom(name) => name,
                     _ => unreachable!(),
                 };
 
@@ -197,7 +197,7 @@ impl SymbolResolver {
                 Self::resolve_expr(&expr.expr, scope)?;
 
                 let type_name = match expr.expr.type_(scope)? {
-                    Type::Struct(name) => name,
+                    Type::Custom(name) => name,
                     _ => unreachable!(),
                 };
 

@@ -181,7 +181,7 @@ impl TypeChecker {
 
     fn check_type(type_: &Type, scope: &Scope) -> Result<()> {
         Ok(match type_ {
-            Type::Struct(name) => {
+            Type::Custom(name) => {
                 if scope.find_type(name).is_none() {
                     return Err(ParserError::Type(TypeError::Nonexistent(name.to_owned())));
                 }
@@ -196,7 +196,7 @@ impl TypeChecker {
                 tt::Type::Struct(type_struct) => {
                     for (_, type_) in &type_struct.fields {
                         Self::check_type(type_, scope)?;
-                        if type_ == &Type::Struct(type_struct.name.clone()) {
+                        if type_ == &Type::Custom(type_struct.name.clone()) {
                             panic!("Recursize type {type_} has infinite size");
                         }
                     }

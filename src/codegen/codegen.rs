@@ -7,7 +7,7 @@ use crate::{
     parser::{
         BinOp, BitwiseOp, CmpOp, Expr, ExprArray, ExprArrayAccess, ExprBinary, ExprFunctionCall,
         ExprIdent, ExprLit, ExprStruct, ExprStructAccess, ExprStructMethod, ExprUnary, Expression,
-        Stmt, StmtFor, StmtFunction, StmtIf, StmtReturn, StmtVarDecl, StmtWhile, UIntLitRepr, UnOp,
+        Stmt, StmtFor, StmtFunction, StmtIf, StmtReturn, StmtVarDecl, StmtWhile, UnOp,
     },
     register::Register,
     scope::Scope,
@@ -952,7 +952,10 @@ impl CodeGen {
         dest: Option<&Destination>,
         state: Option<&State>,
     ) -> Result<(), CodeGenError> {
-        let struct_name = expr.expr.type_(&self.scope)?.struct_unchecked();
+        let struct_name = match expr.expr.type_(&self.scope)? {
+            Type::Custom(name) => name,
+            _ => unreachable!(),
+        };
         let expr_dest = self.expr_dest(*expr.expr)?;
         let r = self.arch.alloc()?;
         let effective_address = match expr_dest.clone() {
@@ -963,7 +966,7 @@ impl CodeGen {
         self.arch
             .lea(&r.dest(self.arch.word_size()), &effective_address);
 
-        let this = Type::Ptr(Box::new(Type::Struct(struct_name.clone())));
+        let this = Type::Ptr(Box::new(Type::Custom(struct_name.clone())));
         let mut preceding = Vec::new();
         let mut stack_size = 0;
         let mut arg_registers = Vec::new();
@@ -1089,8 +1092,8 @@ impl CodeGen {
             Expr::StructAccess(expr) => {
                 let type_ = expr.type_(&self.scope)?;
                 let (field_offset, mut field_size) = match expr.expr.type_(&self.scope)? {
-                    Type::Struct(s) => {
-                        match self.scope.find_type(&s).ok_or(TypeError::Nonexistent(s))? {
+                    Type::Custom(c) => {
+                        match self.scope.find_type(&c).ok_or(TypeError::Nonexistent(c))? {
                             tt::Type::Struct(type_struct) => (
                                 type_struct.offset(&self.arch, &expr.field, &self.scope)?,
                                 self.arch.size(

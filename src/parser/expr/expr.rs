@@ -201,7 +201,7 @@ pub struct ExprStructAccess {
 impl Expression for ExprStructAccess {
     fn type_(&self, scope: &Scope) -> Result<Type, ExprError> {
         match self.expr.type_(scope)? {
-            Type::Struct(struct_name) => {
+            Type::Custom(struct_name) => {
                 match scope
                     .find_type(&struct_name)
                     .ok_or(TypeError::Nonexistent(struct_name.to_owned()))?
@@ -226,7 +226,7 @@ pub struct ExprStructMethod {
 impl Expression for ExprStructMethod {
     fn type_(&self, scope: &Scope) -> Result<Type, ExprError> {
         match self.expr.type_(scope)? {
-            Type::Struct(struct_name) => {
+            Type::Custom(struct_name) => {
                 match scope
                     .find_type(&struct_name)
                     .ok_or(TypeError::Nonexistent(struct_name.to_owned()))?
@@ -263,7 +263,7 @@ impl Expression for ExprArrayAccess {
 
 impl Expression for ExprStruct {
     fn type_(&self, _: &Scope) -> Result<Type, ExprError> {
-        Ok(Type::Struct(self.name.clone()))
+        Ok(Type::Custom(self.name.clone()))
     }
 }
 

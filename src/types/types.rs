@@ -88,7 +88,7 @@ pub enum Type {
     UInt(UintType),
     Bool,
     Void,
-    Struct(String),
+    Custom(String),
     Ptr(Box<Type>),
     Array(TypeArray),
     Null,
@@ -102,7 +102,7 @@ impl std::fmt::Display for Type {
             Self::Bool => write!(f, "bool"),
             Self::Void => write!(f, "void"),
             Self::Ptr(type_) => write!(f, "*{type_}"),
-            Self::Struct(name) => write!(f, "struct '{name}'"),
+            Self::Custom(name) => write!(f, "{name}"),
             Self::Array(array) => write!(f, "{}[{}]", array.type_, array.length),
             Self::Null => write!(f, "NULL"),
         }
@@ -158,13 +158,6 @@ impl Type {
             Self::Ptr(type_) => Ok(type_.as_ref().to_owned()),
             Self::Array(array) => Ok(*array.type_.clone()),
             type_ => Err(TypeError::Deref(type_.clone())),
-        }
-    }
-
-    pub fn struct_unchecked(self) -> String {
-        match self {
-            Type::Struct(name) => name,
-            _ => unreachable!(),
         }
     }
 
