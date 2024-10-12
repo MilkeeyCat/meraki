@@ -216,8 +216,6 @@ impl TypeChecker {
 
         Ok(match op {
             BinOp::Add => match ((left, left_type), (right, right_type)) {
-                // T* + T*
-                ((_, Type::Ptr(lhs)), (_, Type::Ptr(rhs))) if lhs == rhs => (),
                 // T* + 10 / 10 + T* / T* + foo / foo + T*
                 ((_, Type::Ptr(_)), (expr, offset)) | ((expr, offset), (_, Type::Ptr(_)))
                     if Expr::int_lit_only(expr) || offset == Type::UInt(UintType::Usize) =>
