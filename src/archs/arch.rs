@@ -45,7 +45,11 @@ pub trait Architecture: ArchitectureClone {
         }
 
         // Align to the largest element in the struct
-        offset.next_multiple_of(largest)
+        if largest > 0 {
+            offset.next_multiple_of(largest)
+        } else {
+            0
+        }
     }
     fn alloc(&mut self) -> Result<Register, AllocatorError>;
     fn free(&mut self, register: Register) -> Result<(), AllocatorError>;
