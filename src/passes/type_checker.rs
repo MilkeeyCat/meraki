@@ -2,6 +2,7 @@ use super::Pass;
 use crate::{
     parser::{BinOp, Block, Expr, ExprBinary, Expression, ParserError, Stmt, UnOp},
     scope::Scope,
+    symbol_table::SymbolTableError,
     type_table::{self as tt, TypeTable},
     types::{Type, TypeError, UintType},
 };
@@ -115,7 +116,11 @@ impl TypeChecker {
                 Type::cast(expr.expr.type_(&scope)?, expr.type_.clone())?;
             }
             Expr::Lit(_) => (),
-            Expr::Ident(expr) => (),
+            Expr::Ident(expr) => {
+                scope.find_symbol(&expr.0).ok_or(ParserError::SymbolTable(
+                    SymbolTableError::NotFound(expr.0.clone()),
+                ))?;
+            }
             Expr::Struct(expr) => {
                 Self::check_type(&expr.type_(scope)?, scope)?;
 
@@ -140,6 +145,10 @@ impl TypeChecker {
             Expr::StructMethod(expr) => (),
             Expr::ArrayAccess(expr) => (),
             Expr::FunctionCall(expr) => {
+                for expr in &expr.arguments {
+                    Self::check_expr(expr, scope)?;
+                }
+
                 let fn_name = &expr.name;
                 let symbol = scope.find_symbol(&expr.name).unwrap().function_unchecked();
                 let args_types = expr
