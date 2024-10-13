@@ -314,10 +314,12 @@ impl CodeGen {
             Expr::Cast(cast_expr) => {
                 if let Some(dest) = dest {
                     let type_ = cast_expr.expr.type_(&self.scope)?;
-                    let og_size = self
-                        .arch
-                        .size(&type_, &self.scope)
-                        .clamp(0, self.arch.word_size());
+                    let og_size = if let Type::Array(_) = &type_ {
+                        self.arch.word_size()
+                    } else {
+                        self.arch.size(&type_, &self.scope)
+                    };
+                    assert!(og_size <= 8);
                     let casted_size = self.arch.size(&cast_expr.type_, &self.scope);
 
                     if casted_size != og_size {

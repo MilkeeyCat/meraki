@@ -146,6 +146,9 @@ impl Type {
             {
                 Ok(to)
             }
+            (Type::Array(_), Type::Ptr(pointee)) if pointee.as_ref() == &Type::Void => {
+                Ok(Type::Ptr(pointee))
+            }
             (from, to) if from.ptr() && to.ptr() => Ok(to),
             (from, to) if from.ptr() && to.int() => Ok(to),
             (from, to) => Err(TypeError::Cast(from, to)),
