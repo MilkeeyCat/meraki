@@ -149,27 +149,27 @@ impl TypeChecker {
                     Self::check_expr(expr, scope)?;
                 }
 
-                let fn_name = &expr.name;
-                let symbol = scope.find_symbol(&expr.name).unwrap().function_unchecked();
+                let (params, return_type) = match expr.expr.type_(scope)? {
+                    Type::Fn(params, return_type) => (params, return_type),
+                    _ => unreachable!(),
+                };
                 let args_types = expr
                     .arguments
                     .iter()
                     .map(|expr| expr.type_(scope))
                     .collect::<std::result::Result<Vec<_>, _>>()?;
 
-                if symbol.parameters.len() != expr.arguments.len() {
+                if params.len() != expr.arguments.len() {
                     return Err(ParserError::FunctionArguments(
-                        fn_name.clone(),
-                        symbol.parameters.to_owned(),
+                        params.to_owned(),
                         args_types,
                     ));
                 }
 
-                for (expr, type_) in expr.arguments.iter().zip(&symbol.parameters) {
+                for (expr, type_) in expr.arguments.iter().zip(&params) {
                     if let Err(_) = Self::check_assign(type_.to_owned(), expr, scope) {
                         return Err(ParserError::FunctionArguments(
-                            fn_name.clone(),
-                            symbol.parameters.to_owned(),
+                            params.to_owned(),
                             args_types,
                         ));
                     }

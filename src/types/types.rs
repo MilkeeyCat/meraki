@@ -91,6 +91,7 @@ pub enum Type {
     Custom(String),
     Ptr(Box<Type>),
     Array(TypeArray),
+    Fn(Vec<Type>, Box<Type>),
     Null,
 }
 
@@ -104,6 +105,14 @@ impl std::fmt::Display for Type {
             Self::Ptr(type_) => write!(f, "*{type_}"),
             Self::Custom(name) => write!(f, "{name}"),
             Self::Array(array) => write!(f, "{}[{}]", array.type_, array.length),
+            Self::Fn(params, return_type) => write!(
+                f,
+                "fn ({}) -> {return_type}",
+                params
+                    .iter()
+                    .map(|type_| type_.to_string())
+                    .collect::<String>()
+            ),
             Self::Null => write!(f, "NULL"),
         }
     }

@@ -18,7 +18,7 @@ pub enum ParserError {
     Int(IntLitReprError),
     SymbolTable(SymbolTableError),
     UndeclaredFunction(String),
-    FunctionArguments(String, Vec<Type>, Vec<Type>),
+    FunctionArguments(Vec<Type>, Vec<Type>),
 }
 
 impl std::error::Error for ParserError {}
@@ -38,9 +38,9 @@ impl std::fmt::Display for ParserError {
             Self::Int(e) => e.fmt(f),
             Self::SymbolTable(e) => e.fmt(f),
             Self::UndeclaredFunction(name) => write!(f, "Call to undeclared function {name}"),
-            Self::FunctionArguments(name, expected, actual) => write!(
+            Self::FunctionArguments(expected, actual) => write!(
                 f,
-                "Function {name} has signature ({}), got called with ({})",
+                "Function has signature ({}), got called with ({})",
                 expected
                     .iter()
                     .map(|type_| type_.to_string())

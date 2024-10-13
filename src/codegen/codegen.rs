@@ -290,7 +290,7 @@ impl CodeGen {
                         .scope
                         .find_symbol(&ident.0)
                         .ok_or(SymbolTableError::NotFound(ident.0.clone()))?;
-                    let dst = symbol.dest(&self.arch, &self.scope)?;
+                    let source = symbol.source(&self.arch, &self.scope)?;
 
                     // If the ident is of type array, the address of variable has to be moved, not the value
                     if let Type::Array(_) = ident.type_(&self.scope)? {
@@ -301,14 +301,14 @@ impl CodeGen {
                         };
 
                         self.arch
-                            .lea(&Destination::Register(r_op.clone()), &dst.clone().into());
+                            .lea(&Destination::Register(r_op.clone()), &source.clone().into());
                         self.arch.mov(&Source::Register(r_op), dest, false)?;
                         self.arch.free(r)?;
                     } else {
-                        self.arch.mov(&dst.clone().into(), dest, false)?;
+                        self.arch.mov(&source, dest, false)?;
                     }
 
-                    self.free(dst)?;
+                    source.free(&mut self.arch)?;
                 }
             }
             Expr::Cast(cast_expr) => {
@@ -800,7 +800,7 @@ impl CodeGen {
         let mut stack_size = 0;
         let mut arg_registers = Vec::new();
 
-        for expr in call.arguments.into_iter() {
+        for expr in call.arguments.clone().into_iter() {
             let type_ = expr.type_(&self.scope)?;
             let r = self.arch.alloc()?;
 
@@ -823,21 +823,42 @@ impl CodeGen {
             preceding.push(type_);
         }
 
-        let function = match self
-            .scope
-            .find_symbol(&call.name)
-            .ok_or(SymbolTableError::NotFound(call.name.clone()))
-            .unwrap()
-        {
-            Symbol::Function(func) => func,
+        let (_, return_type) = match call.expr.type_(&self.scope)? {
+            Type::Fn(params, return_type) => (params, return_type),
             _ => unreachable!(),
         };
-        self.arch.call_fn(
-            &call.name,
-            dest,
-            function.return_type.signed(),
-            self.arch.size(&function.return_type, &self.scope),
-        )?;
+
+        match *call.expr {
+            Expr::Ident(expr)
+                if self.scope.find_symbol(&expr.0).is_some_and(|symbol| {
+                    if let Symbol::Function(_) = symbol {
+                        true
+                    } else {
+                        false
+                    }
+                }) =>
+            {
+                self.arch.call(
+                    &Source::Immediate(Immediate::Label(expr.0)),
+                    dest,
+                    return_type.signed(),
+                    self.arch.size(&return_type, &self.scope),
+                )?;
+            }
+            _ => {
+                let r = self.arch.alloc()?;
+
+                self.expr(*call.expr, Some(&r.dest(self.arch.word_size())), state)?;
+                self.arch.call(
+                    &r.source(self.arch.word_size()),
+                    dest,
+                    return_type.signed(),
+                    self.arch.size(&return_type, &self.scope),
+                )?;
+                self.arch.free(r)?;
+            }
+        };
+
         for r in arg_registers {
             self.arch.free(r)?;
         }
@@ -1019,8 +1040,8 @@ impl CodeGen {
         let method = match self.scope.find_type(&struct_name).unwrap() {
             tt::Type::Struct(type_) => type_.find_method(&expr.method).unwrap(),
         };
-        self.arch.call_fn(
-            &format!("{struct_name}__{}", expr.method),
+        self.arch.call(
+            &Source::Immediate(Immediate::Label(format!("{struct_name}__{}", expr.method))),
             dest,
             method.return_type.signed(),
             self.arch.size(&method.return_type, &self.scope),
@@ -1100,7 +1121,10 @@ impl CodeGen {
                 .scope
                 .find_symbol(&expr.0)
                 .ok_or(SymbolTableError::NotFound(expr.0.clone()))?
-                .dest(&self.arch, &self.scope)?),
+                .source(&self.arch, &self.scope)
+                .unwrap()
+                .try_into()
+                .unwrap()),
             Expr::StructAccess(expr) => {
                 let type_ = expr.type_(&self.scope)?;
                 let (field_offset, mut field_size) = match expr.expr.type_(&self.scope)? {

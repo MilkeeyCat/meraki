@@ -217,8 +217,10 @@ impl SymbolResolver {
                 Self::resolve_expr(&expr.index, scope)?;
             }
             Expr::FunctionCall(expr) => {
-                if scope.find_symbol(&expr.name).is_none() {
-                    return Err(ParserError::UndeclaredFunction(expr.name.clone()));
+                Self::resolve_expr(&expr.expr, scope)?;
+
+                for expr in &expr.arguments {
+                    Self::resolve_expr(expr, scope)?;
                 }
             }
         })

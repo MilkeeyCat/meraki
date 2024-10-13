@@ -314,6 +314,24 @@ impl Parser {
             Token::Bool => Ok(Type::Bool),
             Token::Void => Ok(Type::Void),
             Token::Ident(ident) => Ok(Type::Custom(ident)),
+            Token::Fn => {
+                self.expect(&Token::LParen)?;
+
+                let mut params = Vec::new();
+
+                while !self.cur_token_is(&Token::RParen) {
+                    params.push(self.parse_type()?);
+
+                    if !self.cur_token_is(&Token::RParen) {
+                        self.expect(&Token::Comma)?;
+                    }
+                }
+
+                self.expect(&Token::RParen)?;
+                self.expect(&Token::Arrow)?;
+
+                Ok(Type::Fn(params, Box::new(self.parse_type()?)))
+            }
             token => Err(ParserError::ParseType(token)),
         }?;
 
@@ -604,17 +622,12 @@ impl Parser {
     fn func_call_expr(&mut self, left: Expr) -> Result<Expr, ParserError> {
         self.expect(&Token::LParen)?;
 
-        match left {
-            Expr::Ident(ident) => {
-                let args = self.expr_list()?;
+        let args = self.expr_list()?;
 
-                Ok(Expr::FunctionCall(ExprFunctionCall {
-                    name: ident.0,
-                    arguments: args,
-                }))
-            }
-            _ => todo!("Don't know what error to return yet"),
-        }
+        Ok(Expr::FunctionCall(ExprFunctionCall {
+            expr: Box::new(left),
+            arguments: args,
+        }))
     }
 
     fn bin_expr(&mut self, left: Expr) -> Result<Expr, ParserError> {

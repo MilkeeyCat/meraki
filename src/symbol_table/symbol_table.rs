@@ -1,13 +1,12 @@
-use operands::{Base, Memory};
-
 use super::SymbolTableError;
 use crate::{
     archs::Arch,
-    codegen::{operands, Destination, EffectiveAddress, Offset, Source},
+    codegen::{operands, EffectiveAddress, Immediate, Offset, Source},
     register::Register,
     scope::Scope,
     types::Type,
 };
+use operands::{Base, Memory};
 
 const MAX_SYMBOLS: usize = 512;
 //FIXME: arch dependent stuff shouldn't be in symbol table file xd
@@ -36,8 +35,8 @@ impl Symbol {
             Self::Global(global) => global.type_.clone(),
             Self::Local(local) => local.type_.clone(),
             Self::Param(param) => param.type_.clone(),
-            Self::Function(_) => {
-                panic!("Type of function, you wanted to get return type of the function or wat?")
+            Self::Function(func) => {
+                Type::Fn(func.parameters.clone(), Box::new(func.return_type.clone()))
             }
         }
     }
@@ -50,12 +49,8 @@ impl Symbol {
     }
 
     pub fn source(&self, arch: &Arch, scope: &Scope) -> Result<Source, SymbolTableError> {
-        Ok(self.dest(arch, scope)?.into())
-    }
-
-    pub fn dest(&self, arch: &Arch, scope: &Scope) -> Result<Destination, SymbolTableError> {
         Ok(match self {
-            Self::Local(symbol) => Destination::Memory(Memory {
+            Self::Local(symbol) => Source::Memory(Memory {
                 effective_address: EffectiveAddress {
                     base: Base::Register(RBP),
                     index: None,
@@ -64,7 +59,7 @@ impl Symbol {
                 },
                 size: arch.size(&symbol.type_, scope),
             }),
-            Self::Global(symbol) => Destination::Memory(Memory {
+            Self::Global(symbol) => Source::Memory(Memory {
                 effective_address: EffectiveAddress {
                     base: Base::Label(symbol.name.clone()),
                     index: None,
@@ -73,7 +68,7 @@ impl Symbol {
                 },
                 size: arch.size(&symbol.type_, scope),
             }),
-            Self::Param(symbol) => Destination::Memory(Memory {
+            Self::Param(symbol) => Source::Memory(Memory {
                 effective_address: EffectiveAddress {
                     base: Base::Register(RBP),
                     index: None,
@@ -82,7 +77,7 @@ impl Symbol {
                 },
                 size: arch.size(&symbol.type_, scope),
             }),
-            Self::Function(_) => unreachable!(),
+            Self::Function(func) => Source::Immediate(Immediate::Label(func.name.clone())),
         })
     }
 }

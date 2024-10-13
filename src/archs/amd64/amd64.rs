@@ -88,14 +88,18 @@ impl Architecture for Amd64 {
 
     fn size(&self, type_: &Type, scope: &Scope) -> usize {
         match type_ {
-            Type::Ptr(_) | Type::Null | Type::UInt(UintType::Usize) | Type::Int(IntType::Isize) => {
-                self.word_size()
-            }
+            Type::Ptr(_)
+            | Type::Null
+            | Type::UInt(UintType::Usize)
+            | Type::Int(IntType::Isize)
+            | Type::Fn(_, _) => self.word_size(),
             Type::Custom(structure) => match scope.find_type(structure).unwrap() {
                 crate::type_table::Type::Struct(structure) => self.struct_size(structure, scope),
             },
             Type::Array(array) => self.size(&array.type_, scope) * array.length,
-            type_ => type_.size().expect("Failed to get size of type {type_}"),
+            type_ => type_
+                .size()
+                .expect(&format!("Failed to get size of type {type_}")),
         }
     }
 
@@ -559,16 +563,16 @@ impl Architecture for Amd64 {
         ));
     }
 
-    fn call_fn(
+    fn call(
         &mut self,
-        name: &str,
+        src: &Source,
         dest: Option<&Destination>,
         signed: bool,
         size: usize,
     ) -> Result<(), ArchError> {
         self.buf.push_str(&formatdoc!(
             "
-            \tcall {name}
+            \tcall {src}
             ",
         ));
 

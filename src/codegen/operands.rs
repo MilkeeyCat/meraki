@@ -1,4 +1,8 @@
-use crate::{parser::ExprLit, register};
+use crate::{
+    archs::Arch,
+    parser::ExprLit,
+    register::{self, allocator::AllocatorError},
+};
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Offset(pub isize);
@@ -67,7 +71,7 @@ pub struct EffectiveAddress {
     pub displacement: Option<Offset>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Immediate {
     Int(i64),
     UInt(u64),
@@ -92,7 +96,7 @@ impl From<ExprLit> for Immediate {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Source {
     Memory(Memory),
     Register(Register),
@@ -105,6 +109,34 @@ impl Source {
             Self::Memory(memory) => Some(memory.size),
             Self::Register(register) => Some(register.size),
             Self::Immediate(_) => None,
+        }
+    }
+
+    pub fn free(self, arch: &mut Arch) -> Result<(), AllocatorError> {
+        match self {
+            Self::Register(Register { register, .. }) => arch.free(register),
+            Self::Memory(Memory {
+                effective_address:
+                    EffectiveAddress {
+                        base: Base::Register(register),
+                        ..
+                    },
+                ..
+            }) => arch.free(register),
+            _ => Ok(()),
+        }
+    }
+}
+
+impl TryInto<Destination> for Source {
+    type Error = ();
+
+    fn try_into(self) -> Result<Destination, Self::Error> {
+        match self {
+            Self::Memory(memory) => Ok(Destination::Memory(memory)),
+            Self::Register(register) => Ok(Destination::Register(register)),
+            // FIXME: return an error
+            Self::Immediate(_) => unreachable!(),
         }
     }
 }
@@ -156,6 +188,21 @@ impl Into<EffectiveAddress> for Destination {
                 displacement: None,
             },
             Destination::Memory(memory) => memory.effective_address,
+        }
+    }
+}
+
+impl Into<EffectiveAddress> for Source {
+    fn into(self) -> EffectiveAddress {
+        match self {
+            Source::Register(register) => EffectiveAddress {
+                base: Base::Register(register.register),
+                index: None,
+                scale: None,
+                displacement: None,
+            },
+            Source::Memory(memory) => memory.effective_address,
+            Source::Immediate(_) => unreachable!(),
         }
     }
 }

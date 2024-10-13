@@ -2,7 +2,6 @@ use super::{int_repr::UIntLitRepr, ExprError, IntLitRepr};
 use crate::{
     parser::op::{BinOp, UnOp},
     scope::Scope,
-    symbol_table::{Symbol, SymbolTableError},
     type_table,
     types::{IntType, Type, TypeArray, TypeError},
 };
@@ -39,15 +38,7 @@ impl Expression for Expr {
             Self::StructAccess(expr_struct_access) => expr_struct_access.type_(scope),
             Self::StructMethod(expr) => expr.type_(scope),
             Self::ArrayAccess(expr) => expr.type_(scope),
-            Self::FunctionCall(function_call) => {
-                match scope
-                    .find_symbol(&function_call.name)
-                    .ok_or(SymbolTableError::NotFound(function_call.name.clone()))?
-                {
-                    Symbol::Function(function) => Ok(function.return_type.to_owned()),
-                    _ => unreachable!(),
-                }
-            }
+            Self::FunctionCall(expr) => expr.type_(scope),
         }
     }
 }
@@ -162,15 +153,10 @@ pub struct ExprIdent(pub String);
 
 impl Expression for ExprIdent {
     fn type_(&self, scope: &Scope) -> Result<Type, ExprError> {
-        match scope
+        Ok(scope
             .find_symbol(&self.0)
             .ok_or(TypeError::IdentNotFound(self.0.to_owned()))?
-        {
-            Symbol::Global(global_var) => Ok(global_var.type_.clone()),
-            Symbol::Local(local) => Ok(local.type_.clone()),
-            Symbol::Param(param) => Ok(param.type_.clone()),
-            Symbol::Function(func) => Ok(func.return_type.clone()),
-        }
+            .type_())
     }
 }
 
@@ -245,8 +231,17 @@ impl Expression for ExprStructMethod {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprFunctionCall {
-    pub name: String,
+    pub expr: Box<Expr>,
     pub arguments: Vec<Expr>,
+}
+
+impl Expression for ExprFunctionCall {
+    fn type_(&self, scope: &Scope) -> Result<Type, ExprError> {
+        match self.expr.type_(scope)? {
+            Type::Fn(_, type_) => Ok(*type_),
+            _ => unreachable!(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

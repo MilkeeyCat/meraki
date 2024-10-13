@@ -109,9 +109,9 @@ pub trait Architecture: ArchitectureClone {
     fn fn_postamble(&mut self, name: &str, stackframe: usize);
     fn ret(&mut self, src: &Source, signed: bool) -> Result<(), ArchError>;
     fn jcc(&mut self, label: &str, kind: Jump);
-    fn call_fn(
+    fn call(
         &mut self,
-        name: &str,
+        src: &Source,
         dest: Option<&Destination>,
         signed: bool,
         size: usize,
