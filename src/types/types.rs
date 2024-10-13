@@ -174,6 +174,7 @@ impl Type {
         match (lhs, rhs) {
             (lhs, rhs) if lhs == rhs => lhs,
             (type_ @ Type::Ptr(_), int) | (int, type_ @ Type::Ptr(_)) if int.int() => type_,
+            (type_ @ Type::Ptr(_), Type::Null) | (Type::Null, type_ @ Type::Ptr(_)) => type_,
             (Type::UInt(lhs), Type::UInt(rhs)) => {
                 if lhs > rhs {
                     Type::UInt(lhs)
