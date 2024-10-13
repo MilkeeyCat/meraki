@@ -561,6 +561,9 @@ impl CodeGen {
             | BinOp::Equal
             | BinOp::NotEqual => {
                 if let Some(dest) = dest {
+                    let size = self
+                        .arch
+                        .size(&Type::common_type(left_type, right_type), &self.scope);
                     let left = self.arch.alloc()?;
                     let right = self.arch.alloc()?;
 
