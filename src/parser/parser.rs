@@ -3,7 +3,7 @@ use super::{
     precedence::Precedence,
     stmt::{StmtFor, StmtIf, StmtReturn, StmtWhile},
     BinOp, Block, Expr, ExprArray, ExprArrayAccess, ExprCast, ExprIdent, ExprStruct,
-    ExprStructMethod, ParserError, Stmt, StmtFunction, StmtVarDecl, UIntLitRepr, UnOp,
+    ExprStructMethod, MacroCall, ParserError, Stmt, StmtFunction, StmtVarDecl, UIntLitRepr, UnOp,
 };
 use crate::{
     lexer::{Lexer, Token},
@@ -81,6 +81,7 @@ impl Parser {
                 (Token::LBracket, Self::array_access),
                 (Token::As, Self::cast_expr),
                 (Token::LParen, Self::func_call_expr),
+                (Token::Bang, Self::macro_call_expr),
             ]),
         })
     }
@@ -628,6 +629,26 @@ impl Parser {
             expr: Box::new(left),
             arguments: args,
         }))
+    }
+
+    fn macro_call_expr(&mut self, left: Expr) -> Result<Expr, ParserError> {
+        let name = match left {
+            Expr::Ident(expr) => expr.0,
+            _ => panic!("Macro name can only be a string"),
+        };
+
+        self.expect(&Token::Bang)?;
+        self.expect(&Token::LParen)?;
+
+        let mut tokens = Vec::new();
+
+        while !self.cur_token_is(&Token::RParen) {
+            tokens.push(self.next_token()?);
+        }
+
+        self.expect(&Token::RParen)?;
+
+        Ok(Expr::MacroCall(MacroCall { name, tokens }))
     }
 
     fn bin_expr(&mut self, left: Expr) -> Result<Expr, ParserError> {

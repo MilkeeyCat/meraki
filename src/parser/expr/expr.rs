@@ -1,5 +1,6 @@
 use super::{int_repr::UIntLitRepr, ExprError, IntLitRepr};
 use crate::{
+    lexer::Token,
     parser::op::{BinOp, UnOp},
     scope::Scope,
     type_table,
@@ -23,6 +24,7 @@ pub enum Expr {
     StructMethod(ExprStructMethod),
     ArrayAccess(ExprArrayAccess),
     FunctionCall(ExprFunctionCall),
+    MacroCall(MacroCall),
 }
 
 impl Expression for Expr {
@@ -39,6 +41,7 @@ impl Expression for Expr {
             Self::StructMethod(expr) => expr.type_(scope),
             Self::ArrayAccess(expr) => expr.type_(scope),
             Self::FunctionCall(expr) => expr.type_(scope),
+            Self::MacroCall(_) => unreachable!("Macro calls should've already been expanded"),
         }
     }
 }
@@ -242,6 +245,12 @@ impl Expression for ExprFunctionCall {
             _ => unreachable!(),
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MacroCall {
+    pub name: String,
+    pub tokens: Vec<Token>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

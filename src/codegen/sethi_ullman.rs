@@ -45,7 +45,7 @@ impl SethiUllman for Expr {
             Self::ArrayAccess(expr) => Self::eval(expr.expr.r_num(), expr.index.r_num()),
             //NOTE: I don't really know how to calculate correct value yet, so calculate functions first
             Self::FunctionCall(_) => usize::MAX,
-            Self::Struct(_) | Self::Array(_) => unreachable!(),
+            Self::Struct(_) | Self::Array(_) | Self::MacroCall(_) => unreachable!(),
         }
     }
 
@@ -59,7 +59,7 @@ impl SethiUllman for Expr {
             | Self::ArrayAccess(_)
             | Self::FunctionCall(_) => false,
             Self::Lit(_) | Self::Ident(_) => true,
-            Self::Struct(_) | Self::Array(_) => unreachable!(),
+            Self::Struct(_) | Self::Array(_) | Self::MacroCall(_) => unreachable!(),
         }
     }
 }

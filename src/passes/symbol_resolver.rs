@@ -223,6 +223,7 @@ impl SymbolResolver {
                     Self::resolve_expr(expr, scope)?;
                 }
             }
+            Expr::MacroCall(_) => unreachable!(),
         })
     }
 }

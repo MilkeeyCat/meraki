@@ -371,6 +371,7 @@ impl CodeGen {
                     self.array_access(expr, dest)?;
                 }
             }
+            Expr::MacroCall(_) => unreachable!(),
         };
 
         Ok(())

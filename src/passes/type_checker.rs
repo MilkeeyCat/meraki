@@ -175,6 +175,7 @@ impl TypeChecker {
                     }
                 }
             }
+            Expr::MacroCall(_) => unreachable!(),
         })
     }
 

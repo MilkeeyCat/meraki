@@ -31,7 +31,7 @@ impl From<&Token> for Precedence {
             Token::Equal | Token::NotEqual => Self::Equality,
             Token::Shl | Token::Shr => Self::Shift,
             Token::Assign => Self::Assign,
-            Token::LParen => Self::Call,
+            Token::LParen | Token::Bang => Self::Call,
             Token::As => Self::Cast,
             Token::Period | Token::Arrow | Token::LBracket => Self::Access,
             Token::And => Self::LogicalAnd,
