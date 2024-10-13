@@ -314,16 +314,25 @@ impl CodeGen {
             Expr::Cast(cast_expr) => {
                 if let Some(dest) = dest {
                     let type_ = cast_expr.expr.type_(&self.scope)?;
+                    let og_size = self.arch.size(&type_, &self.scope);
                     let casted_size = self.arch.size(&cast_expr.type_, &self.scope);
 
-                    if casted_size < self.arch.size(&type_, &self.scope) {
+                    if casted_size != og_size {
                         let (r, new) = match dest {
                             Destination::Memory(_) => (self.arch.alloc()?, true),
                             Destination::Register(register) => (register.register, false),
                         };
 
-                        self.expr(*cast_expr.expr, Some(&r.dest(self.arch.word_size())), state)?;
+                        self.expr(*cast_expr.expr, Some(&r.dest(og_size)), state)?;
+
                         if new {
+                            if casted_size > og_size {
+                                self.arch.mov(
+                                    &r.source(og_size),
+                                    &r.dest(casted_size),
+                                    type_.signed(),
+                                )?;
+                            }
                             self.arch
                                 .mov(&r.source(casted_size), dest, type_.signed())?;
                             self.arch.free(r)?;
