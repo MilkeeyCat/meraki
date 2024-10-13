@@ -80,6 +80,7 @@ impl Parser {
                 (Token::Period, Self::struct_access),
                 (Token::LBracket, Self::array_access),
                 (Token::As, Self::cast_expr),
+                (Token::LParen, Self::func_call_expr),
             ]),
         })
     }
@@ -600,36 +601,39 @@ impl Parser {
         }
     }
 
-    fn bin_expr(&mut self, left: Expr) -> Result<Expr, ParserError> {
-        match self.next_token()? {
-            Token::LParen => match left {
-                Expr::Ident(ident) => {
-                    let args = self.expr_list()?;
+    fn func_call_expr(&mut self, left: Expr) -> Result<Expr, ParserError> {
+        self.expect(&Token::LParen)?;
 
-                    Ok(Expr::FunctionCall(ExprFunctionCall {
-                        name: ident.0,
-                        arguments: args,
-                    }))
-                }
-                _ => todo!("Don't know what error to return yet"),
-            },
-            token => {
-                // NOTE: assignment expression is right-associative
-                let precedence = if let &Token::Assign = &token {
-                    Precedence::from(&token).lower()
-                } else {
-                    Precedence::from(&token)
-                };
-                let right = self.expr(precedence)?;
-                let op = BinOp::try_from(&token).map_err(|e| ParserError::Operator(e))?;
+        match left {
+            Expr::Ident(ident) => {
+                let args = self.expr_list()?;
 
-                Ok(Expr::Binary(ExprBinary {
-                    op,
-                    left: Box::new(left),
-                    right: Box::new(right),
+                Ok(Expr::FunctionCall(ExprFunctionCall {
+                    name: ident.0,
+                    arguments: args,
                 }))
             }
+            _ => todo!("Don't know what error to return yet"),
         }
+    }
+
+    fn bin_expr(&mut self, left: Expr) -> Result<Expr, ParserError> {
+        let token = self.next_token()?;
+
+        // NOTE: assignment expression is right-associative
+        let precedence = if let &Token::Assign = &token {
+            Precedence::from(&token).lower()
+        } else {
+            Precedence::from(&token)
+        };
+        let right = self.expr(precedence)?;
+        let op = BinOp::try_from(&token).map_err(|e| ParserError::Operator(e))?;
+
+        Ok(Expr::Binary(ExprBinary {
+            op,
+            left: Box::new(left),
+            right: Box::new(right),
+        }))
     }
 
     fn pointer_access(&mut self, left: Expr) -> Result<Expr, ParserError> {
