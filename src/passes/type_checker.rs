@@ -12,9 +12,14 @@ type Result<T> = std::result::Result<T, ParserError>;
 pub struct TypeChecker;
 
 impl Pass for TypeChecker {
+    type State = ();
     type Output = Result<()>;
 
-    fn proccess(stmts: &mut Vec<Stmt>, scope: &mut Scope) -> Self::Output {
+    fn new(_: Self::State) -> Self {
+        Self {}
+    }
+
+    fn run_pass(self, stmts: &mut Vec<Stmt>, scope: &mut Scope) -> Self::Output {
         Self::check_type_table(scope.type_table(), scope)?;
         for stmt in stmts {
             Self::check_stmt(stmt, scope)?;

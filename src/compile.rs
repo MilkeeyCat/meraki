@@ -3,7 +3,7 @@ use crate::{
     codegen::CodeGen,
     lexer::Lexer,
     parser,
-    passes::{Pass, SymbolResolver, TypeChecker},
+    passes::{MacroExpansion, Pass, SymbolResolver, TypeChecker},
 };
 use clap::Parser;
 use std::{
@@ -13,7 +13,7 @@ use std::{
     process::Stdio,
 };
 
-#[derive(Parser, Debug, Clone)]
+#[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 pub struct CompileArgs {
     /// Source code file to compile
@@ -31,6 +31,9 @@ pub struct CompileArgs {
     /// Compile and assemble but do not link
     #[arg(short = 'c', default_value_t = false, group = "output_t")]
     pub object_only: bool,
+
+    #[arg(long = "macro")]
+    pub macro_libs: Vec<String>,
 }
 
 pub fn compile(args: CompileArgs) -> Result<(), Box<dyn std::error::Error>> {
@@ -42,8 +45,9 @@ pub fn compile(args: CompileArgs) -> Result<(), Box<dyn std::error::Error>> {
     let lexer = Lexer::new(source_code);
     let (mut stmts, mut scope) = parser::Parser::new(lexer)?.into_parts()?;
 
-    SymbolResolver::proccess(&mut stmts, &mut scope)?;
-    TypeChecker::proccess(&mut stmts, &mut scope)?;
+    MacroExpansion::new(args.macro_libs).run_pass(&mut stmts, &mut scope);
+    SymbolResolver::new(()).run_pass(&mut stmts, &mut scope)?;
+    TypeChecker::new(()).run_pass(&mut stmts, &mut scope)?;
 
     dbg!(&stmts);
     dbg!(&scope);

@@ -13,9 +13,14 @@ type Result = std::result::Result<(), ParserError>;
 pub struct SymbolResolver;
 
 impl Pass for SymbolResolver {
+    type State = ();
     type Output = Result;
 
-    fn proccess(stmts: &mut Vec<Stmt>, scope: &mut Scope) -> Self::Output {
+    fn new(_: Self::State) -> Self {
+        Self {}
+    }
+
+    fn run_pass(self, stmts: &mut Vec<Stmt>, scope: &mut Scope) -> Self::Output {
         // Resolve globals
         for stmt in &mut *stmts {
             match stmt {

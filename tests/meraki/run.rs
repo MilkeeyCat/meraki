@@ -8,9 +8,10 @@ pub fn run(path: &Path) -> std::io::Result<Output> {
         output: Some(executable.clone()),
         object_only: false,
         assembly_only: false,
+        macro_libs: Vec::new(),
     };
 
-    compile(args.clone()).unwrap();
+    compile(args).unwrap();
 
     let output = std::process::Command::new(&executable)
         .spawn()

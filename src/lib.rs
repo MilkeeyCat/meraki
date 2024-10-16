@@ -2,6 +2,7 @@ pub mod archs;
 pub mod codegen;
 pub mod compile;
 pub mod lexer;
+pub mod macros;
 pub mod parser;
 pub mod passes;
 pub mod register;
