@@ -17,7 +17,7 @@ use std::{
 #[command(version, about, long_about = None)]
 pub struct CompileArgs {
     /// Source code file to compile
-    #[arg(required = true, num_args = 1)]
+    #[arg(required = true)]
     pub file: PathBuf,
 
     /// Output binary file name
@@ -34,6 +34,9 @@ pub struct CompileArgs {
 
     #[arg(long = "macro")]
     pub macro_libs: Vec<String>,
+
+    #[arg(long = "shared", default_value_t = false)]
+    pub shared: bool,
 }
 
 pub fn compile(args: CompileArgs) -> Result<(), Box<dyn std::error::Error>> {
@@ -77,7 +80,7 @@ pub fn compile(args: CompileArgs) -> Result<(), Box<dyn std::error::Error>> {
         "a.out".into()
     };
 
-    link(&obj_filename, &binary_filename)?;
+    link(&obj_filename, &binary_filename, args.shared)?;
 
     // Remove intermediate steps file
     std::fs::remove_file(&obj_filename)?;
@@ -107,21 +110,29 @@ fn assemble(source: &[u8], output: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-fn link(input: &Path, output: &Path) -> std::io::Result<()> {
+fn link(input: &Path, output: &Path, shared: bool) -> std::io::Result<()> {
     const OBJ_PATH: &'static str = "/usr/lib/x86_64-linux-gnu";
+    let linker = format!("{OBJ_PATH}/ld-linux-x86-64.so.2");
+    let crt = format!("{OBJ_PATH}/crt1.o");
+
+    let mut args = vec![
+        "-dynamic-linker",
+        &linker,
+        &crt,
+        "-lc",
+        input.to_str().unwrap(),
+        "-z",
+        "noexecstack",
+        "-o",
+        output.to_str().unwrap(),
+    ];
+
+    if shared {
+        args.push("-shared");
+    }
 
     std::process::Command::new("ld")
-        .args([
-            "-dynamic-linker",
-            &format!("{OBJ_PATH}/ld-linux-x86-64.so.2"),
-            &format!("{OBJ_PATH}/crt1.o"),
-            "-lc",
-            input.to_str().unwrap(),
-            "-z",
-            "noexecstack",
-            "-o",
-            output.to_str().unwrap(),
-        ])
+        .args(args)
         .spawn()?
         .wait()?;
 
