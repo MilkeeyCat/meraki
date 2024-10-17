@@ -9,6 +9,7 @@ pub fn run(path: &Path) -> std::io::Result<Output> {
         object_only: false,
         assembly_only: false,
         macro_libs: Vec::new(),
+        shared: false,
     };
 
     compile(args).unwrap();
