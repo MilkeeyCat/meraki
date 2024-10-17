@@ -6,7 +6,7 @@ use super::{
     ExprStructMethod, MacroCall, ParserError, Stmt, StmtFunction, StmtVarDecl, UIntLitRepr, UnOp,
 };
 use crate::{
-    lexer::{Lexer, Token},
+    lexer::{LexerError, Token},
     parser::{ExprFunctionCall, ExprStructAccess},
     scope::{Scope, ScopeKind},
     symbol_table::{Symbol, SymbolFunction},
@@ -15,36 +15,33 @@ use crate::{
 };
 use std::collections::HashMap;
 
-type PrefixFn = fn(&mut Parser) -> Result<Expr, ParserError>;
-type InfixFn = fn(&mut Parser, left: Expr) -> Result<Expr, ParserError>;
+type PrefixFn<T> = fn(&mut Parser<T>) -> Result<Expr, ParserError>;
+type InfixFn<T> = fn(&mut Parser<T>, left: Expr) -> Result<Expr, ParserError>;
 
-pub struct Parser {
-    lexer: Lexer,
-    cur_token: Token,
-    peek_token: Token,
+pub struct Parser<T: Iterator<Item = Result<Token, LexerError>>> {
+    lexer: T,
+    cur_token: Option<Token>,
+    peek_token: Option<Token>,
     scope: Scope,
     global_stms: Vec<Stmt>,
-    prefix_fns: HashMap<Token, PrefixFn>,
-    infix_fns: HashMap<Token, InfixFn>,
+    prefix_fns: HashMap<Token, PrefixFn<T>>,
+    infix_fns: HashMap<Token, InfixFn<T>>,
 }
 
-impl Parser {
-    pub fn new(mut lexer: Lexer) -> Result<Self, ParserError> {
+impl<T: Iterator<Item = Result<Token, LexerError>>> Parser<T> {
+    pub fn new(mut lexer: T) -> Result<Self, ParserError> {
         let mut scope = Scope::new();
         scope.enter_new(ScopeKind::Global);
 
         Ok(Self {
-            cur_token: lexer.next_token()?,
-            peek_token: lexer.next_token()?,
+            cur_token: lexer.next().transpose()?,
+            peek_token: lexer.next().transpose()?,
             lexer,
             scope,
             global_stms: Vec::new(),
             prefix_fns: HashMap::from([
-                (Token::Ident(Default::default()), Self::ident as PrefixFn),
-                (
-                    Token::String(Default::default()),
-                    Self::string_lit as PrefixFn,
-                ),
+                (Token::Ident(Default::default()), Self::ident as PrefixFn<T>),
+                (Token::String(Default::default()), Self::string_lit),
                 (Token::Integer(Default::default()), Self::int_lit),
                 (Token::Null, Self::null),
                 (Token::True, Self::bool),
@@ -58,7 +55,7 @@ impl Parser {
                 (Token::LBracket, Self::array_expr),
             ]),
             infix_fns: HashMap::from([
-                (Token::Plus, Self::bin_expr as InfixFn),
+                (Token::Plus, Self::bin_expr as InfixFn<T>),
                 (Token::Minus, Self::bin_expr),
                 (Token::Asterisk, Self::bin_expr),
                 (Token::Slash, Self::bin_expr),
@@ -86,8 +83,9 @@ impl Parser {
         })
     }
 
-    fn next_token(&mut self) -> Result<Token, ParserError> {
-        let mut token = self.lexer.next_token()?;
+    fn next_token(&mut self) -> Result<Option<Token>, ParserError> {
+        let mut token = self.lexer.next().transpose()?;
+
         std::mem::swap(&mut self.cur_token, &mut self.peek_token);
         std::mem::swap(&mut token, &mut self.peek_token);
 
@@ -95,23 +93,18 @@ impl Parser {
     }
 
     fn cur_token_is(&self, token: &Token) -> bool {
-        &self.cur_token == token
+        self.cur_token.as_ref() == Some(token)
     }
 
     fn peek_token_is(&self, token: &Token) -> bool {
-        &self.peek_token == token
+        self.peek_token.as_ref() == Some(token)
     }
 
     fn expect(&mut self, token: &Token) -> Result<(), ParserError> {
-        if self.cur_token_is(token) {
-            self.next_token()?;
-
-            Ok(())
-        } else {
-            Err(ParserError::UnexpectedToken(
-                token.to_owned(),
-                self.cur_token.clone(),
-            ))
+        match self.next_token()? {
+            Some(ref cur) if cur == token => Ok(()),
+            Some(cur) => Err(ParserError::UnexpectedToken(token.to_owned(), cur)),
+            None => Err(ParserError::Expected(token.to_owned())),
         }
     }
 
@@ -122,8 +115,8 @@ impl Parser {
     pub fn parse(&mut self) -> Result<Vec<Stmt>, ParserError> {
         let mut stmts = Vec::new();
 
-        while !&self.cur_token_is(&Token::Eof) {
-            match self.cur_token {
+        while let Some(token) = &self.cur_token {
+            match token {
                 Token::Struct => self.parse_struct()?,
                 Token::Let => stmts.push(self.var_decl()?),
                 Token::Fn => {
@@ -141,7 +134,7 @@ impl Parser {
     }
 
     fn expr(&mut self, precedence: Precedence) -> Result<Expr, ParserError> {
-        let token = match &self.cur_token {
+        let token = match self.cur_token.as_ref().unwrap() {
             Token::Ident(_) => Token::Ident(Default::default()),
             Token::Integer(_) => Token::Integer(Default::default()),
             Token::String(_) => Token::String(Default::default()),
@@ -151,17 +144,17 @@ impl Parser {
         let mut left = match self.prefix_fns.get(&token) {
             Some(func) => func(self),
             None => {
-                return Err(ParserError::Prefix(self.cur_token.clone()));
+                return Err(ParserError::Prefix(token));
             }
         };
 
         while !self.cur_token_is(&Token::Semicolon)
-            && precedence < Precedence::from(&self.cur_token)
+            && precedence < Precedence::from(self.cur_token.as_ref().unwrap())
         {
-            left = match self.infix_fns.get(&self.cur_token) {
+            left = match self.infix_fns.get(self.cur_token.as_ref().unwrap()) {
                 Some(func) => func(self, left?),
                 None => {
-                    return Err(ParserError::Infix(self.cur_token.clone()));
+                    return Err(ParserError::Infix(self.cur_token.clone().unwrap()));
                 }
             };
         }
@@ -172,10 +165,16 @@ impl Parser {
     fn parse_struct(&mut self) -> Result<(), ParserError> {
         self.expect(&Token::Struct)?;
 
-        let name = match self.next_token()? {
-            Token::Ident(ident) => ident,
-            _ => todo!("Don't know what error to return yet"),
-        };
+        let name = match self
+            .next_token()?
+            .ok_or(ParserError::Expected(Token::Ident(Default::default())))?
+        {
+            Token::Ident(ident) => Ok(ident),
+            token => Err(ParserError::UnexpectedToken(
+                Token::Ident(Default::default()),
+                token,
+            )),
+        }?;
 
         self.expect(&Token::LBrace)?;
 
@@ -187,7 +186,7 @@ impl Parser {
                 self.expect(&Token::Fn)?;
 
                 let method_name = match self.next_token()? {
-                    Token::Ident(ident) => ident,
+                    Some(Token::Ident(ident)) => ident,
                     _ => todo!(),
                 };
                 self.expect(&Token::LParen)?;
@@ -217,7 +216,7 @@ impl Parser {
                 }));
             } else {
                 let name = match self.next_token()? {
-                    Token::Ident(ident) => ident,
+                    Some(Token::Ident(ident)) => ident,
                     _ => todo!("Don't know what error to return yet"),
                 };
                 self.expect(&Token::Colon)?;
@@ -255,7 +254,7 @@ impl Parser {
         self.expect(&Token::LBrace)?;
 
         while !self.cur_token_is(&Token::RBrace) {
-            match &self.cur_token {
+            match self.cur_token.as_ref().unwrap() {
                 Token::Return => stmts.push(self.parse_return()?),
                 Token::If => stmts.push(self.if_stmt()?),
                 Token::While => stmts.push(self.while_stmt()?),
@@ -301,7 +300,7 @@ impl Parser {
             n += 1;
         }
 
-        let mut base = match self.next_token()? {
+        let mut base = match self.next_token()?.unwrap() {
             Token::U8 => Ok(Type::UInt(UintType::U8)),
             Token::U16 => Ok(Type::UInt(UintType::U16)),
             Token::U32 => Ok(Type::UInt(UintType::U32)),
@@ -429,7 +428,7 @@ impl Parser {
         if self.cur_token_is(&Token::LBracket) {
             self.expect(&Token::LBracket)?;
 
-            match self.next_token()? {
+            match self.next_token()?.unwrap() {
                 Token::Integer(int) => {
                     let length: usize = str::parse(&int).unwrap();
                     self.expect(&Token::RBracket)?;
@@ -449,10 +448,10 @@ impl Parser {
     fn var_decl(&mut self) -> Result<Stmt, ParserError> {
         self.expect(&Token::Let)?;
 
-        let name = match self.next_token()? {
+        let name = match self.next_token()?.unwrap() {
             Token::Ident(ident) => ident,
-            _ => {
-                return Err(ParserError::ParseType(self.cur_token.to_owned()));
+            token => {
+                return Err(ParserError::ParseType(token));
             }
         };
         self.expect(&Token::Colon)?;
@@ -480,10 +479,10 @@ impl Parser {
     fn function(&mut self, func_definition: bool) -> Result<Option<Stmt>, ParserError> {
         self.expect(&Token::Fn)?;
 
-        let name = match self.next_token()? {
+        let name = match self.next_token()?.unwrap() {
             Token::Ident(ident) => ident,
-            _ => {
-                return Err(ParserError::ParseType(self.cur_token.to_owned()));
+            token => {
+                return Err(ParserError::ParseType(token));
             }
         };
 
@@ -529,7 +528,7 @@ impl Parser {
 
         while !self.cur_token_is(&end) {
             let name = match self.next_token()? {
-                Token::Ident(ident) => ident,
+                Some(Token::Ident(ident)) => ident,
                 _ => todo!("Don't know what error to return yet"),
             };
             self.expect(&Token::Colon)?;
@@ -552,8 +551,11 @@ impl Parser {
 
     fn ident(&mut self) -> Result<Expr, ParserError> {
         match self.peek_token {
-            Token::LBrace => self.struct_expr(),
-            _ => match self.next_token()? {
+            Some(Token::LBrace) => self.struct_expr(),
+            _ => match self
+                .next_token()?
+                .ok_or(ParserError::Expected(Token::Ident(Default::default())))?
+            {
                 Token::Ident(ident) => Ok(Expr::Ident(ExprIdent(ident))),
                 token => Err(ParserError::ParseType(token)),
             },
@@ -562,7 +564,7 @@ impl Parser {
 
     fn struct_expr(&mut self) -> Result<Expr, ParserError> {
         let name = match self.next_token()? {
-            Token::Ident(ident) => ident,
+            Some(Token::Ident(ident)) => ident,
             _ => todo!("Don't know what error to return yet"),
         };
 
@@ -571,7 +573,7 @@ impl Parser {
 
         while !self.cur_token_is(&Token::RBrace) {
             match self.next_token()? {
-                Token::Ident(field) => {
+                Some(Token::Ident(field)) => {
                     self.expect(&Token::Colon)?;
                     let expr = self.expr(Precedence::Lowest)?;
 
@@ -592,17 +594,17 @@ impl Parser {
 
     fn string_lit(&mut self) -> Result<Expr, ParserError> {
         match self.next_token()? {
-            Token::String(literal) => Ok(Expr::Lit(ExprLit::String(literal))),
-            token => Err(ParserError::ParseType(token)),
+            Some(Token::String(literal)) => Ok(Expr::Lit(ExprLit::String(literal))),
+            Some(_) | None => unreachable!(),
         }
     }
 
     fn int_lit(&mut self) -> Result<Expr, ParserError> {
         match self.next_token()? {
-            Token::Integer(num_str) => Ok(Expr::Lit(ExprLit::UInt(
+            Some(Token::Integer(num_str)) => Ok(Expr::Lit(ExprLit::UInt(
                 UIntLitRepr::try_from(&num_str[..]).map_err(|e| ParserError::Int(e))?,
             ))),
-            token => Err(ParserError::ParseType(token)),
+            Some(_) | None => unreachable!(),
         }
     }
 
@@ -614,9 +616,9 @@ impl Parser {
 
     fn bool(&mut self) -> Result<Expr, ParserError> {
         match self.next_token()? {
-            Token::True => Ok(Expr::Lit(ExprLit::Bool(true))),
-            Token::False => Ok(Expr::Lit(ExprLit::Bool(false))),
-            token => Err(ParserError::UnexpectedToken(token.clone(), token)),
+            Some(Token::True) => Ok(Expr::Lit(ExprLit::Bool(true))),
+            Some(Token::False) => Ok(Expr::Lit(ExprLit::Bool(false))),
+            Some(_) | None => unreachable!(),
         }
     }
 
@@ -643,7 +645,10 @@ impl Parser {
         let mut tokens = Vec::new();
 
         while !self.cur_token_is(&Token::RParen) {
-            tokens.push(self.next_token()?);
+            tokens.push(
+                self.next_token()?
+                    .ok_or(ParserError::Expected(Token::RParen))?,
+            );
         }
 
         self.expect(&Token::RParen)?;
@@ -652,7 +657,7 @@ impl Parser {
     }
 
     fn bin_expr(&mut self, left: Expr) -> Result<Expr, ParserError> {
-        let token = self.next_token()?;
+        let token = self.next_token()?.unwrap();
 
         // NOTE: assignment expression is right-associative
         let precedence = if let &Token::Assign = &token {
@@ -674,7 +679,7 @@ impl Parser {
         self.expect(&Token::Arrow)?;
 
         let field = match self.next_token()? {
-            Token::Ident(ident) => ident,
+            Some(Token::Ident(ident)) => ident,
             _ => unreachable!(),
         };
 
@@ -692,7 +697,7 @@ impl Parser {
 
         if self.peek_token_is(&Token::LParen) {
             let method = match self.next_token()? {
-                Token::Ident(field) => field,
+                Some(Token::Ident(field)) => field,
                 _ => panic!("Struct field name should be of type string"),
             };
 
@@ -706,7 +711,7 @@ impl Parser {
             }))
         } else {
             match self.next_token()? {
-                Token::Ident(field) => Ok(Expr::StructAccess(ExprStructAccess {
+                Some(Token::Ident(field)) => Ok(Expr::StructAccess(ExprStructAccess {
                     expr: Box::new(expr),
                     field,
                 })),
@@ -736,7 +741,8 @@ impl Parser {
     }
 
     fn unary_expr(&mut self) -> Result<Expr, ParserError> {
-        let op = UnOp::try_from(&self.next_token()?).map_err(|e| ParserError::Operator(e))?;
+        let op =
+            UnOp::try_from(&self.next_token()?.unwrap()).map_err(|e| ParserError::Operator(e))?;
         let expr = self.expr(Precedence::Prefix)?;
 
         Ok(Expr::Unary(ExprUnary {

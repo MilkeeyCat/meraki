@@ -9,6 +9,7 @@ use super::{ExprError, IntLitReprError, OpParseError};
 #[derive(Debug)]
 pub enum ParserError {
     UnexpectedToken(Token, Token),
+    Expected(Token),
     ParseType(Token),
     Prefix(Token),
     Infix(Token),
@@ -29,6 +30,7 @@ impl std::fmt::Display for ParserError {
             Self::UnexpectedToken(expected, actual) => {
                 write!(f, "Expected token {expected}, got {actual}")
             }
+            Self::Expected(token) => write!(f, "Expected {token}"),
             Self::ParseType(token) => write!(f, "Failed to parse type, found {token}"),
             Self::Prefix(token) => write!(f, "Failed to parse prefix token {token}"),
             Self::Infix(token) => write!(f, "Failed to parse infix token {token}"),

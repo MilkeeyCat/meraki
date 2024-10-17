@@ -2,8 +2,6 @@ use std::fmt::Display;
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
 pub enum Token {
-    Eof,
-
     Ident(String),
     Integer(String),
     String(String),
@@ -76,10 +74,11 @@ impl Display for Token {
         use Token::*;
 
         match self {
-            Eof => write!(f, "EOF"),
-            Ident(ident) => write!(f, "ident({ident})"),
-            Integer(integer) => write!(f, "int({integer})"),
-            String(string) => write!(f, "string({string})"),
+            Ident(ident) => {
+                write!(f, "{}", if ident.is_empty() { "ident" } else { ident })
+            }
+            Integer(int) => write!(f, "{int}"),
+            String(string) => write!(f, "\"{string}\""),
             Assign => write!(f, "="),
             Plus => write!(f, "+"),
             Minus => write!(f, "-"),

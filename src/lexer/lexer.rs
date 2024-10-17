@@ -34,7 +34,59 @@ impl Lexer {
         }
     }
 
-    pub fn next_token(&mut self) -> Result<Token, LexerError> {
+    fn peek(&self) -> Option<char> {
+        self.input[self.read_position..].chars().next()
+    }
+
+    fn read_ident(&mut self) -> String {
+        let pos = self.position;
+
+        while self.ch.is_alphanumeric() || self.ch == '_' {
+            self.read_char();
+        }
+
+        self.input[pos..self.position].to_string()
+    }
+
+    fn read_int(&mut self) -> String {
+        let pos = self.position;
+
+        while self.ch.is_ascii_digit() {
+            self.read_char();
+        }
+
+        self.input[pos..self.position].to_string()
+    }
+
+    fn read_string(&mut self) -> String {
+        let pos = self.position + 1;
+
+        loop {
+            self.read_char();
+
+            if self.ch == '"' || self.ch == '\0' {
+                break self.input[pos..self.position].to_string();
+            }
+        }
+    }
+
+    fn skip_whitespace(&mut self) {
+        while self.ch.is_ascii_whitespace() {
+            self.read_char();
+        }
+    }
+
+    fn skip_comment(&mut self) {
+        while self.ch != '\n' {
+            self.read_char();
+        }
+    }
+}
+
+impl Iterator for Lexer {
+    type Item = Result<Token, LexerError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
         self.skip_whitespace();
 
         let token = match self.ch {
@@ -59,7 +111,7 @@ impl Lexer {
                 if self.peek() == Some('/') {
                     self.skip_comment();
 
-                    return Ok(self.next_token()?);
+                    return self.next();
                 } else {
                     Token::Slash
                 }
@@ -124,13 +176,13 @@ impl Lexer {
             ':' => Token::Colon,
             '"' => Token::String(self.read_string()),
             '0'..='9' => {
-                return Ok(Token::Integer(self.read_int()));
+                return Some(Ok(Token::Integer(self.read_int())));
             }
-            '\0' => Token::Eof,
+            '\0' => return None,
             ch if ch.is_alphanumeric() || ch == '_' => {
                 let ident = self.read_ident();
 
-                return Ok(match ident.as_str() {
+                return Some(Ok(match ident.as_str() {
                     "const" => Token::Const,
                     "true" => Token::True,
                     "let" => Token::Let,
@@ -160,64 +212,16 @@ impl Lexer {
                     "void" => Token::Void,
                     "NULL" => Token::Null,
                     _ => Token::Ident(ident),
-                });
+                }));
             }
             ch => {
-                return Err(LexerError::UnknownCharacter(ch));
+                return Some(Err(LexerError::UnknownCharacter(ch)));
             }
         };
 
         self.read_char();
 
-        Ok(token)
-    }
-
-    fn peek(&self) -> Option<char> {
-        self.input[self.read_position..].chars().next()
-    }
-
-    fn read_ident(&mut self) -> String {
-        let pos = self.position;
-
-        while self.ch.is_alphanumeric() || self.ch == '_' {
-            self.read_char();
-        }
-
-        self.input[pos..self.position].to_string()
-    }
-
-    fn read_int(&mut self) -> String {
-        let pos = self.position;
-
-        while self.ch.is_ascii_digit() {
-            self.read_char();
-        }
-
-        self.input[pos..self.position].to_string()
-    }
-
-    fn read_string(&mut self) -> String {
-        let pos = self.position + 1;
-
-        loop {
-            self.read_char();
-
-            if self.ch == '"' || self.ch == '\0' {
-                break self.input[pos..self.position].to_string();
-            }
-        }
-    }
-
-    fn skip_whitespace(&mut self) {
-        while self.ch.is_ascii_whitespace() {
-            self.read_char();
-        }
-    }
-
-    fn skip_comment(&mut self) {
-        while self.ch != '\n' {
-            self.read_char();
-        }
+        Some(Ok(token))
     }
 }
 
@@ -359,13 +363,12 @@ mod test {
             Token::Bool,
             Token::Void,
             Token::Null,
-            Token::Eof,
         ];
 
         let mut lexer = Lexer::new(input.to_string());
 
         for token in tokens {
-            let next_token = lexer.next_token()?;
+            let next_token = lexer.next().unwrap()?;
 
             assert_eq!(token, next_token);
         }
