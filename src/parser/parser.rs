@@ -133,7 +133,7 @@ impl<T: Iterator<Item = Result<Token, LexerError>>> Parser<T> {
         Ok(stmts)
     }
 
-    fn expr(&mut self, precedence: Precedence) -> Result<Expr, ParserError> {
+    pub fn expr(&mut self, precedence: Precedence) -> Result<Expr, ParserError> {
         let token = match self.cur_token.as_ref().unwrap() {
             Token::Ident(_) => Token::Ident(Default::default()),
             Token::Integer(_) => Token::Integer(Default::default()),
@@ -149,6 +149,7 @@ impl<T: Iterator<Item = Result<Token, LexerError>>> Parser<T> {
         };
 
         while !self.cur_token_is(&Token::Semicolon)
+            && self.cur_token.is_some()
             && precedence < Precedence::from(self.cur_token.as_ref().unwrap())
         {
             left = match self.infix_fns.get(self.cur_token.as_ref().unwrap()) {
@@ -247,6 +248,36 @@ impl<T: Iterator<Item = Result<Token, LexerError>>> Parser<T> {
         Ok(())
     }
 
+    fn stmt(&mut self) -> Result<Option<Stmt>, ParserError> {
+        match self.cur_token.as_ref().unwrap() {
+            Token::Return => Ok(Some(self.parse_return()?)),
+            Token::If => Ok(Some(self.if_stmt()?)),
+            Token::While => Ok(Some(self.while_stmt()?)),
+            Token::For => Ok(Some(self.for_stmt()?)),
+            Token::Let => Ok(Some(self.var_decl()?)),
+            Token::Continue => {
+                self.expect(&Token::Continue)?;
+                self.expect(&Token::Semicolon)?;
+
+                Ok(Some(Stmt::Continue))
+            }
+            Token::Break => {
+                self.expect(&Token::Break)?;
+                self.expect(&Token::Semicolon)?;
+
+                Ok(Some(Stmt::Break))
+            }
+            Token::Fn => self.function(true),
+            _ => {
+                let expr = Stmt::Expr(self.expr(Precedence::default())?);
+
+                self.expect(&Token::Semicolon)?;
+
+                Ok(Some(expr))
+            }
+        }
+    }
+
     fn compound_statement(&mut self, scope_kind: ScopeKind) -> Result<Block, ParserError> {
         let mut stmts = Vec::new();
 
@@ -254,34 +285,8 @@ impl<T: Iterator<Item = Result<Token, LexerError>>> Parser<T> {
         self.expect(&Token::LBrace)?;
 
         while !self.cur_token_is(&Token::RBrace) {
-            match self.cur_token.as_ref().unwrap() {
-                Token::Return => stmts.push(self.parse_return()?),
-                Token::If => stmts.push(self.if_stmt()?),
-                Token::While => stmts.push(self.while_stmt()?),
-                Token::For => stmts.push(self.for_stmt()?),
-                Token::Let => stmts.push(self.var_decl()?),
-                Token::Continue => {
-                    self.expect(&Token::Continue)?;
-                    self.expect(&Token::Semicolon)?;
-                    stmts.push(Stmt::Continue);
-                }
-                Token::Break => {
-                    self.expect(&Token::Break)?;
-                    self.expect(&Token::Semicolon)?;
-                    stmts.push(Stmt::Break);
-                }
-                Token::Fn => {
-                    if let Some(stmt) = self.function(true)? {
-                        stmts.push(stmt)
-                    }
-                }
-                _ => {
-                    let expr = Stmt::Expr(self.expr(Precedence::default())?);
-
-                    self.expect(&Token::Semicolon)?;
-
-                    stmts.push(expr);
-                }
+            if let Some(stmt) = self.stmt()? {
+                stmts.push(stmt);
             }
         }
 
@@ -291,6 +296,19 @@ impl<T: Iterator<Item = Result<Token, LexerError>>> Parser<T> {
             statements: stmts,
             scope: self.scope.leave(),
         })
+    }
+
+    // This function is used only by macro expansion
+    pub fn parse_stmts(&mut self) -> Result<Vec<Stmt>, ParserError> {
+        let mut stmts = Vec::new();
+
+        while self.cur_token.is_some() {
+            if let Some(stmt) = self.stmt()? {
+                stmts.push(stmt);
+            }
+        }
+
+        Ok(stmts)
     }
 
     fn parse_type(&mut self) -> Result<Type, ParserError> {
