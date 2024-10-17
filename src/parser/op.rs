@@ -1,36 +1,16 @@
 use crate::lexer::Token;
+use thiserror::Error;
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum OpParseError {
+    #[error("Failed to parse binary operator from {0}")]
     Bin(Token),
+    #[error("Failed to parse unary operator from {0}")]
     Un(Token),
+    #[error("Failed to parse comparison operator from binary operator {0:?}")]
     Cmp(BinOp),
+    #[error("Failed to parse bitwise operator from binary operator {0:?}")]
     Bitwise(BinOp),
-}
-
-impl std::fmt::Display for OpParseError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Un(token) => {
-                write!(f, "Failed to parse unary operator from {token}")
-            }
-            Self::Bin(token) => {
-                write!(f, "Failed to parse binary operator from {token}")
-            }
-            Self::Cmp(op) => {
-                write!(
-                    f,
-                    "Failed to parse comparison operator from binary operator {op:?}",
-                )
-            }
-            Self::Bitwise(op) => {
-                write!(
-                    f,
-                    "Failed to parse bitwise operator from binary operator {op:?}",
-                )
-            }
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

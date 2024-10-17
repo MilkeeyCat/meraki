@@ -1,19 +1,10 @@
 use crate::{symbol_table::SymbolTableError, types::TypeError};
+use thiserror::Error;
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum ExprError {
-    Type(TypeError),
-    SymbolTable(SymbolTableError),
-}
-
-impl From<TypeError> for ExprError {
-    fn from(value: TypeError) -> Self {
-        Self::Type(value)
-    }
-}
-
-impl From<SymbolTableError> for ExprError {
-    fn from(value: SymbolTableError) -> Self {
-        Self::SymbolTable(value)
-    }
+    #[error(transparent)]
+    Type(#[from] TypeError),
+    #[error(transparent)]
+    SymbolTable(#[from] SymbolTableError),
 }

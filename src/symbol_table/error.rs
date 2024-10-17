@@ -1,24 +1,12 @@
 use crate::types::TypeError;
+use thiserror::Error;
 
-#[derive(Debug, PartialEq)]
+#[derive(Error, Debug, PartialEq)]
 pub enum SymbolTableError {
+    #[error("Redeclaration of '{0}'")]
     Redeclaration(String),
+    #[error("Symbol '{0}' not found")]
     NotFound(String),
+    #[error(transparent)]
     Type(TypeError),
-}
-
-impl std::fmt::Display for SymbolTableError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Redeclaration(name) => write!(f, "Redeclaration of '{name}'"),
-            Self::NotFound(name) => write!(f, "Symbol '{name}' not found"),
-            Self::Type(e) => e.fmt(f),
-        }
-    }
-}
-
-impl From<TypeError> for SymbolTableError {
-    fn from(value: TypeError) -> Self {
-        Self::Type(value)
-    }
 }

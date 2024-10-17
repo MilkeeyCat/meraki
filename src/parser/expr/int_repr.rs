@@ -1,5 +1,6 @@
 use crate::types::{IntType, Type, UintType};
-use std::{fmt::Display, num::ParseIntError};
+use std::num::ParseIntError;
+use thiserror::Error;
 
 const I8_MIN: i64 = i8::MIN as i64;
 const I8_MAX: i64 = i8::MAX as i64;
@@ -103,23 +104,10 @@ impl TryFrom<&str> for UIntLitRepr {
     }
 }
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum IntLitReprError {
+    #[error("{0} bits integers are not supported")]
     TooLarge(usize),
-    ParseInt(ParseIntError),
-}
-
-impl From<ParseIntError> for IntLitReprError {
-    fn from(value: ParseIntError) -> Self {
-        Self::ParseInt(value)
-    }
-}
-
-impl Display for IntLitReprError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::TooLarge(bits) => write!(f, "{bits} bits integers are not supported"),
-            Self::ParseInt(e) => e.fmt(f),
-        }
-    }
+    #[error(transparent)]
+    ParseInt(#[from] ParseIntError),
 }

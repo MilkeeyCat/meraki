@@ -1,86 +1,48 @@
+use super::{ExprError, IntLitReprError, OpParseError};
 use crate::{
     lexer::{LexerError, Token},
     symbol_table::SymbolTableError,
     types::{Type, TypeError},
 };
+use thiserror::Error;
 
-use super::{ExprError, IntLitReprError, OpParseError};
-
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum ParserError {
+    #[error(transparent)]
+    Expr(#[from] ExprError),
+    #[error(transparent)]
+    Lexer(#[from] LexerError),
+    #[error(transparent)]
+    Type(#[from] TypeError),
+    #[error(transparent)]
+    Operator(#[from] OpParseError),
+    #[error(transparent)]
+    Int(#[from] IntLitReprError),
+    #[error(transparent)]
+    SymbolTable(#[from] SymbolTableError),
+    #[error("Expected token {0}, got {1}")]
     UnexpectedToken(Token, Token),
+    #[error("Expected {0}")]
     Expected(Token),
+    #[error("Failed to parse type, found {0}")]
     ParseType(Token),
+    #[error("Failed to parse prefix token {0}")]
     Prefix(Token),
+    #[error("Failed to parse infix token {0}")]
     Infix(Token),
-    Lexer(LexerError),
-    Type(TypeError),
-    Operator(OpParseError),
-    Int(IntLitReprError),
-    SymbolTable(SymbolTableError),
+    #[error("Call to undeclared function {0}")]
     UndeclaredFunction(String),
+    #[error("Function has signature ({}), got called with ({})",
+        .0
+            .iter()
+            .map(|type_| type_.to_string())
+            .collect::<Vec<String>>()
+            .join(", "),
+        .1
+            .iter()
+            .map(|type_| type_.to_string())
+            .collect::<Vec<String>>()
+            .join(", ")
+    )]
     FunctionArguments(Vec<Type>, Vec<Type>),
-}
-
-impl std::error::Error for ParserError {}
-
-impl std::fmt::Display for ParserError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::UnexpectedToken(expected, actual) => {
-                write!(f, "Expected token {expected}, got {actual}")
-            }
-            Self::Expected(token) => write!(f, "Expected {token}"),
-            Self::ParseType(token) => write!(f, "Failed to parse type, found {token}"),
-            Self::Prefix(token) => write!(f, "Failed to parse prefix token {token}"),
-            Self::Infix(token) => write!(f, "Failed to parse infix token {token}"),
-            Self::Lexer(e) => e.fmt(f),
-            Self::Type(e) => e.fmt(f),
-            Self::Operator(e) => e.fmt(f),
-            Self::Int(e) => e.fmt(f),
-            Self::SymbolTable(e) => e.fmt(f),
-            Self::UndeclaredFunction(name) => write!(f, "Call to undeclared function {name}"),
-            Self::FunctionArguments(expected, actual) => write!(
-                f,
-                "Function has signature ({}), got called with ({})",
-                expected
-                    .iter()
-                    .map(|type_| type_.to_string())
-                    .collect::<Vec<String>>()
-                    .join(", "),
-                actual
-                    .iter()
-                    .map(|type_| type_.to_string())
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            ),
-        }
-    }
-}
-
-impl From<TypeError> for ParserError {
-    fn from(value: TypeError) -> Self {
-        Self::Type(value)
-    }
-}
-
-impl From<SymbolTableError> for ParserError {
-    fn from(value: SymbolTableError) -> Self {
-        Self::SymbolTable(value)
-    }
-}
-
-impl From<LexerError> for ParserError {
-    fn from(value: LexerError) -> Self {
-        Self::Lexer(value)
-    }
-}
-
-impl From<ExprError> for ParserError {
-    fn from(value: ExprError) -> Self {
-        match value {
-            ExprError::Type(e) => Self::Type(e),
-            ExprError::SymbolTable(e) => Self::SymbolTable(e),
-        }
-    }
 }

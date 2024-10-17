@@ -1,12 +1,7 @@
-#[derive(Debug)]
-pub enum LexerError {
-    UnknownCharacter(char),
-}
+use thiserror::Error;
 
-impl std::fmt::Display for LexerError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::UnknownCharacter(ch) => write!(f, "Failed to parse char {ch}"),
-        }
-    }
+#[derive(Error, Debug)]
+pub enum LexerError {
+    #[error("Failed to parse char {0}")]
+    UnknownCharacter(char),
 }

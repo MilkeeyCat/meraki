@@ -1,37 +1,24 @@
 use super::Type;
+use thiserror::Error;
 
-#[derive(Debug, PartialEq)]
+#[derive(Error, Debug, PartialEq)]
 pub enum TypeError {
+    #[error("Operation between {0} and {1} are not allowed")]
     Promotion(Type, Type),
+    #[error("Ident {0} not found")]
     IdentNotFound(String),
+    #[error("Can't assign {0} to {1}")]
     Assignment(Type, Type),
+    #[error("Can't cast {0} into {1}")]
     Cast(Type, Type),
+    #[error("Expected return value of type {1}, got {0} instead")]
     Return(Type, Type),
+    #[error("Variable can't be of type void")]
     VoidVariable,
+    #[error("Type '{0}' doens't exits")]
     Nonexistent(String),
+    #[error("Type {0} is not pointer")]
     Deref(Type),
+    #[error("Mismatched types expected {0}, found {1}")]
     Mismatched(Type, Type),
-}
-
-impl std::fmt::Display for TypeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::IdentNotFound(ident) => write!(f, "Ident {ident} not found"),
-            Self::Promotion(lhs, rhs) => {
-                write!(f, "Operation between {lhs} and {rhs} are not allowed")
-            }
-            Self::Assignment(lhs, rhs) => write!(f, "Can't assign {lhs} to {rhs}"),
-            Self::Cast(from, to) => write!(f, "Can't cast {from} into {to}"),
-            Self::Return(left, right) => write!(
-                f,
-                "Expected return value of type {right},  got {left} instead",
-            ),
-            Self::VoidVariable => write!(f, "Variable can't be of type void"),
-            Self::Nonexistent(name) => write!(f, "Type '{name}' doens't exits"),
-            Self::Deref(type_) => write!(f, "Type {type_} is not pointer"),
-            Self::Mismatched(expected, actual) => {
-                write!(f, "Mismatched types expected {expected}, found {actual}")
-            }
-        }
-    }
 }
