@@ -139,6 +139,7 @@ pub trait Architecture: ArchitectureClone {
     fn shr(&mut self, dest: &Destination, src: &Source) -> Result<(), ArchError>;
     fn push(&mut self, src: &Source);
     fn pop(&mut self, dest: &Destination);
+    fn symbol_source(&self, name: &str, scope: &Scope) -> Result<Source, ArchError>;
     fn finish(&mut self) -> Vec<u8>;
 }
 

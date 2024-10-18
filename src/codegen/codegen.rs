@@ -11,7 +11,7 @@ use crate::{
     },
     register::Register,
     scope::Scope,
-    symbol_table::{Symbol, SymbolTableError},
+    symbol_table::Symbol,
     type_table as tt,
     types::{Type, TypeError},
 };
@@ -286,11 +286,7 @@ impl CodeGen {
             }
             Expr::Ident(ident) => {
                 if let Some(dest) = dest {
-                    let symbol = self
-                        .scope
-                        .find_symbol(&ident.0)
-                        .ok_or(SymbolTableError::NotFound(ident.0.clone()))?;
-                    let source = symbol.source(&self.arch, &self.scope)?;
+                    let source = self.arch.symbol_source(&ident.0, &self.scope)?;
 
                     // If the ident is of type array, the address of variable has to be moved, not the value
                     if let Type::Array(_) = ident.type_(&self.scope)? {
@@ -1124,11 +1120,8 @@ impl CodeGen {
     fn expr_dest(&mut self, expr: Expr) -> Result<Destination, CodeGenError> {
         match expr {
             Expr::Ident(expr) => Ok(self
-                .scope
-                .find_symbol(&expr.0)
-                .ok_or(SymbolTableError::NotFound(expr.0.clone()))?
-                .source(&self.arch, &self.scope)
-                .unwrap()
+                .arch
+                .symbol_source(&expr.0, &self.scope)?
                 .try_into()
                 .unwrap()),
             Expr::StructAccess(expr) => {

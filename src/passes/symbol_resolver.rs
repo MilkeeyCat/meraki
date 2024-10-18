@@ -32,22 +32,23 @@ impl Pass for SymbolResolver {
                             stmt.block
                                 .scope
                                 .symbol_table
-                                .push(Symbol::Param(SymbolParam {
-                                    name: name.to_owned(),
-                                    preceding: stmt.params[..i]
-                                        .iter()
-                                        .map(|(_, type_)| type_.to_owned())
-                                        .collect(),
-                                    type_: type_.to_owned(),
-                                    offset: Offset::default(),
-                                }))
+                                .push(
+                                    name.to_owned(),
+                                    Symbol::Param(SymbolParam {
+                                        preceding: stmt.params[..i]
+                                            .iter()
+                                            .map(|(_, type_)| type_.to_owned())
+                                            .collect(),
+                                        type_: type_.to_owned(),
+                                        offset: Offset::default(),
+                                    }),
+                                )
                                 .unwrap();
                         });
 
-                    scope
-                        .symbol_table_mut()
-                        .push(Symbol::Function(SymbolFunction {
-                            name: stmt.name.clone(),
+                    scope.symbol_table_mut().push(
+                        stmt.name.clone(),
+                        Symbol::Function(SymbolFunction {
                             return_type: stmt.return_type.clone(),
                             parameters: stmt
                                 .params
@@ -55,13 +56,17 @@ impl Pass for SymbolResolver {
                                 .into_iter()
                                 .map(|(_, type_)| type_)
                                 .collect(),
-                        }))?;
+                        }),
+                    )?;
                 }
                 Stmt::VarDecl(stmt) => {
-                    scope.symbol_table_mut().push(Symbol::Global(SymbolGlobal {
-                        name: stmt.name.clone(),
-                        type_: stmt.type_.clone(),
-                    }))?;
+                    scope.symbol_table_mut().push(
+                        stmt.name.clone(),
+                        Symbol::Global(SymbolGlobal {
+                            label: stmt.name.clone(),
+                            type_: stmt.type_.clone(),
+                        }),
+                    )?;
                 }
                 _ => unreachable!(),
             }
@@ -94,11 +99,13 @@ impl SymbolResolver {
     fn resolve_stmt(stmt: &mut Stmt, scope: &mut Scope) -> Result {
         Ok(match stmt {
             Stmt::VarDecl(stmt) => {
-                scope.symbol_table_mut().push(Symbol::Local(SymbolLocal {
-                    name: stmt.name.clone(),
-                    type_: stmt.type_.clone(),
-                    offset: Offset::default(),
-                }))?;
+                scope.symbol_table_mut().push(
+                    stmt.name.clone(),
+                    Symbol::Local(SymbolLocal {
+                        type_: stmt.type_.clone(),
+                        offset: Offset::default(),
+                    }),
+                )?;
             }
             Stmt::Expr(expr) => {
                 Self::resolve_expr(expr, scope)?;

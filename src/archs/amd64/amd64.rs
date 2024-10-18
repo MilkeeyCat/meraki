@@ -10,7 +10,7 @@ use crate::{
         Register,
     },
     scope::Scope,
-    symbol_table::Symbol,
+    symbol_table::{Symbol, SymbolTableError},
     types::{IntType, Type, UintType},
 };
 use indoc::formatdoc;
@@ -632,7 +632,7 @@ impl Architecture for Amd64 {
     ) -> Result<isize, ArchError> {
         let mut occurences: HashMap<ParamClass, usize> = HashMap::new();
 
-        for param in block.scope.symbol_table.0.iter_mut().filter_map(|symbol| {
+        for param in block.scope.symbol_table.iter_mut().filter_map(|symbol| {
             if let Symbol::Param(param) = symbol {
                 Some(param)
             } else {
@@ -806,6 +806,43 @@ impl Architecture for Amd64 {
             \tpush {src}
             "
         ));
+    }
+
+    fn symbol_source(&self, name: &str, scope: &Scope) -> Result<Source, ArchError> {
+        Ok(
+            match scope.find_symbol(name).ok_or(ArchError::SymbolTable(
+                SymbolTableError::NotFound(name.to_owned()),
+            ))? {
+                Symbol::Local(symbol) => Source::Memory(Memory {
+                    effective_address: EffectiveAddress {
+                        base: Base::Register(self.rbp),
+                        index: None,
+                        scale: None,
+                        displacement: Some(symbol.offset.clone()),
+                    },
+                    size: self.size(&symbol.type_, scope),
+                }),
+                Symbol::Global(symbol) => Source::Memory(Memory {
+                    effective_address: EffectiveAddress {
+                        base: Base::Label(name.to_owned()),
+                        index: None,
+                        scale: None,
+                        displacement: None,
+                    },
+                    size: self.size(&symbol.type_, scope),
+                }),
+                Symbol::Param(symbol) => Source::Memory(Memory {
+                    effective_address: EffectiveAddress {
+                        base: Base::Register(self.rbp),
+                        index: None,
+                        scale: None,
+                        displacement: Some(symbol.offset.clone()),
+                    },
+                    size: self.size(&symbol.type_, scope),
+                }),
+                Symbol::Function(_) => Source::Immediate(Immediate::Label(name.to_owned())),
+            },
+        )
     }
 
     fn pop(&mut self, dest: &Destination) {

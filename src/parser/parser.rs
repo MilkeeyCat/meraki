@@ -528,13 +528,13 @@ impl<T: Iterator<Item = Result<Token, LexerError>>> Parser<T> {
                 block,
             })))
         } else {
-            self.scope
-                .symbol_table_mut()
-                .push(Symbol::Function(SymbolFunction {
-                    name: name.clone(),
+            self.scope.symbol_table_mut().push(
+                name.clone(),
+                Symbol::Function(SymbolFunction {
                     return_type: type_.clone(),
                     parameters: params.clone().into_iter().map(|(_, type_)| type_).collect(),
-                }))?;
+                }),
+            )?;
             self.expect(&Token::Semicolon)?;
 
             Ok(None)

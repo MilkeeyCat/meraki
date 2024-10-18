@@ -119,14 +119,3 @@ impl Scope {
         })
     }
 }
-
-impl From<Vec<Symbol>> for Scope {
-    fn from(value: Vec<Symbol>) -> Self {
-        let mut scope = Self::new();
-        let mut scope_impl = ScopeImpl::new(ScopeKind::Global);
-        scope_impl.symbol_table.0 = value;
-        scope.enter(scope_impl);
-
-        scope
-    }
-}

@@ -1,16 +1,6 @@
 use super::SymbolTableError;
-use crate::{
-    archs::Arch,
-    codegen::{operands, EffectiveAddress, Immediate, Offset, Source},
-    register::Register,
-    scope::Scope,
-    types::Type,
-};
-use operands::{Base, Memory};
-
-const MAX_SYMBOLS: usize = 512;
-//FIXME: arch dependent stuff shouldn't be in symbol table file xd
-const RBP: Register = Register::new("there's no one byte one, hmmmm", "bp", "ebp", "rbp");
+use crate::{codegen::Offset, types::Type};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Symbol {
@@ -21,15 +11,6 @@ pub enum Symbol {
 }
 
 impl Symbol {
-    pub fn name(&self) -> &str {
-        match self {
-            Self::Global(global) => &global.name,
-            Self::Local(local) => &local.name,
-            Self::Param(param) => &param.name,
-            Self::Function(function) => &function.name,
-        }
-    }
-
     pub fn type_(&self) -> Type {
         match self {
             Self::Global(global) => global.type_.clone(),
@@ -47,57 +28,22 @@ impl Symbol {
             _ => unreachable!(),
         }
     }
-
-    pub fn source(&self, arch: &Arch, scope: &Scope) -> Result<Source, SymbolTableError> {
-        Ok(match self {
-            Self::Local(symbol) => Source::Memory(Memory {
-                effective_address: EffectiveAddress {
-                    base: Base::Register(RBP),
-                    index: None,
-                    scale: None,
-                    displacement: Some(symbol.offset.clone()),
-                },
-                size: arch.size(&symbol.type_, scope),
-            }),
-            Self::Global(symbol) => Source::Memory(Memory {
-                effective_address: EffectiveAddress {
-                    base: Base::Label(symbol.name.clone()),
-                    index: None,
-                    scale: None,
-                    displacement: None,
-                },
-                size: arch.size(&symbol.type_, scope),
-            }),
-            Self::Param(symbol) => Source::Memory(Memory {
-                effective_address: EffectiveAddress {
-                    base: Base::Register(RBP),
-                    index: None,
-                    scale: None,
-                    displacement: Some(symbol.offset.clone()),
-                },
-                size: arch.size(&symbol.type_, scope),
-            }),
-            Self::Function(func) => Source::Immediate(Immediate::Label(func.name.clone())),
-        })
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SymbolGlobal {
-    pub name: String,
+    pub label: String,
     pub type_: Type,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SymbolLocal {
-    pub name: String,
     pub offset: Offset,
     pub type_: Type,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SymbolParam {
-    pub name: String,
     pub preceding: Vec<Type>,
     pub type_: Type,
     pub offset: Offset,
@@ -105,40 +51,39 @@ pub struct SymbolParam {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SymbolFunction {
-    pub name: String,
     pub return_type: Type,
     pub parameters: Vec<Type>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct SymbolTable(pub Vec<Symbol>);
+pub struct SymbolTable(HashMap<String, Symbol>);
 
 impl SymbolTable {
+    const MAX_SYMBOLS: usize = 512;
+
     pub fn new() -> Self {
-        Self(Vec::with_capacity(MAX_SYMBOLS))
+        Self(HashMap::new())
     }
 
     pub fn find(&self, name: &str) -> Option<&Symbol> {
-        self.0.iter().find(|symbol| symbol.name() == name)
+        self.0.get(name)
     }
 
     pub fn find_mut(&mut self, name: &str) -> Option<&mut Symbol> {
-        self.0.iter_mut().find(|symbol| symbol.name() == name)
+        self.0.get_mut(name)
     }
 
-    pub fn push(&mut self, symbol: Symbol) -> Result<(), SymbolTableError> {
-        assert!(self.0.len() < MAX_SYMBOLS);
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Symbol> {
+        self.0.values_mut().into_iter()
+    }
 
-        if self
-            .0
-            .iter()
-            .map(|symbol| symbol.name())
-            .collect::<Vec<&str>>()
-            .contains(&symbol.name())
-        {
-            Err(SymbolTableError::Redeclaration(symbol.name().to_owned()))
+    pub fn push(&mut self, name: String, symbol: Symbol) -> Result<(), SymbolTableError> {
+        assert!(self.0.len() < Self::MAX_SYMBOLS);
+
+        if self.0.contains_key(&name) {
+            Err(SymbolTableError::Redeclaration(name))
         } else {
-            self.0.push(symbol);
+            self.0.insert(name, symbol);
 
             Ok(())
         }
