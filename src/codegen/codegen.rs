@@ -747,8 +747,11 @@ impl CodeGen {
                     Some(&r.dest(self.arch.size(&type_, &self.scope))),
                     state,
                 )?;
-                self.arch
-                    .not(&r.dest(self.arch.size(&type_, &self.scope)), dest);
+                self.arch.cmp(
+                    &r.dest(self.arch.size(&type_, &self.scope)),
+                    &Source::Immediate(Immediate::UInt(0)),
+                );
+                self.arch.setcc(dest, CmpOp::Equal);
                 self.arch.free(r)?;
             }
             UnOp::Address => {

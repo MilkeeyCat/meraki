@@ -59,7 +59,6 @@ pub trait Architecture: ArchitectureClone {
     fn declare(&mut self, name: &str, size: usize);
     fn mov(&mut self, src: &Source, dest: &Destination, signed: bool) -> Result<(), ArchError>;
     fn negate(&mut self, dest: &Destination);
-    fn not(&mut self, dest: &Destination, dest2: &Destination);
     fn add(
         &mut self,
         lhs: &Source,

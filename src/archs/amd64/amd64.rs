@@ -235,15 +235,6 @@ impl Architecture for Amd64 {
         ));
     }
 
-    fn not(&mut self, dest: &Destination, dest2: &Destination) {
-        self.buf.push_str(&formatdoc!(
-            "
-            \tcmp {dest}, 0
-            \tsete {dest2}
-            ",
-        ));
-    }
-
     fn add(
         &mut self,
         lhs: &Source,
