@@ -326,14 +326,15 @@ impl CodeGen {
 
                         self.expr(*cast_expr.expr, Some(&r.dest(og_size)), state)?;
 
+                        if casted_size > og_size {
+                            self.arch.mov(
+                                &r.source(og_size),
+                                &r.dest(casted_size),
+                                type_.signed(),
+                            )?;
+                        }
+
                         if new {
-                            if casted_size > og_size {
-                                self.arch.mov(
-                                    &r.source(og_size),
-                                    &r.dest(casted_size),
-                                    type_.signed(),
-                                )?;
-                            }
                             self.arch
                                 .mov(&r.source(casted_size), dest, type_.signed())?;
                             self.arch.free(r)?;
