@@ -1,8 +1,8 @@
 # Meraki
+This language feels and looks like if C and Rust had a baby and they were
+ashamed of it.
 
-It's like if C and Rust had a love child and was ashamed of it
-
-## Rough syntax ideas
+## Implemented features
 
 ### Data Types
 - usize
@@ -30,14 +30,6 @@ fn main() -> u8 {
 }
 ```
 
-### Variables
-
-```rust
-let foo: usize = 69;
-let bar: *Struct = &Struct;
-let baz: u32[5] = [1, 2, 3, 4, 5];
-```
-
 ### Structs
 
 ```rust
@@ -45,29 +37,37 @@ struct Foo {
     bar: u8;
     baz: *i16;
 
-    static fn new(bar: u8, baz_ptr: *i16): Self {
-        return Self {
-            bar,
-            baz: baz_ptr
-        };
-    }
-
-    fn useless_method(): i16 {
-        return (i16)self.bar + *self.baz;
+    fn useless_method() -> i16 {
+        return this->bar as i16 + *this->baz;
     }
 }
 
-let foo: Foo = Foo::new();
-let res: i16 = foo.useless_method();
+let tmp2: u16 = 420;
+let foo: Foo = Foo {
+    bar: 69,
+    baz: &tmp2,
+};
+let res: i16 = foo.useless_method(); // 489
 ```
 
-### Typedefs
+### Variables
 
 ```rust
-type SmolInt = u8;
+let foo: usize = 69;
+let bar: *usize= &foo;
+let baz: u32[5] = [1, 2, 3, 4, 5];
 ```
 
 ### Casting
 
 Use keyword `as` for casting expressions. Also we don't cast integer variables for ya.
 No implicit conversions! Only integer literals can be promoted to bigger type
+
+### Proc Macros
+Currently it's not possible to declare macros from meraki but there's
+[C api](https://github.com/MilkeeyCat/meraki/blob/34ed08f02b63de1fa031cea76ca8462fbab15232/src/macros/c_api.c)
+following which you can create a shared object with macros and pass it to a compiler using `--macro` flag.</br>
+Macro invokation syntax:</br>
+```rust
+foo!(I'll eat anything);
+```
