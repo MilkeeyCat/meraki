@@ -1,13 +1,13 @@
-use super::TypeError;
+use super::error::TyError;
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash)]
-pub struct TypeArray {
-    pub type_: Box<Type>,
-    pub length: usize,
+pub struct TyArray {
+    pub ty: Box<Ty>,
+    pub len: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash)]
-pub enum IntType {
+pub enum IntTy {
     I8,
     I16,
     I32,
@@ -15,7 +15,7 @@ pub enum IntType {
     Isize,
 }
 
-impl IntType {
+impl IntTy {
     fn size(&self) -> Option<usize> {
         Some(match self {
             Self::I8 => 1,
@@ -27,7 +27,7 @@ impl IntType {
     }
 }
 
-impl std::fmt::Display for IntType {
+impl std::fmt::Display for IntTy {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::I8 => write!(f, "i8"),
@@ -40,7 +40,7 @@ impl std::fmt::Display for IntType {
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash)]
-pub enum UintType {
+pub enum UintTy {
     U8,
     U16,
     U32,
@@ -48,7 +48,7 @@ pub enum UintType {
     Usize,
 }
 
-impl UintType {
+impl UintTy {
     fn size(&self) -> Option<usize> {
         Some(match self {
             Self::U8 => 1,
@@ -59,18 +59,18 @@ impl UintType {
         })
     }
 
-    pub fn to_signed(self) -> IntType {
+    pub fn to_signed(self) -> IntTy {
         match self {
-            Self::U8 => IntType::I8,
-            Self::U16 => IntType::I16,
-            Self::U32 => IntType::I32,
-            Self::U64 => IntType::I64,
-            Self::Usize => IntType::Isize,
+            Self::U8 => IntTy::I8,
+            Self::U16 => IntTy::I16,
+            Self::U32 => IntTy::I32,
+            Self::U64 => IntTy::I64,
+            Self::Usize => IntTy::Isize,
         }
     }
 }
 
-impl std::fmt::Display for UintType {
+impl std::fmt::Display for UintTy {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::U8 => write!(f, "u8"),
@@ -83,19 +83,20 @@ impl std::fmt::Display for UintType {
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash)]
-pub enum Type {
-    Int(IntType),
-    UInt(UintType),
-    Bool,
-    Void,
-    Custom(String),
-    Ptr(Box<Type>),
-    Array(TypeArray),
-    Fn(Vec<Type>, Box<Type>),
+pub enum Ty {
     Null,
+    Void,
+    Bool,
+    Int(IntTy),
+    UInt(UintTy),
+    Ident(String),
+    Ptr(Box<Ty>),
+    Array(TyArray),
+    Fn(Vec<Ty>, Box<Ty>),
+    Infer,
 }
 
-impl std::fmt::Display for Type {
+impl std::fmt::Display for Ty {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Int(int) => int.fmt(f),
@@ -103,8 +104,8 @@ impl std::fmt::Display for Type {
             Self::Bool => write!(f, "bool"),
             Self::Void => write!(f, "void"),
             Self::Ptr(type_) => write!(f, "*{type_}"),
-            Self::Custom(name) => write!(f, "{name}"),
-            Self::Array(array) => write!(f, "{}[{}]", array.type_, array.length),
+            Self::Ident(name) => write!(f, "{name}"),
+            Self::Array(array) => write!(f, "{}[{}]", array.ty, array.len),
             Self::Fn(params, return_type) => write!(
                 f,
                 "fn ({}) -> {return_type}",
@@ -114,11 +115,12 @@ impl std::fmt::Display for Type {
                     .collect::<String>()
             ),
             Self::Null => write!(f, "NULL"),
+            Self::Infer => unreachable!(),
         }
     }
 }
 
-impl Type {
+impl Ty {
     pub fn ptr(&self) -> bool {
         matches!(self, Self::Ptr(..))
     }
@@ -132,73 +134,71 @@ impl Type {
     }
 
     pub fn int(&self) -> bool {
-        matches!(self, Type::UInt(_) | Type::Int(_))
+        matches!(self, Ty::UInt(_) | Ty::Int(_))
     }
 
-    pub fn cast(from: Self, to: Self) -> Result<Self, TypeError> {
+    pub fn cast(from: Self, to: Self) -> Result<Self, TyError> {
         match (from, to) {
             (from, to) if from.int() && to.int() => Ok(to),
-            (from, to) if from == Self::Bool && to.int() || from.int() && to == Type::Bool => {
-                Ok(to)
-            }
+            (from, to) if from == Self::Bool && to.int() || from.int() && to == Ty::Bool => Ok(to),
             (from, to)
                 if from.arr() && to.ptr() && from.inner().unwrap() == to.inner().unwrap() =>
             {
                 Ok(to)
             }
-            (Type::Array(_), Type::Ptr(pointee)) if pointee.as_ref() == &Type::Void => {
-                Ok(Type::Ptr(pointee))
+            (Ty::Array(_), Ty::Ptr(pointee)) if pointee.as_ref() == &Ty::Void => {
+                Ok(Ty::Ptr(pointee))
             }
             (from, to) if from.ptr() && to.ptr() => Ok(to),
             (from, to) if from.ptr() && to.int() => Ok(to),
-            (from, to) => Err(TypeError::Cast(from, to)),
+            (from, to) => Err(TyError::Cast(from, to)),
         }
     }
 
     pub fn size(&self) -> Option<usize> {
         match self {
-            Type::Void => Some(0),
-            Type::Bool => Some(1),
-            Type::Int(int) => int.size(),
-            Type::UInt(uint) => uint.size(),
+            Ty::Void => Some(0),
+            Ty::Bool => Some(1),
+            Ty::Int(int) => int.size(),
+            Ty::UInt(uint) => uint.size(),
             _ => None,
         }
     }
 
-    pub fn inner(&self) -> Result<Type, TypeError> {
+    pub fn inner(&self) -> Result<Ty, TyError> {
         match self {
             Self::Ptr(type_) => Ok(type_.as_ref().to_owned()),
-            Self::Array(array) => Ok(*array.type_.clone()),
-            type_ => Err(TypeError::Deref(type_.clone())),
+            Self::Array(array) => Ok(*array.ty.clone()),
+            type_ => Err(TyError::Deref(type_.clone())),
         }
     }
 
-    pub fn common_type(lhs: Type, rhs: Type) -> Type {
+    pub fn common_type(lhs: Ty, rhs: Ty) -> Ty {
         match (lhs, rhs) {
             (lhs, rhs) if lhs == rhs => lhs,
-            (type_ @ Type::Ptr(_), int) | (int, type_ @ Type::Ptr(_)) if int.int() => type_,
-            (type_ @ Type::Ptr(_), Type::Null) | (Type::Null, type_ @ Type::Ptr(_)) => type_,
-            (Type::UInt(lhs), Type::UInt(rhs)) => {
+            (type_ @ Ty::Ptr(_), int) | (int, type_ @ Ty::Ptr(_)) if int.int() => type_,
+            (type_ @ Ty::Ptr(_), Ty::Null) | (Ty::Null, type_ @ Ty::Ptr(_)) => type_,
+            (Ty::UInt(lhs), Ty::UInt(rhs)) => {
                 if lhs > rhs {
-                    Type::UInt(lhs)
+                    Ty::UInt(lhs)
                 } else {
-                    Type::UInt(rhs)
+                    Ty::UInt(rhs)
                 }
             }
-            (Type::Int(lhs), Type::Int(rhs)) => {
+            (Ty::Int(lhs), Ty::Int(rhs)) => {
                 if lhs > rhs {
-                    Type::Int(lhs)
+                    Ty::Int(lhs)
                 } else {
-                    Type::Int(rhs)
+                    Ty::Int(rhs)
                 }
             }
-            (Type::UInt(uint), Type::Int(int)) | (Type::Int(int), Type::UInt(uint)) => {
+            (Ty::UInt(uint), Ty::Int(int)) | (Ty::Int(int), Ty::UInt(uint)) => {
                 let uint_int = uint.to_signed();
 
                 if uint_int <= int {
-                    Type::Int(int)
+                    Ty::Int(int)
                 } else {
-                    Type::Int(uint_int)
+                    Ty::Int(uint_int)
                 }
             }
             (lhs, rhs) => unreachable!("Failed to get common type for {lhs} and {rhs}"),
