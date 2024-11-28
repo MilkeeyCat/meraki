@@ -13,7 +13,7 @@ pub enum OpParseError {
     Bitwise(BinOp),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Copy)]
 pub enum BinOp {
     Add,
     Sub,
@@ -61,7 +61,7 @@ impl TryFrom<&Token> for BinOp {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum UnOp {
     LogicalNot,
     Negative,
