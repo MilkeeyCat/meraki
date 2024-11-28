@@ -1,10 +1,10 @@
 use crate::{
-    archs::{Amd64, Architecture},
-    codegen::CodeGen,
+    codegen::{amd64_asm::Amd64Asm, Codegen},
     lexer::Lexer,
-    parser,
-    passes::{MacroExpansion, Pass, SymbolResolver, TypeChecker},
+    lowering::Lowering,
+    parser, Context,
 };
+use bumpalo::Bump;
 use clap::Parser;
 use std::{
     fs::File,
@@ -46,16 +46,19 @@ pub fn compile(args: CompileArgs) -> Result<(), Box<dyn std::error::Error>> {
     file.read_to_string(&mut source_code)?;
 
     let lexer = Lexer::new(source_code);
-    let (mut stmts, mut scope) = parser::Parser::new(lexer)?.into_parts()?;
+    let ast = parser::Parser::new(lexer)?.parse()?;
+    let allocator = Bump::new();
+    let mut ctx = Context::new(&allocator);
 
-    MacroExpansion::new(args.macro_libs).run_pass(&mut stmts, &mut scope);
-    SymbolResolver::new(()).run_pass(&mut stmts, &mut scope)?;
-    TypeChecker::new(()).run_pass(&mut stmts, &mut scope)?;
+    Lowering::new(&mut ctx).lower(ast);
+    ctx.ty_problem.solve(&ctx.ir);
 
-    dbg!(&stmts);
-    dbg!(&scope);
+    //MacroExpansion::new(args.macro_libs).run_pass(&mut stmts, &mut scope);
+    //SymbolResolver::new(()).run_pass(&mut stmts, &mut scope)?;
+    //TypeChecker::new(()).run_pass(&mut stmts, &mut scope)?;
 
-    let code = CodeGen::new(Box::new(Amd64::new()), scope).compile(stmts)?;
+    let codegen: &mut dyn Codegen = &mut Amd64Asm::new(&ctx);
+    let code = codegen.compile()?;
 
     if args.assembly_only {
         let asm_filename = args.file.with_extension("s");

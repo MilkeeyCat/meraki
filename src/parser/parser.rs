@@ -1,17 +1,15 @@
 use super::{
     expr::{ExprBinary, ExprLit, ExprUnary},
+    item::Item,
     precedence::Precedence,
     stmt::{StmtFor, StmtIf, StmtReturn, StmtWhile},
     BinOp, Block, Expr, ExprArray, ExprArrayAccess, ExprCast, ExprIdent, ExprStruct,
-    ExprStructMethod, MacroCall, ParserError, Stmt, StmtFunction, StmtVarDecl, UIntLitRepr, UnOp,
+    ExprStructMethod, IntTy, ItemFn, ItemStruct, MacroCall, ParserError, Stmt, Ty, TyArray, UintTy,
+    UnOp, Variable,
 };
 use crate::{
     lexer::{LexerError, Token},
-    parser::{ExprFunctionCall, ExprStructAccess},
-    scope::{Scope, ScopeKind},
-    symbol_table::{Symbol, SymbolFunction},
-    type_table::{TypeStruct, TypeStructMethod},
-    types::{IntType, Type, TypeArray, TypeError, UintType},
+    parser::{ExprField, ExprFunctionCall},
 };
 use std::collections::HashMap;
 
@@ -22,23 +20,16 @@ pub struct Parser<T: Iterator<Item = Result<Token, LexerError>>> {
     lexer: T,
     cur_token: Option<Token>,
     peek_token: Option<Token>,
-    scope: Scope,
-    global_stms: Vec<Stmt>,
     prefix_fns: HashMap<Token, PrefixFn<T>>,
     infix_fns: HashMap<Token, InfixFn<T>>,
 }
 
 impl<T: Iterator<Item = Result<Token, LexerError>>> Parser<T> {
     pub fn new(mut lexer: T) -> Result<Self, ParserError> {
-        let mut scope = Scope::new();
-        scope.enter_new(ScopeKind::Global);
-
         Ok(Self {
             cur_token: lexer.next().transpose()?,
             peek_token: lexer.next().transpose()?,
             lexer,
-            scope,
-            global_stms: Vec::new(),
             prefix_fns: HashMap::from([
                 (Token::Ident(Default::default()), Self::ident as PrefixFn<T>),
                 (Token::String(Default::default()), Self::string_lit),
@@ -108,29 +99,20 @@ impl<T: Iterator<Item = Result<Token, LexerError>>> Parser<T> {
         }
     }
 
-    pub fn into_parts(mut self) -> Result<(Vec<Stmt>, Scope), ParserError> {
-        Ok((self.parse()?, self.scope))
-    }
-
-    pub fn parse(&mut self) -> Result<Vec<Stmt>, ParserError> {
-        let mut stmts = Vec::new();
+    pub fn parse(&mut self) -> Result<Vec<Item>, ParserError> {
+        let mut items = Vec::new();
 
         while let Some(token) = &self.cur_token {
-            match token {
+            let item = match token {
                 Token::Struct => self.parse_struct()?,
-                Token::Let => stmts.push(self.var_decl()?),
-                Token::Fn => {
-                    if let Some(stmt) = self.function(true)? {
-                        stmts.push(stmt)
-                    }
-                }
+                Token::Let => self.global()?,
+                Token::Fn => self.function(true)?,
                 _ => unreachable!(),
-            }
+            };
+            items.push(item);
         }
 
-        stmts.extend_from_slice(&self.global_stms);
-
-        Ok(stmts)
+        Ok(items)
     }
 
     pub fn expr(&mut self, precedence: Precedence) -> Result<Expr, ParserError> {
@@ -163,7 +145,7 @@ impl<T: Iterator<Item = Result<Token, LexerError>>> Parser<T> {
         left
     }
 
-    fn parse_struct(&mut self) -> Result<(), ParserError> {
+    fn parse_struct(&mut self) -> Result<Item, ParserError> {
         self.expect(&Token::Struct)?;
 
         let name = match self
@@ -180,41 +162,10 @@ impl<T: Iterator<Item = Result<Token, LexerError>>> Parser<T> {
         self.expect(&Token::LBrace)?;
 
         let mut fields = Vec::new();
-        let mut methods = Vec::new();
 
         while !self.cur_token_is(&Token::RBrace) {
             if self.cur_token_is(&Token::Fn) {
-                self.expect(&Token::Fn)?;
-
-                let method_name = match self.next_token()? {
-                    Some(Token::Ident(ident)) => ident,
-                    _ => todo!(),
-                };
-                self.expect(&Token::LParen)?;
-                let mut params = self.params(Token::Comma, Token::RParen)?;
-                params.insert(
-                    0,
-                    (
-                        "this".to_owned(),
-                        Type::Ptr(Box::new(Type::Custom(name.clone()))),
-                    ),
-                );
-                self.expect(&Token::Arrow)?;
-
-                let type_ = self.parse_type()?;
-                let block = self.compound_statement(ScopeKind::Function(type_.clone()))?;
-
-                methods.push(TypeStructMethod {
-                    return_type: type_.clone(),
-                    name: method_name.clone(),
-                    params: params.clone(),
-                });
-                self.global_stms.push(Stmt::Function(StmtFunction {
-                    return_type: type_,
-                    name: format!("{name}__{method_name}"),
-                    params,
-                    block,
-                }));
+                // Handle struct methods here
             } else {
                 let name = match self.next_token()? {
                     Some(Token::Ident(ident)) => ident,
@@ -237,65 +188,51 @@ impl<T: Iterator<Item = Result<Token, LexerError>>> Parser<T> {
 
         self.expect(&Token::RBrace)?;
 
-        self.scope
-            .type_table_mut()
-            .define(crate::type_table::Type::Struct(TypeStruct {
-                name,
-                fields,
-                methods,
-            }));
-
-        Ok(())
+        Ok(Item::Struct(ItemStruct { name, fields }))
     }
 
-    fn stmt(&mut self) -> Result<Option<Stmt>, ParserError> {
+    fn stmt(&mut self) -> Result<Stmt, ParserError> {
         match self.cur_token.as_ref().unwrap() {
-            Token::Return => Ok(Some(self.parse_return()?)),
-            Token::If => Ok(Some(self.if_stmt()?)),
-            Token::While => Ok(Some(self.while_stmt()?)),
-            Token::For => Ok(Some(self.for_stmt()?)),
-            Token::Let => Ok(Some(self.var_decl()?)),
+            Token::Return => self.parse_return(),
+            Token::If => self.if_stmt(),
+            Token::While => self.while_stmt(),
+            Token::For => self.for_stmt(),
+            Token::Let => self.local(),
             Token::Continue => {
                 self.expect(&Token::Continue)?;
                 self.expect(&Token::Semicolon)?;
 
-                Ok(Some(Stmt::Continue))
+                Ok(Stmt::Continue)
             }
             Token::Break => {
                 self.expect(&Token::Break)?;
                 self.expect(&Token::Semicolon)?;
 
-                Ok(Some(Stmt::Break))
+                Ok(Stmt::Break)
             }
-            Token::Fn => self.function(true),
+            Token::Fn => Ok(Stmt::Item(self.function(true)?)),
             _ => {
                 let expr = Stmt::Expr(self.expr(Precedence::default())?);
 
                 self.expect(&Token::Semicolon)?;
 
-                Ok(Some(expr))
+                Ok(expr)
             }
         }
     }
 
-    fn compound_statement(&mut self, scope_kind: ScopeKind) -> Result<Block, ParserError> {
+    fn compound_statement(&mut self) -> Result<Block, ParserError> {
         let mut stmts = Vec::new();
 
-        self.scope.enter_new(scope_kind);
         self.expect(&Token::LBrace)?;
 
         while !self.cur_token_is(&Token::RBrace) {
-            if let Some(stmt) = self.stmt()? {
-                stmts.push(stmt);
-            }
+            stmts.push(self.stmt()?);
         }
 
         self.expect(&Token::RBrace)?;
 
-        Ok(Block {
-            statements: stmts,
-            scope: self.scope.leave(),
-        })
+        Ok(Block(stmts))
     }
 
     // This function is used only by macro expansion
@@ -303,15 +240,13 @@ impl<T: Iterator<Item = Result<Token, LexerError>>> Parser<T> {
         let mut stmts = Vec::new();
 
         while self.cur_token.is_some() {
-            if let Some(stmt) = self.stmt()? {
-                stmts.push(stmt);
-            }
+            stmts.push(self.stmt()?);
         }
 
         Ok(stmts)
     }
 
-    fn parse_type(&mut self) -> Result<Type, ParserError> {
+    fn parse_type(&mut self) -> Result<Ty, ParserError> {
         let mut n = 0;
         while self.cur_token_is(&Token::Asterisk) {
             self.expect(&Token::Asterisk)?;
@@ -319,19 +254,19 @@ impl<T: Iterator<Item = Result<Token, LexerError>>> Parser<T> {
         }
 
         let mut base = match self.next_token()?.unwrap() {
-            Token::U8 => Ok(Type::UInt(UintType::U8)),
-            Token::U16 => Ok(Type::UInt(UintType::U16)),
-            Token::U32 => Ok(Type::UInt(UintType::U32)),
-            Token::U64 => Ok(Type::UInt(UintType::U64)),
-            Token::I8 => Ok(Type::Int(IntType::I8)),
-            Token::I16 => Ok(Type::Int(IntType::I16)),
-            Token::I32 => Ok(Type::Int(IntType::I32)),
-            Token::I64 => Ok(Type::Int(IntType::I64)),
-            Token::Usize => Ok(Type::UInt(UintType::Usize)),
-            Token::Isize => Ok(Type::Int(IntType::Isize)),
-            Token::Bool => Ok(Type::Bool),
-            Token::Void => Ok(Type::Void),
-            Token::Ident(ident) => Ok(Type::Custom(ident)),
+            Token::U8 => Ok(Ty::UInt(UintTy::U8)),
+            Token::U16 => Ok(Ty::UInt(UintTy::U16)),
+            Token::U32 => Ok(Ty::UInt(UintTy::U32)),
+            Token::U64 => Ok(Ty::UInt(UintTy::U64)),
+            Token::I8 => Ok(Ty::Int(IntTy::I8)),
+            Token::I16 => Ok(Ty::Int(IntTy::I16)),
+            Token::I32 => Ok(Ty::Int(IntTy::I32)),
+            Token::I64 => Ok(Ty::Int(IntTy::I64)),
+            Token::Usize => Ok(Ty::UInt(UintTy::Usize)),
+            Token::Isize => Ok(Ty::Int(IntTy::Isize)),
+            Token::Bool => Ok(Ty::Bool),
+            Token::Void => Ok(Ty::Void),
+            Token::Ident(ident) => Ok(Ty::Ident(ident)),
             Token::Fn => {
                 self.expect(&Token::LParen)?;
 
@@ -348,13 +283,13 @@ impl<T: Iterator<Item = Result<Token, LexerError>>> Parser<T> {
                 self.expect(&Token::RParen)?;
                 self.expect(&Token::Arrow)?;
 
-                Ok(Type::Fn(params, Box::new(self.parse_type()?)))
+                Ok(Ty::Fn(params, Box::new(self.parse_type()?)))
             }
             token => Err(ParserError::ParseType(token)),
         }?;
 
         while n > 0 {
-            base = Type::Ptr(Box::new(base));
+            base = Ty::Ptr(Box::new(base));
             n -= 1;
         }
 
@@ -379,11 +314,11 @@ impl<T: Iterator<Item = Result<Token, LexerError>>> Parser<T> {
         self.expect(&Token::If)?;
 
         let condition = self.expr(Precedence::default())?;
-        let consequence = self.compound_statement(ScopeKind::Local)?;
+        let consequence = self.compound_statement()?;
         let alternative = if self.cur_token_is(&Token::Else) {
             self.expect(&Token::Else)?;
 
-            Some(self.compound_statement(ScopeKind::Local)?)
+            Some(self.compound_statement()?)
         } else {
             None
         };
@@ -399,7 +334,7 @@ impl<T: Iterator<Item = Result<Token, LexerError>>> Parser<T> {
         self.expect(&Token::While)?;
 
         let condition = self.expr(Precedence::default())?;
-        let block = self.compound_statement(ScopeKind::Loop)?;
+        let block = self.compound_statement()?;
 
         Ok(Stmt::While(StmtWhile { condition, block }))
     }
@@ -411,7 +346,7 @@ impl<T: Iterator<Item = Result<Token, LexerError>>> Parser<T> {
             None
         } else {
             let stmt = if self.cur_token_is(&Token::Let) {
-                self.var_decl()?
+                self.local()?
             } else {
                 Stmt::Expr(self.expr(Precedence::default())?)
             };
@@ -432,7 +367,7 @@ impl<T: Iterator<Item = Result<Token, LexerError>>> Parser<T> {
             Some(self.expr(Precedence::default())?)
         };
 
-        let block = self.compound_statement(ScopeKind::Loop)?;
+        let block = self.compound_statement()?;
 
         Ok(Stmt::For(StmtFor {
             initializer: initializer.map(|initializer| Box::new(initializer)),
@@ -442,7 +377,7 @@ impl<T: Iterator<Item = Result<Token, LexerError>>> Parser<T> {
         }))
     }
 
-    fn array_type(&mut self, type_: &mut Type) -> Result<(), ParserError> {
+    fn array_type(&mut self, type_: &mut Ty) -> Result<(), ParserError> {
         if self.cur_token_is(&Token::LBracket) {
             self.expect(&Token::LBracket)?;
 
@@ -451,9 +386,9 @@ impl<T: Iterator<Item = Result<Token, LexerError>>> Parser<T> {
                     let length: usize = str::parse(&int).unwrap();
                     self.expect(&Token::RBracket)?;
 
-                    *type_ = Type::Array(TypeArray {
-                        type_: Box::new(type_.clone()),
-                        length,
+                    *type_ = Ty::Array(TyArray {
+                        ty: Box::new(type_.clone()),
+                        len: length,
                     });
                 }
                 token => panic!("Expected integer, got {token}"),
@@ -463,7 +398,7 @@ impl<T: Iterator<Item = Result<Token, LexerError>>> Parser<T> {
         Ok(())
     }
 
-    fn var_decl(&mut self) -> Result<Stmt, ParserError> {
+    fn local(&mut self) -> Result<Stmt, ParserError> {
         self.expect(&Token::Let)?;
 
         let name = match self.next_token()?.unwrap() {
@@ -472,14 +407,16 @@ impl<T: Iterator<Item = Result<Token, LexerError>>> Parser<T> {
                 return Err(ParserError::ParseType(token));
             }
         };
-        self.expect(&Token::Colon)?;
+        let ty = if self.cur_token_is(&Token::Colon) {
+            self.expect(&Token::Colon)?;
 
-        let mut type_ = self.parse_type()?;
-        if let Type::Void = type_ {
-            return Err(ParserError::Type(TypeError::VoidVariable));
-        }
+            let mut ty = self.parse_type()?;
+            self.array_type(&mut ty)?;
 
-        self.array_type(&mut type_)?;
+            ty
+        } else {
+            Ty::Infer
+        };
 
         let expr = if self.cur_token_is(&Token::Assign) {
             self.expect(&Token::Assign)?;
@@ -491,10 +428,45 @@ impl<T: Iterator<Item = Result<Token, LexerError>>> Parser<T> {
 
         self.expect(&Token::Semicolon)?;
 
-        Ok(Stmt::VarDecl(StmtVarDecl::new(type_, name, expr)))
+        Ok(Stmt::Local(Variable {
+            name,
+            ty,
+            value: expr,
+        }))
     }
 
-    fn function(&mut self, func_definition: bool) -> Result<Option<Stmt>, ParserError> {
+    fn global(&mut self) -> Result<Item, ParserError> {
+        self.expect(&Token::Let)?;
+
+        let name = match self.next_token()?.unwrap() {
+            Token::Ident(ident) => ident,
+            token => {
+                return Err(ParserError::ParseType(token));
+            }
+        };
+        self.expect(&Token::Colon)?;
+
+        let mut ty = self.parse_type()?;
+        self.array_type(&mut ty)?;
+
+        let expr = if self.cur_token_is(&Token::Assign) {
+            self.expect(&Token::Assign)?;
+
+            Some(self.expr(Precedence::default())?)
+        } else {
+            None
+        };
+
+        self.expect(&Token::Semicolon)?;
+
+        Ok(Item::Global(Variable {
+            name,
+            ty,
+            value: expr,
+        }))
+    }
+
+    fn function(&mut self, func_definition: bool) -> Result<Item, ParserError> {
         self.expect(&Token::Fn)?;
 
         let name = match self.next_token()?.unwrap() {
@@ -511,7 +483,7 @@ impl<T: Iterator<Item = Result<Token, LexerError>>> Parser<T> {
 
         let type_ = self.parse_type()?;
         let block = if self.cur_token_is(&Token::LBrace) {
-            Some(self.compound_statement(ScopeKind::Function(type_.clone()))?)
+            Some(self.compound_statement()?)
         } else {
             None
         };
@@ -520,28 +492,19 @@ impl<T: Iterator<Item = Result<Token, LexerError>>> Parser<T> {
             panic!("Function definition is not supported here");
         }
 
-        if let Some(block) = block {
-            Ok(Some(Stmt::Function(StmtFunction {
-                return_type: type_,
-                name,
-                params,
-                block,
-            })))
-        } else {
-            self.scope.symbol_table_mut().push(
-                name.clone(),
-                Symbol::Function(SymbolFunction {
-                    return_type: type_.clone(),
-                    parameters: params.clone().into_iter().map(|(_, type_)| type_).collect(),
-                }),
-            )?;
+        if block.is_none() {
             self.expect(&Token::Semicolon)?;
-
-            Ok(None)
         }
+
+        Ok(Item::Fn(ItemFn {
+            ret_ty: type_,
+            name,
+            params,
+            block,
+        }))
     }
 
-    fn params(&mut self, delim: Token, end: Token) -> Result<Vec<(String, Type)>, ParserError> {
+    fn params(&mut self, delim: Token, end: Token) -> Result<Vec<(String, Ty)>, ParserError> {
         let mut params = Vec::new();
 
         while !self.cur_token_is(&end) {
@@ -619,9 +582,7 @@ impl<T: Iterator<Item = Result<Token, LexerError>>> Parser<T> {
 
     fn int_lit(&mut self) -> Result<Expr, ParserError> {
         match self.next_token()? {
-            Some(Token::Integer(num_str)) => Ok(Expr::Lit(ExprLit::UInt(
-                UIntLitRepr::try_from(&num_str[..]).map_err(|e| ParserError::Int(e))?,
-            ))),
+            Some(Token::Integer(num_str)) => Ok(Expr::Lit(ExprLit::UInt(num_str.parse().unwrap()))),
             Some(_) | None => unreachable!(),
         }
     }
@@ -701,7 +662,7 @@ impl<T: Iterator<Item = Result<Token, LexerError>>> Parser<T> {
             _ => unreachable!(),
         };
 
-        Ok(Expr::StructAccess(ExprStructAccess {
+        Ok(Expr::Field(ExprField {
             expr: Box::new(Expr::Unary(ExprUnary {
                 op: UnOp::Deref,
                 expr: Box::new(left),
@@ -729,7 +690,7 @@ impl<T: Iterator<Item = Result<Token, LexerError>>> Parser<T> {
             }))
         } else {
             match self.next_token()? {
-                Some(Token::Ident(field)) => Ok(Expr::StructAccess(ExprStructAccess {
+                Some(Token::Ident(field)) => Ok(Expr::Field(ExprField {
                     expr: Box::new(expr),
                     field,
                 })),
@@ -754,7 +715,7 @@ impl<T: Iterator<Item = Result<Token, LexerError>>> Parser<T> {
 
         Ok(Expr::Cast(ExprCast {
             expr: Box::new(expr),
-            type_: self.parse_type()?,
+            ty: self.parse_type()?,
         }))
     }
 
@@ -817,11 +778,9 @@ mod test {
     use crate::{
         lexer::Lexer,
         parser::{
-            BinOp, Expr, ExprBinary, ExprCast, ExprIdent, ExprLit, ExprUnary, ParserError, Stmt,
-            StmtVarDecl, UIntLitRepr, UnOp,
+            BinOp, Expr, ExprBinary, ExprCast, ExprIdent, ExprLit, ExprUnary, IntTy, ParserError,
+            Stmt, Ty, UintTy, UnOp, Variable,
         },
-        scope::ScopeKind,
-        types::{IntType, Type, UintType},
     };
 
     #[test]
@@ -837,18 +796,18 @@ mod test {
                     op: BinOp::Add,
                     left: Box::new(Expr::Binary(ExprBinary {
                         op: BinOp::Mul,
-                        left: Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(1)))),
-                        right: Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(2)))),
+                        left: Box::new(Expr::Lit(ExprLit::UInt(1))),
+                        right: Box::new(Expr::Lit(ExprLit::UInt(2))),
                     })),
                     right: Box::new(Expr::Binary(ExprBinary {
                         op: BinOp::Div,
-                        left: Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(3)))),
+                        left: Box::new(Expr::Lit(ExprLit::UInt(3))),
                         right: Box::new(Expr::Binary(ExprBinary {
                             op: BinOp::Add,
-                            left: Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(4)))),
+                            left: Box::new(Expr::Lit(ExprLit::UInt(4))),
                             right: Box::new(Expr::Cast(ExprCast {
-                                type_: Type::UInt(UintType::U8),
-                                expr: Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(1)))),
+                                ty: Ty::UInt(UintTy::U8),
+                                expr: Box::new(Expr::Lit(ExprLit::UInt(1))),
                             })),
                         })),
                     })),
@@ -862,24 +821,24 @@ mod test {
                 }
                 ",
                 vec![
-                    Stmt::VarDecl(StmtVarDecl::new(
-                        Type::UInt(UintType::U8),
-                        "foo".to_owned(),
-                        None,
-                    )),
+                    Stmt::Local(Variable {
+                        name: "foo".to_owned(),
+                        ty: Ty::UInt(UintTy::U8),
+                        value: None,
+                    }),
                     Stmt::Expr(Expr::Binary(ExprBinary {
                         op: BinOp::Assign,
                         left: Box::new(Expr::Ident(ExprIdent("foo".to_owned()))),
                         right: Box::new(Expr::Binary(ExprBinary {
                             op: BinOp::Add,
                             left: Box::new(Expr::Cast(ExprCast {
-                                type_: Type::UInt(UintType::U8),
+                                ty: Ty::UInt(UintTy::U8),
                                 expr: Box::new(Expr::Unary(ExprUnary {
                                     op: UnOp::Negative,
-                                    expr: Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(1)))),
+                                    expr: Box::new(Expr::Lit(ExprLit::UInt(1))),
                                 })),
                             })),
-                            right: Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(5)))),
+                            right: Box::new(Expr::Lit(ExprLit::UInt(5))),
                         })),
                     })),
                 ],
@@ -893,29 +852,29 @@ mod test {
                 }
                 ",
                 vec![
-                    Stmt::VarDecl(StmtVarDecl::new(
-                        Type::UInt(UintType::U8),
-                        "foo".to_owned(),
-                        None,
-                    )),
-                    Stmt::VarDecl(StmtVarDecl::new(
-                        Type::Int(IntType::I8),
-                        "bar".to_owned(),
-                        None,
-                    )),
+                    Stmt::Local(Variable {
+                        name: "foo".to_owned(),
+                        ty: Ty::UInt(UintTy::U8),
+                        value: None,
+                    }),
+                    Stmt::Local(Variable {
+                        name: "bar".to_owned(),
+                        ty: Ty::Int(IntTy::I8),
+                        value: None,
+                    }),
                     Stmt::Expr(Expr::Binary(ExprBinary {
                         op: BinOp::Assign,
                         left: Box::new(Expr::Ident(ExprIdent("bar".to_owned()))),
                         right: Box::new(Expr::Binary(ExprBinary {
                             op: BinOp::Add,
                             left: Box::new(Expr::Cast(ExprCast {
-                                type_: Type::Int(IntType::I8),
+                                ty: Ty::Int(IntTy::I8),
                                 expr: Box::new(Expr::Ident(ExprIdent("foo".to_owned()))),
                             })),
                             right: Box::new(Expr::Binary(ExprBinary {
                                 op: BinOp::Div,
-                                left: Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(5)))),
-                                right: Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(10)))),
+                                left: Box::new(Expr::Lit(ExprLit::UInt(5))),
+                                right: Box::new(Expr::Lit(ExprLit::UInt(10))),
                             })),
                         })),
                     })),
@@ -930,13 +889,13 @@ mod test {
                 vec![Stmt::Expr(Expr::Binary(ExprBinary {
                     op: BinOp::Add,
                     left: Box::new(Expr::Cast(ExprCast {
-                        type_: Type::Int(IntType::I8),
-                        expr: Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(1)))),
+                        ty: Ty::Int(IntTy::I8),
+                        expr: Box::new(Expr::Lit(ExprLit::UInt(1))),
                     })),
                     right: Box::new(Expr::Binary(ExprBinary {
                         op: BinOp::Div,
-                        left: Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(2)))),
-                        right: Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(3)))),
+                        left: Box::new(Expr::Lit(ExprLit::UInt(2))),
+                        right: Box::new(Expr::Lit(ExprLit::UInt(3))),
                     })),
                 }))],
             ),
@@ -950,23 +909,23 @@ mod test {
                 }
                 ",
                 vec![
-                    Stmt::VarDecl(StmtVarDecl::new(
-                        Type::UInt(UintType::U8),
-                        "a".to_owned(),
-                        None,
-                    )),
-                    Stmt::VarDecl(StmtVarDecl::new(
-                        Type::UInt(UintType::U8),
-                        "b".to_owned(),
-                        None,
-                    )),
+                    Stmt::Local(Variable {
+                        name: "a".to_owned(),
+                        ty: Ty::UInt(UintTy::U8),
+                        value: None,
+                    }),
+                    Stmt::Local(Variable {
+                        name: "b".to_owned(),
+                        ty: Ty::UInt(UintTy::U8),
+                        value: None,
+                    }),
                     Stmt::Expr(Expr::Binary(ExprBinary {
                         op: BinOp::Assign,
                         left: Box::new(Expr::Ident(ExprIdent("a".to_owned()))),
                         right: Box::new(Expr::Binary(ExprBinary {
                             op: BinOp::Assign,
                             left: Box::new(Expr::Ident(ExprIdent("b".to_owned()))),
-                            right: Box::new(Expr::Lit(ExprLit::UInt(UIntLitRepr::new(69)))),
+                            right: Box::new(Expr::Lit(ExprLit::UInt(69))),
                         })),
                     })),
                 ],
@@ -975,10 +934,10 @@ mod test {
 
         for (input, expected) in tests {
             let mut parser = Parser::new(Lexer::new(input.to_string())).unwrap();
-            let ast = parser.compound_statement(ScopeKind::Global).unwrap();
+            let ast = parser.compound_statement().unwrap();
 
             assert_eq!(
-                &ast.statements, &expected,
+                &ast.0, &expected,
                 "expected: {:?}, got: {:?}",
                 expected, ast
             );
