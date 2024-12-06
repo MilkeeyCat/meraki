@@ -1,13 +1,19 @@
-mod argument;
-mod codegen;
-mod error;
-pub mod operands;
-mod sethi_ullman;
+pub mod amd64_asm;
 
-pub use argument::Argument;
-pub use codegen::CodeGen;
-pub use error::CodeGenError;
-pub use operands::{
-    Base, Destination, EffectiveAddress, Immediate, Memory, Offset, Register, Source,
-};
-pub use sethi_ullman::SethiUllman;
+use crate::ir::Ir;
+use crate::parser::OpParseError;
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum CodeGenError {
+    #[error(transparent)]
+    OpParse(#[from] OpParseError),
+}
+
+pub trait Codegen<'a, 'ir> {
+    fn new(ir: &'a Ir<'ir>) -> Self
+    where
+        Self: Sized;
+
+    fn compile(&mut self) -> Vec<u8>;
+}

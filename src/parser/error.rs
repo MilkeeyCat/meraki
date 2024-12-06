@@ -1,25 +1,15 @@
-use super::{ExprError, IntLitReprError, OpParseError};
-use crate::{
-    lexer::{LexerError, Token},
-    symbol_table::SymbolTableError,
-    types::{Type, TypeError},
-};
+use super::{OpParseError, Ty};
+use crate::lexer::{LexerError, Token};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum ParserError {
     #[error(transparent)]
-    Expr(#[from] ExprError),
-    #[error(transparent)]
     Lexer(#[from] LexerError),
     #[error(transparent)]
-    Type(#[from] TypeError),
+    Type(#[from] TyError),
     #[error(transparent)]
     Operator(#[from] OpParseError),
-    #[error(transparent)]
-    Int(#[from] IntLitReprError),
-    #[error(transparent)]
-    SymbolTable(#[from] SymbolTableError),
     #[error("Expected token {0}, got {1}")]
     UnexpectedToken(Token, Token),
     #[error("Expected {0}")]
@@ -30,19 +20,26 @@ pub enum ParserError {
     Prefix(Token),
     #[error("Failed to parse infix token {0}")]
     Infix(Token),
-    #[error("Call to undeclared function {0}")]
-    UndeclaredFunction(String),
-    #[error("Function has signature ({}), got called with ({})",
-        .0
-            .iter()
-            .map(|type_| type_.to_string())
-            .collect::<Vec<String>>()
-            .join(", "),
-        .1
-            .iter()
-            .map(|type_| type_.to_string())
-            .collect::<Vec<String>>()
-            .join(", ")
-    )]
-    FunctionArguments(Vec<Type>, Vec<Type>),
+}
+
+#[derive(Error, Debug, PartialEq)]
+pub enum TyError {
+    #[error("Operation between {0} and {1} are not allowed")]
+    Promotion(Ty, Ty),
+    #[error("Ident {0} not found")]
+    IdentNotFound(String),
+    #[error("Can't assign {0} to {1}")]
+    Assignment(Ty, Ty),
+    #[error("Can't cast {0} into {1}")]
+    Cast(Ty, Ty),
+    #[error("Expected return value of type {1}, got {0} instead")]
+    Return(Ty, Ty),
+    #[error("Variable can't be of type void")]
+    VoidVariable,
+    #[error("Type '{0}' doens't exits")]
+    Nonexistent(String),
+    #[error("Type {0} is not pointer")]
+    Deref(Ty),
+    #[error("Mismatched types expected {0}, found {1}")]
+    Mismatched(Ty, Ty),
 }
