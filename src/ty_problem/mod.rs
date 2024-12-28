@@ -1,5 +1,6 @@
 use crate::{
     ir::{self, Ir, Item, Node, OrderedMap, Ty},
+    parser::IntTy,
     Context,
 };
 
@@ -154,8 +155,8 @@ impl<'ir> TyProblem<'ir> {
                 if let Some(ty) = self.get_ty_var(*lhs).ty() {
                     match ty {
                         Ty::Ptr(_) => {
-                            *self.get_ty_var_mut(*rhs) = TyVar::Typed(&Ty::Int(ir::IntTy::Isize));
-                            *self.get_ty_var_mut(*expr) = TyVar::Typed(&Ty::Int(ir::IntTy::Isize));
+                            *self.get_ty_var_mut(*rhs) = TyVar::Typed(&Ty::Int(IntTy::Isize));
+                            *self.get_ty_var_mut(*expr) = TyVar::Typed(&Ty::Int(IntTy::Isize));
                             progress |= true;
                         }
                         Ty::Int(_) | Ty::UInt(_) => {
@@ -182,7 +183,7 @@ impl<'ir> TyProblem<'ir> {
 
                 match (self.get_ty_var(*lhs).ty(), self.get_ty_var(*rhs).ty()) {
                     (Some(Ty::Ptr(_)), Some(Ty::Ptr(_))) => {
-                        *self.get_ty_var_mut(*expr) = TyVar::Typed(&Ty::Int(ir::IntTy::Isize));
+                        *self.get_ty_var_mut(*expr) = TyVar::Typed(&Ty::Int(IntTy::Isize));
                         progress |= true;
 
                         false

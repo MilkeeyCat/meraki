@@ -1,5 +1,3 @@
-use std::fmt::Display;
-
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
 pub enum Token {
     Ident(String),
@@ -69,7 +67,7 @@ pub enum Token {
     Null,
 }
 
-impl Display for Token {
+impl std::fmt::Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use Token::*;
 

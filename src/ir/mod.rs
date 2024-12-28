@@ -5,7 +5,7 @@ use crate::parser::{BinOp, UnOp};
 use bumpalo::Bump;
 
 pub use ordered_map::OrderedMap;
-pub use types::{IntTy, Ty, TyArray, UintTy};
+pub use types::{Ty, TyArray};
 
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq, Hash)]
 pub struct Id {

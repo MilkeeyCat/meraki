@@ -1,18 +1,12 @@
-use crate::ty_problem;
+use crate::{
+    parser::{IntTy, UintTy},
+    ty_problem,
+};
 
 #[derive(Debug, PartialEq)]
 pub struct TyArray<'ir> {
     pub ty: &'ir Ty<'ir>,
     pub len: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash)]
-pub enum IntTy {
-    I8,
-    I16,
-    I32,
-    I64,
-    Isize,
 }
 
 impl IntTy {
@@ -25,27 +19,6 @@ impl IntTy {
             Self::Isize => return None,
         })
     }
-}
-
-impl std::fmt::Display for IntTy {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::I8 => write!(f, "i8"),
-            Self::I16 => write!(f, "i16"),
-            Self::I32 => write!(f, "i32"),
-            Self::I64 => write!(f, "i64"),
-            Self::Isize => write!(f, "isize"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash)]
-pub enum UintTy {
-    U8,
-    U16,
-    U32,
-    U64,
-    Usize,
 }
 
 impl UintTy {
@@ -66,18 +39,6 @@ impl UintTy {
             Self::U32 => IntTy::I32,
             Self::U64 => IntTy::I64,
             Self::Usize => IntTy::Isize,
-        }
-    }
-}
-
-impl std::fmt::Display for UintTy {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::U8 => write!(f, "u8"),
-            Self::U16 => write!(f, "u16"),
-            Self::U32 => write!(f, "u32"),
-            Self::U64 => write!(f, "u64"),
-            Self::Usize => write!(f, "usize"),
         }
     }
 }

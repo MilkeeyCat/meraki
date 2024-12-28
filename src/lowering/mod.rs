@@ -2,7 +2,7 @@ mod scopes;
 
 use crate::{
     ir::{self, Id, OrderedMap, Stmt},
-    parser::{self, BinOp, Item, UnOp, Variable},
+    parser::{self, BinOp, IntTy, Item, UintTy, UnOp, Variable},
     ty_problem, Context,
 };
 use scopes::Scopes;
@@ -374,36 +374,26 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                     parser::Ty::Void => self.ctx.allocator.alloc(ir::Ty::Void),
                     parser::Ty::Bool => self.ctx.allocator.alloc(ir::Ty::Bool),
                     parser::Ty::Int(ty) => match ty {
-                        parser::IntTy::I8 => self.ctx.allocator.alloc(ir::Ty::Int(ir::IntTy::I8)),
-                        parser::IntTy::I16 => self.ctx.allocator.alloc(ir::Ty::Int(ir::IntTy::I16)),
-                        parser::IntTy::I32 => self.ctx.allocator.alloc(ir::Ty::Int(ir::IntTy::I32)),
-                        parser::IntTy::I64 => self.ctx.allocator.alloc(ir::Ty::Int(ir::IntTy::I64)),
-                        parser::IntTy::Isize => {
-                            self.ctx.allocator.alloc(ir::Ty::Int(ir::IntTy::Isize))
-                        }
+                        parser::IntTy::I8 => self.ctx.allocator.alloc(ir::Ty::Int(IntTy::I8)),
+                        parser::IntTy::I16 => self.ctx.allocator.alloc(ir::Ty::Int(IntTy::I16)),
+                        parser::IntTy::I32 => self.ctx.allocator.alloc(ir::Ty::Int(IntTy::I32)),
+                        parser::IntTy::I64 => self.ctx.allocator.alloc(ir::Ty::Int(IntTy::I64)),
+                        parser::IntTy::Isize => self.ctx.allocator.alloc(ir::Ty::Int(IntTy::Isize)),
                     },
                     parser::Ty::UInt(ty) => match ty {
-                        parser::UintTy::U8 => {
-                            self.ctx.allocator.alloc(ir::Ty::UInt(ir::UintTy::U8))
-                        }
-                        parser::UintTy::U16 => {
-                            self.ctx.allocator.alloc(ir::Ty::UInt(ir::UintTy::U16))
-                        }
-                        parser::UintTy::U32 => {
-                            self.ctx.allocator.alloc(ir::Ty::UInt(ir::UintTy::U32))
-                        }
-                        parser::UintTy::U64 => {
-                            self.ctx.allocator.alloc(ir::Ty::UInt(ir::UintTy::U64))
-                        }
+                        parser::UintTy::U8 => self.ctx.allocator.alloc(ir::Ty::UInt(UintTy::U8)),
+                        parser::UintTy::U16 => self.ctx.allocator.alloc(ir::Ty::UInt(UintTy::U16)),
+                        parser::UintTy::U32 => self.ctx.allocator.alloc(ir::Ty::UInt(UintTy::U32)),
+                        parser::UintTy::U64 => self.ctx.allocator.alloc(ir::Ty::UInt(UintTy::U64)),
                         parser::UintTy::Usize => {
-                            self.ctx.allocator.alloc(ir::Ty::UInt(ir::UintTy::Usize))
+                            self.ctx.allocator.alloc(ir::Ty::UInt(UintTy::Usize))
                         }
                     },
                     parser::Ty::Ptr(ref ty) => self
                         .ctx
                         .allocator
                         .alloc(ir::Ty::Ptr(self.lower_ty(*ty.clone()))),
-                    parser::Ty::Array(parser::TyArray { ref ty, len }) => {
+                    parser::Ty::Array { ty, len } => {
                         self.ctx.allocator.alloc(ir::Ty::Array(ir::TyArray {
                             len: *len,
                             ty: self.lower_ty(*ty.clone()),
@@ -448,7 +438,7 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                 .alloc(ir::Ty::Infer(self.ctx.ty_problem.new_infer_ty_var())),
             parser::Expr::Lit(lit) => match lit {
                 parser::ExprLit::Bool(_) => &ir::Ty::Bool,
-                parser::ExprLit::String(_) => &ir::Ty::Ptr(&ir::Ty::UInt(ir::UintTy::U8)),
+                parser::ExprLit::String(_) => &ir::Ty::Ptr(&ir::Ty::UInt(UintTy::U8)),
                 _ => self
                     .ctx
                     .allocator
