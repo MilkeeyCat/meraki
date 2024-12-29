@@ -7,7 +7,10 @@ mod types;
 
 pub mod expr;
 
-use crate::lexer::{self, Token};
+use crate::{
+    diagnostics::{Diagnostic, Diagnostics},
+    lexer::{self, span::Span, Token},
+};
 pub use error::{Error, TyError};
 pub use expr::*;
 pub use item::{Item, ItemFn, ItemStruct};
@@ -27,23 +30,25 @@ pub struct Variable {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Block(pub Vec<Stmt>);
 
-type PrefixFn<T> = fn(&mut Parser<T>) -> Result<Expr, Error>;
-type InfixFn<T> = fn(&mut Parser<T>, left: Expr) -> Result<Expr, Error>;
+type PrefixFn<'a, 'src, T> = fn(&mut Parser<'a, 'src, T>) -> Result<Expr, Error>;
+type InfixFn<'a, 'src, T> = fn(&mut Parser<'a, 'src, T>, left: Expr) -> Result<Expr, Error>;
 
-pub struct Parser<T: Iterator<Item = Result<Token, lexer::Error>>> {
+pub struct Parser<'a, 'src, T: Iterator<Item = Result<Token, Span>>> {
     lexer: T,
+    diag: &'a mut Diagnostics<'src>,
     cur_token: Option<Token>,
     peek_token: Option<Token>,
-    prefix_fns: HashMap<Token, PrefixFn<T>>,
-    infix_fns: HashMap<Token, InfixFn<T>>,
+    prefix_fns: HashMap<Token, PrefixFn<'a, 'src, T>>,
+    infix_fns: HashMap<Token, InfixFn<'a, 'src, T>>,
 }
 
-impl<T: Iterator<Item = Result<Token, lexer::Error>>> Parser<T> {
-    pub fn new(mut lexer: T) -> Result<Self, Error> {
-        Ok(Self {
-            cur_token: lexer.next().transpose()?,
-            peek_token: lexer.next().transpose()?,
+impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
+    pub fn new(mut lexer: T, diag: &'a mut Diagnostics<'src>) -> Result<Self, Error> {
+        let mut parser = Self {
+            cur_token: None,
+            peek_token: None,
             lexer,
+            diag,
             prefix_fns: HashMap::from([
                 (Token::Ident(Default::default()), Self::ident as PrefixFn<T>),
                 (Token::String(Default::default()), Self::string_lit),
@@ -85,16 +90,28 @@ impl<T: Iterator<Item = Result<Token, lexer::Error>>> Parser<T> {
                 (Token::LParen, Self::func_call_expr),
                 (Token::Bang, Self::macro_call_expr),
             ]),
-        })
+        };
+
+        parser.next_token()?;
+        parser.next_token()?;
+
+        Ok(parser)
     }
 
     fn next_token(&mut self) -> Result<Option<Token>, Error> {
-        let mut token = self.lexer.next().transpose()?;
+        match self.lexer.next().transpose() {
+            Ok(mut token) => {
+                std::mem::swap(&mut self.cur_token, &mut self.peek_token);
+                std::mem::swap(&mut token, &mut self.peek_token);
 
-        std::mem::swap(&mut self.cur_token, &mut self.peek_token);
-        std::mem::swap(&mut token, &mut self.peek_token);
+                Ok(token)
+            }
+            Err(span) => {
+                self.diag.error(Diagnostic::UnknownChar, span);
 
-        Ok(token)
+                self.next_token()
+            }
+        }
     }
 
     fn cur_token_is(&self, token: &Token) -> bool {
@@ -786,6 +803,7 @@ impl<T: Iterator<Item = Result<Token, lexer::Error>>> Parser<T> {
 mod test {
     use super::Parser;
     use crate::{
+        diagnostics::Diagnostics,
         lexer::Lexer,
         parser::{
             BinOp, Error, Expr, ExprBinary, ExprCast, ExprIdent, ExprLit, ExprUnary, IntTy, Stmt,
@@ -943,7 +961,8 @@ mod test {
         ];
 
         for (input, expected) in tests {
-            let mut parser = Parser::new(Lexer::new(input.to_string())).unwrap();
+            let mut diagnostics = Diagnostics::new(input);
+            let mut parser = Parser::new(Lexer::new(input), &mut diagnostics).unwrap();
             let ast = parser.compound_statement().unwrap();
 
             assert_eq!(

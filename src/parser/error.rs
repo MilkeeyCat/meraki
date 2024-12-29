@@ -1,11 +1,9 @@
 use super::{OpParseError, Ty};
-use crate::lexer::{self, Token};
+use crate::lexer::Token;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error(transparent)]
-    Lexer(#[from] lexer::Error),
     #[error(transparent)]
     Type(#[from] TyError),
     #[error(transparent)]

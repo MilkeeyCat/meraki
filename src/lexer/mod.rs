@@ -1,24 +1,39 @@
-mod error;
 mod token;
 
-pub use error::Error;
+use span::Span;
 pub use token::Token;
 
+pub mod span {
+    #[derive(Debug)]
+    pub struct Span {
+        pub start: usize,
+        pub end: usize,
+    }
+
+    #[derive(Debug)]
+    pub struct Spanned<T> {
+        pub span: Span,
+        pub inner: T,
+    }
+}
+
 #[derive(Debug)]
-pub struct Lexer {
-    input: String,
+pub struct Lexer<'src> {
+    input: &'src str,
     position: usize,
     read_position: usize,
     ch: char,
+    start: usize,
 }
 
-impl Lexer {
-    pub fn new(input: String) -> Self {
+impl<'src> Lexer<'src> {
+    pub fn new(input: &'src str) -> Self {
         let mut lexer = Self {
             input,
             ch: '\0',
             position: 0,
             read_position: 0,
+            start: 0,
         };
         lexer.read_char();
 
@@ -26,6 +41,8 @@ impl Lexer {
     }
 
     fn read_char(&mut self) {
+        self.start = self.position;
+
         match self.input[self.read_position..].chars().next() {
             Some(ch) => {
                 self.ch = ch;
@@ -85,10 +102,17 @@ impl Lexer {
             self.read_char();
         }
     }
+
+    fn span(&self) -> Span {
+        Span {
+            start: self.start,
+            end: self.position,
+        }
+    }
 }
 
-impl Iterator for Lexer {
-    type Item = Result<Token, Error>;
+impl<'src> Iterator for Lexer<'src> {
+    type Item = Result<Token, Span>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.skip_whitespace();
@@ -218,8 +242,10 @@ impl Iterator for Lexer {
                     _ => Token::Ident(ident),
                 }));
             }
-            ch => {
-                return Some(Err(Error::UnknownCharacter(ch)));
+            _ => {
+                self.read_char();
+
+                return Some(Err(self.span()));
             }
         };
 
@@ -231,11 +257,11 @@ impl Iterator for Lexer {
 
 #[cfg(test)]
 mod test {
-    use super::{Error, Lexer};
+    use super::Lexer;
     use crate::lexer::Token;
 
     #[test]
-    fn source_into_tokens() -> Result<(), Error> {
+    fn source_into_tokens() {
         let input = r#"
             ident
             69
@@ -369,14 +395,12 @@ mod test {
             Token::Null,
         ];
 
-        let mut lexer = Lexer::new(input.to_string());
+        let mut lexer = Lexer::new(input);
 
         for token in tokens {
-            let next_token = lexer.next().unwrap()?;
+            let next_token = lexer.next().unwrap().unwrap();
 
             assert_eq!(token, next_token);
         }
-
-        Ok(())
     }
 }
