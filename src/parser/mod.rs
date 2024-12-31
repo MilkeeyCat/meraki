@@ -9,7 +9,7 @@ pub mod expr;
 
 use crate::{
     diagnostics::{Diagnostic, Diagnostics},
-    lexer::{self, span::Span, Token},
+    lexer::{span::Span, Token},
 };
 pub use error::{Error, TyError};
 pub use expr::*;
@@ -43,7 +43,7 @@ pub struct Parser<'a, 'src, T: Iterator<Item = Result<Token, Span>>> {
 }
 
 impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
-    pub fn new(mut lexer: T, diag: &'a mut Diagnostics<'src>) -> Result<Self, Error> {
+    pub fn new(lexer: T, diag: &'a mut Diagnostics<'src>) -> Result<Self, Error> {
         let mut parser = Self {
             cur_token: None,
             peek_token: None,
@@ -147,12 +147,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
     }
 
     pub fn expr(&mut self, precedence: Precedence) -> Result<Expr, Error> {
-        let token = match self.cur_token.as_ref().unwrap() {
-            Token::Ident(_) => Token::Ident(Default::default()),
-            Token::Integer(_) => Token::Integer(Default::default()),
-            Token::String(_) => Token::String(Default::default()),
-            token => token.clone(),
-        };
+        let token = self.cur_token.clone().unwrap();
 
         let mut left = match self.prefix_fns.get(&token) {
             Some(func) => func(self),

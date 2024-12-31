@@ -1,140 +1,146 @@
-#[derive(Debug, PartialEq, Clone, Hash, Eq)]
+use derive_more::derive::Display;
+use std::{
+    hash::{Hash, Hasher},
+    mem::discriminant,
+};
+
+#[derive(Debug, Clone, Eq, Display)]
 pub enum Token {
+    #[display("ident")]
     Ident(String),
+    #[display("integer literal")]
     Integer(String),
+    #[display("string literal")]
     String(String),
 
+    #[display("=")]
     Assign,
+    #[display("+")]
     Plus,
+    #[display("-")]
     Minus,
+    #[display("!")]
     Bang,
+    #[display("*")]
     Asterisk,
+    #[display("/")]
     Slash,
+    #[display("->")]
     Arrow,
+    #[display(".")]
     Period,
+    #[display("~")]
     Tilde,
+    #[display("&")]
     Ampersand,
+    #[display("|")]
     Bar,
+    #[display("==")]
     Equal,
+    #[display("!=")]
     NotEqual,
+    #[display("<")]
     LessThan,
+    #[display(">")]
     GreaterThan,
+    #[display("<=")]
     LessEqual,
+    #[display(">=")]
     GreaterEqual,
+    #[display("&&")]
     And,
+    #[display("||")]
     Or,
+    #[display("<<")]
     Shl,
+    #[display(">>")]
     Shr,
+    #[display(",")]
     Comma,
+    #[display(";")]
     Semicolon,
+    #[display(":")]
     Colon,
+    #[display("(")]
     LParen,
+    #[display(")")]
     RParen,
+    #[display("{{")]
     LBrace,
+    #[display("}}")]
     RBrace,
+    #[display("[")]
     LBracket,
+    #[display("]")]
     RBracket,
 
+    #[display("const")]
     Const,
+    #[display("true")]
     True,
+    #[display("false")]
     False,
+    #[display("let")]
     Let,
+    #[display("fn")]
     Fn,
+    #[display("enum")]
     Enum,
+    #[display("struct")]
     Struct,
+    #[display("if")]
     If,
+    #[display("while")]
     While,
+    #[display("for")]
     For,
+    #[display("else")]
     Else,
+    #[display("return")]
     Return,
+    #[display("as")]
     As,
+    #[display("continue")]
     Continue,
+    #[display("break")]
     Break,
 
+    #[display("u8")]
     U8,
+    #[display("u16")]
     U16,
+    #[display("u32")]
     U32,
+    #[display("u64")]
     U64,
+    #[display("i8")]
     I8,
+    #[display("i16")]
     I16,
+    #[display("i32")]
     I32,
+    #[display("i64")]
     I64,
+    #[display("usize")]
     Usize,
+    #[display("isize")]
     Isize,
+    #[display("bool")]
     Bool,
+    #[display("void")]
     Void,
-
+    #[display("null")]
     Null,
 }
 
-impl std::fmt::Display for Token {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use Token::*;
+impl PartialEq<Token> for Token {
+    fn eq(&self, other: &Token) -> bool {
+        discriminant(self) == discriminant(other)
+    }
+}
 
-        match self {
-            Ident(ident) => {
-                write!(f, "{}", if ident.is_empty() { "ident" } else { ident })
-            }
-            Integer(int) => write!(f, "{int}"),
-            String(string) => write!(f, "\"{string}\""),
-            Assign => write!(f, "="),
-            Plus => write!(f, "+"),
-            Minus => write!(f, "-"),
-            Bang => write!(f, "!"),
-            Asterisk => write!(f, "*"),
-            Slash => write!(f, "/"),
-            Arrow => write!(f, "->"),
-            Period => write!(f, "."),
-            Tilde => write!(f, "~"),
-            Ampersand => write!(f, "&"),
-            Bar => write!(f, "|"),
-            Equal => write!(f, "=="),
-            NotEqual => write!(f, "!="),
-            LessThan => write!(f, "<"),
-            GreaterThan => write!(f, ">"),
-            LessEqual => write!(f, "<="),
-            GreaterEqual => write!(f, "=>"),
-            And => write!(f, "&&"),
-            Or => write!(f, "||"),
-            Shl => write!(f, "<<"),
-            Shr => write!(f, ">>"),
-            Comma => write!(f, ","),
-            Semicolon => write!(f, ";"),
-            Colon => write!(f, ":"),
-            LParen => write!(f, "("),
-            RParen => write!(f, ")"),
-            LBrace => write!(f, "{{"),
-            RBrace => write!(f, "}}"),
-            LBracket => write!(f, "["),
-            RBracket => write!(f, "]"),
-            Const => write!(f, "const"),
-            True => write!(f, "true"),
-            False => write!(f, "false"),
-            Let => write!(f, "let"),
-            Fn => write!(f, "fn"),
-            Enum => write!(f, "enum"),
-            Struct => write!(f, "struct"),
-            If => write!(f, "if"),
-            While => write!(f, "while"),
-            For => write!(f, "for"),
-            Else => write!(f, "else"),
-            Return => write!(f, "return"),
-            As => write!(f, "as"),
-            Continue => write!(f, "continue"),
-            Break => write!(f, "break"),
-            U8 => write!(f, "u8"),
-            U16 => write!(f, "u16"),
-            U32 => write!(f, "u32"),
-            U64 => write!(f, "u64"),
-            I8 => write!(f, "i8"),
-            I16 => write!(f, "i16"),
-            I32 => write!(f, "i32"),
-            I64 => write!(f, "i64"),
-            Usize => write!(f, "usize"),
-            Isize => write!(f, "isize"),
-            Bool => write!(f, "bool"),
-            Void => write!(f, "void"),
-            Null => write!(f, "NULL"),
-        }
+impl Hash for Token {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        discriminant(self).hash(state)
     }
 }
