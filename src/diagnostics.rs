@@ -70,7 +70,7 @@ impl<'src> Diagnostics<'src> {
     }
 
     fn lines(&self, span: &Span) -> usize {
-        self.source[..span.end - span.start]
+        self.source[span.end..span.start]
             .chars()
             .filter(|ch| ch == &'\n')
             .count()
