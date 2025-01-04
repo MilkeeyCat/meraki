@@ -198,12 +198,11 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
                     _ => todo!("Don't know what error to return yet"),
                 };
                 self.expect(&Token::Colon)?;
-                let mut type_ = self.parse_type()?;
-                self.array_type(&mut type_)?;
+                let ty = self.parse_type()?;
 
                 match fields.iter().find(|(field_name, _)| field_name == &name) {
                     Some(_) => todo!("Don't know yet what error to return"),
-                    None => fields.push((name, type_)),
+                    None => fields.push((name, ty)),
                 };
 
                 if !self.cur_token_is(&Token::RBrace) {
@@ -273,26 +272,33 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
     }
 
     fn parse_type(&mut self) -> Result<Ty, Error> {
-        let mut n = 0;
-        while self.cur_token_is(&Token::Asterisk) {
-            self.expect(&Token::Asterisk)?;
-            n += 1;
-        }
+        Ok(match self.next_token()?.unwrap() {
+            Token::Asterisk => Ty::Ptr(Box::new(self.parse_type()?)),
+            Token::LBracket => match self.next_token()?.unwrap() {
+                Token::Integer(int) => {
+                    let length: usize = str::parse(&int).unwrap();
+                    self.expect(&Token::RBracket)?;
 
-        let mut base = match self.next_token()?.unwrap() {
-            Token::U8 => Ok(Ty::UInt(UintTy::U8)),
-            Token::U16 => Ok(Ty::UInt(UintTy::U16)),
-            Token::U32 => Ok(Ty::UInt(UintTy::U32)),
-            Token::U64 => Ok(Ty::UInt(UintTy::U64)),
-            Token::I8 => Ok(Ty::Int(IntTy::I8)),
-            Token::I16 => Ok(Ty::Int(IntTy::I16)),
-            Token::I32 => Ok(Ty::Int(IntTy::I32)),
-            Token::I64 => Ok(Ty::Int(IntTy::I64)),
-            Token::Usize => Ok(Ty::UInt(UintTy::Usize)),
-            Token::Isize => Ok(Ty::Int(IntTy::Isize)),
-            Token::Bool => Ok(Ty::Bool),
-            Token::Void => Ok(Ty::Void),
-            Token::Ident(ident) => Ok(Ty::Ident(ident)),
+                    Ty::Array {
+                        ty: Box::new(self.parse_type()?),
+                        len: length,
+                    }
+                }
+                token => panic!("Expected integer, got {token}"),
+            },
+            Token::U8 => Ty::UInt(UintTy::U8),
+            Token::U16 => Ty::UInt(UintTy::U16),
+            Token::U32 => Ty::UInt(UintTy::U32),
+            Token::U64 => Ty::UInt(UintTy::U64),
+            Token::I8 => Ty::Int(IntTy::I8),
+            Token::I16 => Ty::Int(IntTy::I16),
+            Token::I32 => Ty::Int(IntTy::I32),
+            Token::I64 => Ty::Int(IntTy::I64),
+            Token::Usize => Ty::UInt(UintTy::Usize),
+            Token::Isize => Ty::Int(IntTy::Isize),
+            Token::Bool => Ty::Bool,
+            Token::Void => Ty::Void,
+            Token::Ident(ident) => Ty::Ident(ident),
             Token::Fn => {
                 self.expect(&Token::LParen)?;
 
@@ -309,17 +315,10 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
                 self.expect(&Token::RParen)?;
                 self.expect(&Token::Arrow)?;
 
-                Ok(Ty::Fn(params, Box::new(self.parse_type()?)))
+                Ty::Fn(params, Box::new(self.parse_type()?))
             }
-            token => Err(Error::ParseType(token)),
-        }?;
-
-        while n > 0 {
-            base = Ty::Ptr(Box::new(base));
-            n -= 1;
-        }
-
-        Ok(base)
+            token => return Err(Error::ParseType(token)),
+        })
     }
 
     fn parse_return(&mut self) -> Result<Stmt, Error> {
@@ -403,27 +402,6 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         }))
     }
 
-    fn array_type(&mut self, type_: &mut Ty) -> Result<(), Error> {
-        if self.cur_token_is(&Token::LBracket) {
-            self.expect(&Token::LBracket)?;
-
-            match self.next_token()?.unwrap() {
-                Token::Integer(int) => {
-                    let length: usize = str::parse(&int).unwrap();
-                    self.expect(&Token::RBracket)?;
-
-                    *type_ = Ty::Array {
-                        ty: Box::new(type_.clone()),
-                        len: length,
-                    };
-                }
-                token => panic!("Expected integer, got {token}"),
-            }
-        }
-
-        Ok(())
-    }
-
     fn local(&mut self) -> Result<Stmt, Error> {
         self.expect(&Token::Let)?;
 
@@ -436,10 +414,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         let ty = if self.cur_token_is(&Token::Colon) {
             self.expect(&Token::Colon)?;
 
-            let mut ty = self.parse_type()?;
-            self.array_type(&mut ty)?;
-
-            ty
+            self.parse_type()?
         } else {
             Ty::Infer
         };
@@ -472,8 +447,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         };
         self.expect(&Token::Colon)?;
 
-        let mut ty = self.parse_type()?;
-        self.array_type(&mut ty)?;
+        let ty = self.parse_type()?;
 
         let expr = if self.cur_token_is(&Token::Assign) {
             self.expect(&Token::Assign)?;
