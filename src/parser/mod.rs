@@ -92,24 +92,24 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
             ]),
         };
 
-        parser.next_token()?;
-        parser.next_token()?;
+        parser.bump()?;
+        parser.bump()?;
 
         Ok(parser)
     }
 
-    fn next_token(&mut self) -> Result<Option<Token>, Error> {
+    fn bump(&mut self) -> Result<(), Error> {
         match self.lexer.next().transpose() {
             Ok(mut token) => {
                 std::mem::swap(&mut self.cur_token, &mut self.peek_token);
                 std::mem::swap(&mut token, &mut self.peek_token);
 
-                Ok(token)
+                Ok(())
             }
             Err(span) => {
                 self.diag.error(Diagnostic::UnknownChar, span);
 
-                self.next_token()
+                self.bump()
             }
         }
     }
@@ -123,9 +123,13 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
     }
 
     fn expect(&mut self, token: &Token) -> Result<(), Error> {
-        match self.next_token()? {
-            Some(ref cur) if cur == token => Ok(()),
-            Some(cur) => Err(Error::UnexpectedToken(token.to_owned(), cur)),
+        match &self.cur_token {
+            Some(cur) if cur == token => {
+                self.bump()?;
+
+                Ok(())
+            }
+            Some(cur) => Err(Error::UnexpectedToken(token.to_owned(), cur.clone())),
             None => Err(Error::Expected(token.to_owned())),
         }
     }
@@ -174,16 +178,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
     fn parse_struct(&mut self) -> Result<Item, Error> {
         self.expect(&Token::Struct)?;
 
-        let name = match self
-            .next_token()?
-            .ok_or(Error::Expected(Token::Ident(Default::default())))?
-        {
-            Token::Ident(ident) => Ok(ident),
-            token => Err(Error::UnexpectedToken(
-                Token::Ident(Default::default()),
-                token,
-            )),
-        }?;
+        let name = self.parse_ident()?;
 
         self.expect(&Token::LBrace)?;
 
@@ -193,10 +188,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
             if self.cur_token_is(&Token::Fn) {
                 // Handle struct methods here
             } else {
-                let name = match self.next_token()? {
-                    Some(Token::Ident(ident)) => ident,
-                    _ => todo!("Don't know what error to return yet"),
-                };
+                let name = self.parse_ident()?;
                 self.expect(&Token::Colon)?;
                 let ty = self.parse_type()?;
 
@@ -272,34 +264,39 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
     }
 
     fn parse_type(&mut self) -> Result<Ty, Error> {
-        Ok(match self.next_token()?.unwrap() {
-            Token::Asterisk => Ty::Ptr(Box::new(self.parse_type()?)),
-            Token::LBracket => match self.next_token()?.unwrap() {
-                Token::Integer(int) => {
-                    let length: usize = str::parse(&int).unwrap();
-                    self.expect(&Token::RBracket)?;
+        let ty = match &self.cur_token {
+            Some(Token::Asterisk) => Ty::Ptr(Box::new(self.parse_type()?)),
+            Some(Token::LBracket) => {
+                self.bump()?;
 
-                    Ty::Array {
-                        ty: Box::new(self.parse_type()?),
-                        len: length,
+                match &self.cur_token {
+                    Some(Token::Integer(int)) => {
+                        let length: usize = str::parse(int).unwrap();
+                        self.expect(&Token::RBracket)?;
+
+                        Ty::Array {
+                            ty: Box::new(self.parse_type()?),
+                            len: length,
+                        }
                     }
+                    token => panic!("Expected integer, got {token:?}"),
                 }
-                token => panic!("Expected integer, got {token}"),
-            },
-            Token::U8 => Ty::UInt(UintTy::U8),
-            Token::U16 => Ty::UInt(UintTy::U16),
-            Token::U32 => Ty::UInt(UintTy::U32),
-            Token::U64 => Ty::UInt(UintTy::U64),
-            Token::I8 => Ty::Int(IntTy::I8),
-            Token::I16 => Ty::Int(IntTy::I16),
-            Token::I32 => Ty::Int(IntTy::I32),
-            Token::I64 => Ty::Int(IntTy::I64),
-            Token::Usize => Ty::UInt(UintTy::Usize),
-            Token::Isize => Ty::Int(IntTy::Isize),
-            Token::Bool => Ty::Bool,
-            Token::Void => Ty::Void,
-            Token::Ident(ident) => Ty::Ident(ident),
-            Token::Fn => {
+            }
+            Some(Token::U8) => Ty::UInt(UintTy::U8),
+            Some(Token::U16) => Ty::UInt(UintTy::U16),
+            Some(Token::U32) => Ty::UInt(UintTy::U32),
+            Some(Token::U64) => Ty::UInt(UintTy::U64),
+            Some(Token::I8) => Ty::Int(IntTy::I8),
+            Some(Token::I16) => Ty::Int(IntTy::I16),
+            Some(Token::I32) => Ty::Int(IntTy::I32),
+            Some(Token::I64) => Ty::Int(IntTy::I64),
+            Some(Token::Usize) => Ty::UInt(UintTy::Usize),
+            Some(Token::Isize) => Ty::Int(IntTy::Isize),
+            Some(Token::Bool) => Ty::Bool,
+            Some(Token::Void) => Ty::Void,
+            Some(Token::Ident(ident)) => Ty::Ident(ident.clone()),
+            Some(Token::Fn) => {
+                self.bump()?;
                 self.expect(&Token::LParen)?;
 
                 let mut params = Vec::new();
@@ -315,10 +312,14 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
                 self.expect(&Token::RParen)?;
                 self.expect(&Token::Arrow)?;
 
-                Ty::Fn(params, Box::new(self.parse_type()?))
+                return Ok(Ty::Fn(params, Box::new(self.parse_type()?)));
             }
-            token => return Err(Error::ParseType(token)),
-        })
+            token => return Err(Error::ParseType(token.clone().unwrap())),
+        };
+
+        self.bump()?;
+
+        Ok(ty)
     }
 
     fn parse_return(&mut self) -> Result<Stmt, Error> {
@@ -405,12 +406,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
     fn local(&mut self) -> Result<Stmt, Error> {
         self.expect(&Token::Let)?;
 
-        let name = match self.next_token()?.unwrap() {
-            Token::Ident(ident) => ident,
-            token => {
-                return Err(Error::ParseType(token));
-            }
-        };
+        let name = self.parse_ident()?;
         let ty = if self.cur_token_is(&Token::Colon) {
             self.expect(&Token::Colon)?;
 
@@ -439,12 +435,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
     fn global(&mut self) -> Result<Item, Error> {
         self.expect(&Token::Let)?;
 
-        let name = match self.next_token()?.unwrap() {
-            Token::Ident(ident) => ident,
-            token => {
-                return Err(Error::ParseType(token));
-            }
-        };
+        let name = self.parse_ident()?;
         self.expect(&Token::Colon)?;
 
         let ty = self.parse_type()?;
@@ -469,12 +460,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
     fn function(&mut self, func_definition: bool) -> Result<Item, Error> {
         self.expect(&Token::Fn)?;
 
-        let name = match self.next_token()?.unwrap() {
-            Token::Ident(ident) => ident,
-            token => {
-                return Err(Error::ParseType(token));
-            }
-        };
+        let name = self.parse_ident()?;
 
         self.expect(&Token::LParen)?;
 
@@ -508,10 +494,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         let mut params = Vec::new();
 
         while !self.cur_token_is(&end) {
-            let name = match self.next_token()? {
-                Some(Token::Ident(ident)) => ident,
-                _ => todo!("Don't know what error to return yet"),
-            };
+            let name = self.parse_ident()?;
             self.expect(&Token::Colon)?;
             let type_ = self.parse_type()?;
 
@@ -533,28 +516,20 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
     fn ident(&mut self) -> Result<Expr, Error> {
         match self.peek_token {
             Some(Token::LBrace) => self.struct_expr(),
-            _ => match self
-                .next_token()?
-                .ok_or(Error::Expected(Token::Ident(Default::default())))?
-            {
-                Token::Ident(ident) => Ok(Expr::Ident(ExprIdent(ident))),
-                token => Err(Error::ParseType(token)),
-            },
+            _ => Ok(Expr::Ident(ExprIdent(self.parse_ident()?))),
         }
     }
 
     fn struct_expr(&mut self) -> Result<Expr, Error> {
-        let name = match self.next_token()? {
-            Some(Token::Ident(ident)) => ident,
-            _ => todo!("Don't know what error to return yet"),
-        };
+        let name = self.parse_ident()?;
 
         self.expect(&Token::LBrace)?;
         let mut fields = Vec::new();
 
         while !self.cur_token_is(&Token::RBrace) {
-            match self.next_token()? {
+            match self.cur_token.clone() {
                 Some(Token::Ident(field)) => {
+                    self.bump()?;
                     self.expect(&Token::Colon)?;
                     let expr = self.expr(Precedence::Lowest)?;
 
@@ -574,16 +549,26 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
     }
 
     fn string_lit(&mut self) -> Result<Expr, Error> {
-        match self.next_token()? {
-            Some(Token::String(literal)) => Ok(Expr::Lit(ExprLit::String(literal))),
-            Some(_) | None => unreachable!(),
+        match &self.cur_token {
+            Some(Token::String(literal)) => {
+                let lit = literal.clone();
+                self.bump()?;
+
+                Ok(Expr::Lit(ExprLit::String(lit)))
+            }
+            _ => unreachable!(),
         }
     }
 
     fn int_lit(&mut self) -> Result<Expr, Error> {
-        match self.next_token()? {
-            Some(Token::Integer(num_str)) => Ok(Expr::Lit(ExprLit::UInt(num_str.parse().unwrap()))),
-            Some(_) | None => unreachable!(),
+        match &self.cur_token {
+            Some(Token::Integer(num_str)) => {
+                let lit = num_str.parse().unwrap();
+                self.bump()?;
+
+                Ok(Expr::Lit(ExprLit::UInt(lit)))
+            }
+            _ => unreachable!(),
         }
     }
 
@@ -594,10 +579,18 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
     }
 
     fn bool(&mut self) -> Result<Expr, Error> {
-        match self.next_token()? {
-            Some(Token::True) => Ok(Expr::Lit(ExprLit::Bool(true))),
-            Some(Token::False) => Ok(Expr::Lit(ExprLit::Bool(false))),
-            Some(_) | None => unreachable!(),
+        match &self.cur_token {
+            Some(Token::True) => {
+                self.bump()?;
+
+                Ok(Expr::Lit(ExprLit::Bool(true)))
+            }
+            Some(Token::False) => {
+                self.bump()?;
+
+                Ok(Expr::Lit(ExprLit::Bool(false)))
+            }
+            _ => unreachable!(),
         }
     }
 
@@ -624,7 +617,12 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         let mut tokens = Vec::new();
 
         while !self.cur_token_is(&Token::RParen) {
-            tokens.push(self.next_token()?.ok_or(Error::Expected(Token::RParen))?);
+            tokens.push(
+                self.cur_token
+                    .clone()
+                    .ok_or(Error::Expected(Token::RParen))?,
+            );
+            self.bump()?;
         }
 
         self.expect(&Token::RParen)?;
@@ -633,7 +631,8 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
     }
 
     fn bin_expr(&mut self, left: Expr) -> Result<Expr, Error> {
-        let token = self.next_token()?.unwrap();
+        let token = self.cur_token.clone().unwrap();
+        self.bump()?;
 
         // NOTE: assignment expression is right-associative
         let precedence = if let &Token::Assign = &token {
@@ -654,10 +653,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
     fn pointer_access(&mut self, left: Expr) -> Result<Expr, Error> {
         self.expect(&Token::Arrow)?;
 
-        let field = match self.next_token()? {
-            Some(Token::Ident(ident)) => ident,
-            _ => unreachable!(),
-        };
+        let field = self.parse_ident()?;
 
         Ok(Expr::Field(ExprField {
             expr: Box::new(Expr::Unary(ExprUnary {
@@ -672,10 +668,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         self.expect(&Token::Period)?;
 
         if self.peek_token_is(&Token::LParen) {
-            let method = match self.next_token()? {
-                Some(Token::Ident(field)) => field,
-                _ => panic!("Struct field name should be of type string"),
-            };
+            let method = self.parse_ident()?;
 
             self.expect(&Token::LParen)?;
             let arguments = self.expr_list()?;
@@ -686,13 +679,10 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
                 arguments,
             }))
         } else {
-            match self.next_token()? {
-                Some(Token::Ident(field)) => Ok(Expr::Field(ExprField {
-                    expr: Box::new(expr),
-                    field,
-                })),
-                _ => panic!("Struct field name should be of type string"),
-            }
+            Ok(Expr::Field(ExprField {
+                expr: Box::new(expr),
+                field: self.parse_ident()?,
+            }))
         }
     }
 
@@ -717,7 +707,9 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
     }
 
     fn unary_expr(&mut self) -> Result<Expr, Error> {
-        let op = UnOp::try_from(&self.next_token()?.unwrap()).map_err(|e| Error::Operator(e))?;
+        let token = self.cur_token.clone().unwrap();
+        self.bump()?;
+        let op = UnOp::try_from(&token).map_err(|e| Error::Operator(e))?;
         let expr = self.expr(Precedence::Prefix)?;
 
         Ok(Expr::Unary(ExprUnary {
@@ -765,6 +757,17 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         self.expect(&Token::RBracket)?;
 
         Ok(Expr::Array(ExprArray(items)))
+    }
+
+    fn parse_ident(&mut self) -> Result<String, Error> {
+        match self.cur_token.clone() {
+            Some(Token::Ident(ident)) => {
+                self.bump()?;
+
+                Ok(ident)
+            }
+            _ => todo!(),
+        }
     }
 }
 
