@@ -5,7 +5,7 @@ use std::{
 };
 
 #[derive(Debug, Clone, Eq, Display)]
-pub enum Token {
+pub enum TokenKind {
     #[display("ident")]
     Ident(String),
     #[display("integer literal")]
@@ -133,13 +133,13 @@ pub enum Token {
     Null,
 }
 
-impl PartialEq<Token> for Token {
-    fn eq(&self, other: &Token) -> bool {
+impl PartialEq<TokenKind> for TokenKind {
+    fn eq(&self, other: &TokenKind) -> bool {
         discriminant(self) == discriminant(other)
     }
 }
 
-impl Hash for Token {
+impl Hash for TokenKind {
     fn hash<H: Hasher>(&self, state: &mut H) {
         discriminant(self).hash(state)
     }

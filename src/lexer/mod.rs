@@ -1,20 +1,29 @@
 mod token;
 
 use span::Span;
-pub use token::Token;
+pub use token::TokenKind;
 
 pub mod span {
-    #[derive(Debug)]
+    #[derive(Debug, Clone, PartialEq)]
     pub struct Span {
         pub start: usize,
         pub end: usize,
     }
 
-    #[derive(Debug)]
-    pub struct Spanned<T> {
-        pub span: Span,
-        pub inner: T,
+    impl Span {
+        pub fn to(self, end: Span) -> Span {
+            Span {
+                start: std::cmp::min(self.start, end.start),
+                end: std::cmp::max(self.end, end.end),
+            }
+        }
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Token {
+    pub kind: TokenKind,
+    pub span: Span,
 }
 
 #[derive(Debug)]
@@ -41,8 +50,6 @@ impl<'src> Lexer<'src> {
     }
 
     fn read_char(&mut self) {
-        self.start = self.position;
-
         match self.input[self.read_position..].chars().next() {
             Some(ch) => {
                 self.ch = ch;
@@ -116,130 +123,139 @@ impl<'src> Iterator for Lexer<'src> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.skip_whitespace();
+        self.start = self.position;
 
-        let token = match self.ch {
+        let kind = match self.ch {
             '=' => {
                 if self.peek() == Some('=') {
                     self.read_char();
-                    Token::Equal
+                    TokenKind::Equal
                 } else {
-                    Token::Assign
+                    TokenKind::Assign
                 }
             }
             '-' => {
                 if self.peek() == Some('>') {
                     self.read_char();
-                    Token::Arrow
+                    TokenKind::Arrow
                 } else {
-                    Token::Minus
+                    TokenKind::Minus
                 }
             }
-            '+' => Token::Plus,
+            '+' => TokenKind::Plus,
             '/' => {
                 if self.peek() == Some('/') {
                     self.skip_comment();
 
                     return self.next();
                 } else {
-                    Token::Slash
+                    TokenKind::Slash
                 }
             }
-            '.' => Token::Period,
-            '~' => Token::Tilde,
+            '.' => TokenKind::Period,
+            '~' => TokenKind::Tilde,
             '&' => {
                 if self.peek() == Some('&') {
                     self.read_char();
-                    Token::And
+                    TokenKind::And
                 } else {
-                    Token::Ampersand
+                    TokenKind::Ampersand
                 }
             }
             '|' => {
                 if self.peek() == Some('|') {
                     self.read_char();
-                    Token::Or
+                    TokenKind::Or
                 } else {
-                    Token::Bar
+                    TokenKind::Bar
                 }
             }
             '!' => {
                 if self.peek() == Some('=') {
                     self.read_char();
-                    Token::NotEqual
+                    TokenKind::NotEqual
                 } else {
-                    Token::Bang
+                    TokenKind::Bang
                 }
             }
-            '*' => Token::Asterisk,
+            '*' => TokenKind::Asterisk,
             '<' => match self.peek() {
                 Some('=') => {
                     self.read_char();
-                    Token::LessEqual
+                    TokenKind::LessEqual
                 }
                 Some('<') => {
                     self.read_char();
-                    Token::Shl
+                    TokenKind::Shl
                 }
-                _ => Token::LessThan,
+                _ => TokenKind::LessThan,
             },
             '>' => match self.peek() {
                 Some('=') => {
                     self.read_char();
-                    Token::GreaterEqual
+                    TokenKind::GreaterEqual
                 }
                 Some('>') => {
                     self.read_char();
-                    Token::Shr
+                    TokenKind::Shr
                 }
-                _ => Token::GreaterThan,
+                _ => TokenKind::GreaterThan,
             },
-            ';' => Token::Semicolon,
-            '(' => Token::LParen,
-            ')' => Token::RParen,
-            '{' => Token::LBrace,
-            '}' => Token::RBrace,
-            '[' => Token::LBracket,
-            ']' => Token::RBracket,
-            ',' => Token::Comma,
-            ':' => Token::Colon,
-            '"' => Token::String(self.read_string()),
+            ';' => TokenKind::Semicolon,
+            '(' => TokenKind::LParen,
+            ')' => TokenKind::RParen,
+            '{' => TokenKind::LBrace,
+            '}' => TokenKind::RBrace,
+            '[' => TokenKind::LBracket,
+            ']' => TokenKind::RBracket,
+            ',' => TokenKind::Comma,
+            ':' => TokenKind::Colon,
+            '"' => TokenKind::String(self.read_string()),
             '0'..='9' => {
-                return Some(Ok(Token::Integer(self.read_int())));
+                let num = self.read_int();
+
+                return Some(Ok(Token {
+                    kind: TokenKind::Integer(num),
+                    span: self.span(),
+                }));
             }
             '\0' => return None,
             ch if ch.is_alphanumeric() || ch == '_' => {
                 let ident = self.read_ident();
 
-                return Some(Ok(match ident.as_str() {
-                    "const" => Token::Const,
-                    "true" => Token::True,
-                    "let" => Token::Let,
-                    "fn" => Token::Fn,
-                    "enum" => Token::Enum,
-                    "struct" => Token::Struct,
-                    "false" => Token::False,
-                    "if" => Token::If,
-                    "while" => Token::While,
-                    "for" => Token::For,
-                    "else" => Token::Else,
-                    "return" => Token::Return,
-                    "as" => Token::As,
-                    "continue" => Token::Continue,
-                    "break" => Token::Break,
-                    "u8" => Token::U8,
-                    "u16" => Token::U16,
-                    "u32" => Token::U32,
-                    "u64" => Token::U64,
-                    "i8" => Token::I8,
-                    "i16" => Token::I16,
-                    "i32" => Token::I32,
-                    "i64" => Token::I64,
-                    "usize" => Token::Usize,
-                    "isize" => Token::Isize,
-                    "bool" => Token::Bool,
-                    "void" => Token::Void,
-                    "NULL" => Token::Null,
-                    _ => Token::Ident(ident),
+                return Some(Ok(Token {
+                    kind: match ident.as_str() {
+                        "const" => TokenKind::Const,
+                        "true" => TokenKind::True,
+                        "let" => TokenKind::Let,
+                        "fn" => TokenKind::Fn,
+                        "enum" => TokenKind::Enum,
+                        "struct" => TokenKind::Struct,
+                        "false" => TokenKind::False,
+                        "if" => TokenKind::If,
+                        "while" => TokenKind::While,
+                        "for" => TokenKind::For,
+                        "else" => TokenKind::Else,
+                        "return" => TokenKind::Return,
+                        "as" => TokenKind::As,
+                        "continue" => TokenKind::Continue,
+                        "break" => TokenKind::Break,
+                        "u8" => TokenKind::U8,
+                        "u16" => TokenKind::U16,
+                        "u32" => TokenKind::U32,
+                        "u64" => TokenKind::U64,
+                        "i8" => TokenKind::I8,
+                        "i16" => TokenKind::I16,
+                        "i32" => TokenKind::I32,
+                        "i64" => TokenKind::I64,
+                        "usize" => TokenKind::Usize,
+                        "isize" => TokenKind::Isize,
+                        "bool" => TokenKind::Bool,
+                        "void" => TokenKind::Void,
+                        "NULL" => TokenKind::Null,
+                        _ => TokenKind::Ident(ident),
+                    },
+                    span: self.span(),
                 }));
             }
             _ => {
@@ -251,14 +267,17 @@ impl<'src> Iterator for Lexer<'src> {
 
         self.read_char();
 
-        Some(Ok(token))
+        Some(Ok(Token {
+            kind,
+            span: self.span(),
+        }))
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::Lexer;
-    use crate::lexer::Token;
+    use crate::lexer::TokenKind;
 
     #[test]
     fn source_into_tokens() {
@@ -332,75 +351,75 @@ mod test {
         "#;
 
         let tokens = vec![
-            Token::Ident(String::from("ident")),
-            Token::Integer(String::from("69")),
-            Token::String(String::from("string")),
-            Token::Assign,
-            Token::Plus,
-            Token::Minus,
-            Token::Bang,
-            Token::Asterisk,
-            Token::Slash,
-            Token::Arrow,
-            Token::Period,
-            Token::Tilde,
-            Token::Ampersand,
-            Token::Bar,
-            Token::Equal,
-            Token::NotEqual,
-            Token::LessThan,
-            Token::GreaterThan,
-            Token::LessEqual,
-            Token::GreaterEqual,
-            Token::And,
-            Token::Or,
-            Token::Shl,
-            Token::Shr,
-            Token::Comma,
-            Token::Semicolon,
-            Token::Colon,
-            Token::LParen,
-            Token::RParen,
-            Token::LBrace,
-            Token::RBrace,
-            Token::LBracket,
-            Token::RBracket,
-            Token::Const,
-            Token::True,
-            Token::False,
-            Token::Let,
-            Token::Fn,
-            Token::Enum,
-            Token::Struct,
-            Token::If,
-            Token::While,
-            Token::For,
-            Token::Else,
-            Token::Return,
-            Token::As,
-            Token::Continue,
-            Token::Break,
-            Token::U8,
-            Token::U16,
-            Token::U32,
-            Token::U64,
-            Token::I8,
-            Token::I16,
-            Token::I32,
-            Token::I64,
-            Token::Usize,
-            Token::Isize,
-            Token::Bool,
-            Token::Void,
-            Token::Null,
+            TokenKind::Ident(String::from("ident")),
+            TokenKind::Integer(String::from("69")),
+            TokenKind::String(String::from("string")),
+            TokenKind::Assign,
+            TokenKind::Plus,
+            TokenKind::Minus,
+            TokenKind::Bang,
+            TokenKind::Asterisk,
+            TokenKind::Slash,
+            TokenKind::Arrow,
+            TokenKind::Period,
+            TokenKind::Tilde,
+            TokenKind::Ampersand,
+            TokenKind::Bar,
+            TokenKind::Equal,
+            TokenKind::NotEqual,
+            TokenKind::LessThan,
+            TokenKind::GreaterThan,
+            TokenKind::LessEqual,
+            TokenKind::GreaterEqual,
+            TokenKind::And,
+            TokenKind::Or,
+            TokenKind::Shl,
+            TokenKind::Shr,
+            TokenKind::Comma,
+            TokenKind::Semicolon,
+            TokenKind::Colon,
+            TokenKind::LParen,
+            TokenKind::RParen,
+            TokenKind::LBrace,
+            TokenKind::RBrace,
+            TokenKind::LBracket,
+            TokenKind::RBracket,
+            TokenKind::Const,
+            TokenKind::True,
+            TokenKind::False,
+            TokenKind::Let,
+            TokenKind::Fn,
+            TokenKind::Enum,
+            TokenKind::Struct,
+            TokenKind::If,
+            TokenKind::While,
+            TokenKind::For,
+            TokenKind::Else,
+            TokenKind::Return,
+            TokenKind::As,
+            TokenKind::Continue,
+            TokenKind::Break,
+            TokenKind::U8,
+            TokenKind::U16,
+            TokenKind::U32,
+            TokenKind::U64,
+            TokenKind::I8,
+            TokenKind::I16,
+            TokenKind::I32,
+            TokenKind::I64,
+            TokenKind::Usize,
+            TokenKind::Isize,
+            TokenKind::Bool,
+            TokenKind::Void,
+            TokenKind::Null,
         ];
 
         let mut lexer = Lexer::new(input);
 
-        for token in tokens {
+        for kind in tokens {
             let next_token = lexer.next().unwrap().unwrap();
 
-            assert_eq!(token, next_token);
+            assert_eq!(kind, next_token.kind);
         }
     }
 }

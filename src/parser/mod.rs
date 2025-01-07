@@ -1,3 +1,4 @@
+mod diagnostics;
 mod error;
 mod item;
 mod op;
@@ -9,7 +10,7 @@ pub mod expr;
 
 use crate::{
     diagnostics::{Diagnostic, Diagnostics},
-    lexer::{span::Span, Token},
+    lexer::{span::Span, Token, TokenKind},
 };
 pub use error::{Error, TyError};
 pub use expr::*;
@@ -28,67 +29,82 @@ pub struct Variable {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Block(pub Vec<Stmt>);
+pub struct Block {
+    pub open_brace: Span,
+    pub stmts: Vec<Stmt>,
+    pub close_brace: Span,
+}
 
-type PrefixFn<'a, 'src, T> = fn(&mut Parser<'a, 'src, T>) -> Result<Expr, Error>;
-type InfixFn<'a, 'src, T> = fn(&mut Parser<'a, 'src, T>, left: Expr) -> Result<Expr, Error>;
+type PrefixFn<'a, 'src, T> = fn(&mut Parser<'a, 'src, T>) -> Result<Expr, ()>;
+type InfixFn<'a, 'src, T> = fn(&mut Parser<'a, 'src, T>, left: Expr) -> Result<Expr, ()>;
 
 pub struct Parser<'a, 'src, T: Iterator<Item = Result<Token, Span>>> {
     lexer: T,
     diag: &'a mut Diagnostics<'src>,
+    prev_token: Option<Token>,
     cur_token: Option<Token>,
     peek_token: Option<Token>,
-    prefix_fns: HashMap<Token, PrefixFn<'a, 'src, T>>,
-    infix_fns: HashMap<Token, InfixFn<'a, 'src, T>>,
+    prefix_fns: HashMap<TokenKind, PrefixFn<'a, 'src, T>>,
+    infix_fns: HashMap<TokenKind, InfixFn<'a, 'src, T>>,
 }
 
 impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
-    pub fn new(lexer: T, diag: &'a mut Diagnostics<'src>) -> Result<Self, Error> {
+    pub fn new(lexer: T, diag: &'a mut Diagnostics<'src>) -> Result<Self, ()> {
         let mut parser = Self {
+            prev_token: None,
             cur_token: None,
             peek_token: None,
             lexer,
             diag,
             prefix_fns: HashMap::from([
-                (Token::Ident(Default::default()), Self::ident as PrefixFn<T>),
-                (Token::String(Default::default()), Self::string_lit),
-                (Token::Integer(Default::default()), Self::int_lit),
-                (Token::Null, Self::null),
-                (Token::True, Self::bool),
-                (Token::False, Self::bool),
-                (Token::Minus, Self::unary_expr),
-                (Token::Bang, Self::unary_expr),
-                (Token::LParen, Self::grouped_expr),
-                (Token::Ampersand, Self::unary_expr),
-                (Token::Asterisk, Self::unary_expr),
-                (Token::Tilde, Self::unary_expr),
-                (Token::LBracket, Self::array_expr),
+                (
+                    TokenKind::Ident(Default::default()),
+                    Self::parse_ident_expr as PrefixFn<T>,
+                ),
+                (
+                    TokenKind::String(Default::default()),
+                    Self::parse_string_lit_expr,
+                ),
+                (
+                    TokenKind::Integer(Default::default()),
+                    Self::parse_int_lit_expr,
+                ),
+                (TokenKind::Null, Self::parse_null_expr),
+                (TokenKind::True, Self::parse_bool_expr),
+                (TokenKind::False, Self::parse_bool_expr),
+                (TokenKind::Minus, Self::parse_unary_expr),
+                (TokenKind::Bang, Self::parse_unary_expr),
+                (TokenKind::LParen, Self::parse_grouped_expr),
+                (TokenKind::Ampersand, Self::parse_unary_expr),
+                (TokenKind::Asterisk, Self::parse_unary_expr),
+                (TokenKind::Tilde, Self::parse_unary_expr),
+                (TokenKind::LBracket, Self::parse_array_expr),
             ]),
             infix_fns: HashMap::from([
-                (Token::Plus, Self::bin_expr as InfixFn<T>),
-                (Token::Minus, Self::bin_expr),
-                (Token::Asterisk, Self::bin_expr),
-                (Token::Slash, Self::bin_expr),
-                (Token::Assign, Self::bin_expr),
-                (Token::LessThan, Self::bin_expr),
-                (Token::LessEqual, Self::bin_expr),
-                (Token::GreaterThan, Self::bin_expr),
-                (Token::GreaterEqual, Self::bin_expr),
-                (Token::Equal, Self::bin_expr),
-                (Token::NotEqual, Self::bin_expr),
-                (Token::And, Self::bin_expr),
-                (Token::Or, Self::bin_expr),
-                (Token::LParen, Self::bin_expr),
-                (Token::Ampersand, Self::bin_expr),
-                (Token::Bar, Self::bin_expr),
-                (Token::Shl, Self::bin_expr),
-                (Token::Shr, Self::bin_expr),
-                (Token::Arrow, Self::pointer_access),
-                (Token::Period, Self::struct_access),
-                (Token::LBracket, Self::array_access),
-                (Token::As, Self::cast_expr),
-                (Token::LParen, Self::func_call_expr),
-                (Token::Bang, Self::macro_call_expr),
+                (TokenKind::Plus, Self::parse_bin_expr as InfixFn<T>),
+                (TokenKind::Minus, Self::parse_bin_expr),
+                (TokenKind::Asterisk, Self::parse_bin_expr),
+                (TokenKind::Slash, Self::parse_bin_expr),
+                (TokenKind::Assign, Self::parse_bin_expr),
+                (TokenKind::LessThan, Self::parse_bin_expr),
+                (TokenKind::LessEqual, Self::parse_bin_expr),
+                (TokenKind::GreaterThan, Self::parse_bin_expr),
+                (TokenKind::GreaterEqual, Self::parse_bin_expr),
+                (TokenKind::Equal, Self::parse_bin_expr),
+                (TokenKind::NotEqual, Self::parse_bin_expr),
+                (TokenKind::And, Self::parse_bin_expr),
+                (TokenKind::Or, Self::parse_bin_expr),
+                (TokenKind::LParen, Self::parse_bin_expr),
+                (TokenKind::Ampersand, Self::parse_bin_expr),
+                (TokenKind::Bar, Self::parse_bin_expr),
+                (TokenKind::Shl, Self::parse_bin_expr),
+                (TokenKind::Shr, Self::parse_bin_expr),
+                (TokenKind::Arrow, Self::parse_pointer_access_expr),
+                (TokenKind::Period, Self::parse_struct_access_expr),
+                (TokenKind::LBracket, Self::parse_array_access_expr),
+                (TokenKind::As, Self::parse_cast_expr),
+                (TokenKind::LParen, Self::parse_call_expr),
+                (TokenKind::Bang, Self::parse_macro_call_expr),
             ]),
         };
 
@@ -98,9 +114,10 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         Ok(parser)
     }
 
-    fn bump(&mut self) -> Result<(), Error> {
+    fn bump(&mut self) -> Result<(), ()> {
         match self.lexer.next().transpose() {
             Ok(mut token) => {
+                std::mem::swap(&mut self.prev_token, &mut self.cur_token);
                 std::mem::swap(&mut self.cur_token, &mut self.peek_token);
                 std::mem::swap(&mut token, &mut self.peek_token);
 
@@ -114,60 +131,80 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         }
     }
 
-    fn cur_token_is(&self, token: &Token) -> bool {
-        self.cur_token.as_ref() == Some(token)
+    fn cur_token_is(&self, kind: &TokenKind) -> bool {
+        self.cur_token.as_ref().map(|token| &token.kind) == Some(kind)
     }
 
-    fn peek_token_is(&self, token: &Token) -> bool {
-        self.peek_token.as_ref() == Some(token)
+    fn peek_token_is(&self, kind: &TokenKind) -> bool {
+        self.peek_token.as_ref().map(|token| &token.kind) == Some(kind)
     }
 
-    fn expect(&mut self, token: &Token) -> Result<(), Error> {
+    fn expect(&mut self, kind: &TokenKind) -> Result<Span, ()> {
         match &self.cur_token {
-            Some(cur) if cur == token => {
+            Some(cur) if &cur.kind == kind => {
+                let span = cur.span.clone();
                 self.bump()?;
 
-                Ok(())
+                Ok(span)
             }
-            Some(cur) => Err(Error::UnexpectedToken(token.to_owned(), cur.clone())),
-            None => Err(Error::Expected(token.to_owned())),
+            _ => {
+                self.expected(&[kind]);
+
+                Err(())
+            }
         }
     }
 
-    pub fn parse(&mut self) -> Result<Vec<Item>, Error> {
+    pub fn parse(&mut self) -> Result<Vec<Item>, ()> {
         let mut items = Vec::new();
 
         while let Some(token) = &self.cur_token {
-            let item = match token {
-                Token::Struct => self.parse_struct()?,
-                Token::Let => self.global()?,
-                Token::Fn => self.function(true)?,
-                _ => unreachable!(),
+            let item = match token.kind {
+                TokenKind::Struct => Some(self.parse_struct_item()?),
+                TokenKind::Let => Some(self.parse_global_item()?),
+                TokenKind::Fn => Some(self.parse_function_item(true)?),
+                _ => {
+                    self.expected(&[&TokenKind::Struct, &TokenKind::Let, &TokenKind::Fn]);
+
+                    self.bump()?;
+
+                    None
+                }
             };
-            items.push(item);
+
+            if let Some(item) = item {
+                items.push(item);
+            }
         }
 
         Ok(items)
     }
 
-    pub fn expr(&mut self, precedence: Precedence) -> Result<Expr, Error> {
-        let token = self.cur_token.clone().unwrap();
+    pub fn parse_expr(&mut self, precedence: Precedence) -> Result<Expr, ()> {
+        let token = self.cur_token_unchecked();
 
-        let mut left = match self.prefix_fns.get(&token) {
+        let mut left = match self.prefix_fns.get(&token.kind) {
             Some(func) => func(self),
             None => {
-                return Err(Error::Prefix(token));
+                self.diag
+                    .error(Diagnostic::ExpressionPrefix(token.kind), token.span);
+
+                return Err(());
             }
         };
 
-        while !self.cur_token_is(&Token::Semicolon)
+        while !self.cur_token_is(&TokenKind::Semicolon)
             && self.cur_token.is_some()
-            && precedence < Precedence::from(self.cur_token.as_ref().unwrap())
+            && precedence < Precedence::from(&self.cur_token_ref_unchecked().kind)
         {
-            left = match self.infix_fns.get(self.cur_token.as_ref().unwrap()) {
+            left = match self.infix_fns.get(&self.cur_token_ref_unchecked().kind) {
                 Some(func) => func(self, left?),
                 None => {
-                    return Err(Error::Infix(self.cur_token.clone().unwrap()));
+                    let Token { kind, span } = self.cur_token_unchecked();
+
+                    self.diag.error(Diagnostic::ExpressionInfix(kind), span);
+
+                    return Err(());
                 }
             };
         }
@@ -175,146 +212,194 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         left
     }
 
-    fn parse_struct(&mut self) -> Result<Item, Error> {
-        self.expect(&Token::Struct)?;
+    fn parse_struct_item(&mut self) -> Result<Item, ()> {
+        self.expect(&TokenKind::Struct)?;
 
-        let name = self.parse_ident()?;
+        let (name, _) = self.parse_ident()?;
 
-        self.expect(&Token::LBrace)?;
+        self.expect(&TokenKind::LBrace)?;
 
         let mut fields = Vec::new();
 
-        while !self.cur_token_is(&Token::RBrace) {
-            if self.cur_token_is(&Token::Fn) {
-                // Handle struct methods here
+        while !self.cur_token_is(&TokenKind::RBrace) {
+            let (name, span) = self.parse_ident()?;
+            self.expect(&TokenKind::Colon)?;
+            let ty = self.parse_type()?;
+
+            if fields.iter().any(|(field_name, _)| field_name == &name) {
+                self.diag.error(Diagnostic::RepeatingField(name), span);
             } else {
-                let name = self.parse_ident()?;
-                self.expect(&Token::Colon)?;
-                let ty = self.parse_type()?;
+                fields.push((name, ty));
+            }
 
-                match fields.iter().find(|(field_name, _)| field_name == &name) {
-                    Some(_) => todo!("Don't know yet what error to return"),
-                    None => fields.push((name, ty)),
-                };
-
-                if !self.cur_token_is(&Token::RBrace) {
-                    self.expect(&Token::Semicolon)?;
-                }
+            if !self.cur_token_is(&TokenKind::RBrace) {
+                self.expect(&TokenKind::Semicolon)?;
             }
         }
 
-        self.expect(&Token::RBrace)?;
+        self.expect(&TokenKind::RBrace)?;
 
         Ok(Item::Struct(ItemStruct { name, fields }))
     }
 
-    fn stmt(&mut self) -> Result<Stmt, Error> {
-        match self.cur_token.as_ref().unwrap() {
-            Token::Return => self.parse_return(),
-            Token::If => self.if_stmt(),
-            Token::While => self.while_stmt(),
-            Token::For => self.for_stmt(),
-            Token::Let => self.local(),
-            Token::Continue => {
-                self.expect(&Token::Continue)?;
-                self.expect(&Token::Semicolon)?;
+    fn parse_stmt(&mut self) -> Result<Stmt, ()> {
+        match self.cur_token.as_ref().map(|token| &token.kind) {
+            Some(TokenKind::Return) => self.parse_return_stmt(),
+            Some(TokenKind::If) => self.parse_if_stmt(),
+            Some(TokenKind::While) => self.parse_while_stmt(),
+            Some(TokenKind::For) => self.parse_for_stmt(),
+            Some(TokenKind::Let) => self.parse_local_stmt(),
+            Some(TokenKind::Continue) => {
+                self.expect(&TokenKind::Continue)?;
+                self.expect(&TokenKind::Semicolon)?;
 
                 Ok(Stmt::Continue)
             }
-            Token::Break => {
-                self.expect(&Token::Break)?;
-                self.expect(&Token::Semicolon)?;
+            Some(TokenKind::Break) => {
+                self.expect(&TokenKind::Break)?;
+                self.expect(&TokenKind::Semicolon)?;
 
                 Ok(Stmt::Break)
             }
-            Token::Fn => Ok(Stmt::Item(self.function(true)?)),
-            _ => {
-                let expr = Stmt::Expr(self.expr(Precedence::default())?);
+            Some(TokenKind::Fn) => Ok(Stmt::Item(self.parse_function_item(false)?)),
+            Some(_) => {
+                let expr = Stmt::Expr(self.parse_expr(Precedence::default())?);
 
-                self.expect(&Token::Semicolon)?;
+                self.expect(&TokenKind::Semicolon)?;
 
                 Ok(expr)
+            }
+            None => {
+                self.expected(&[
+                    &TokenKind::Return,
+                    &TokenKind::If,
+                    &TokenKind::While,
+                    &TokenKind::For,
+                    &TokenKind::Let,
+                    &TokenKind::Continue,
+                    &TokenKind::Break,
+                ]);
+
+                Err(())
             }
         }
     }
 
-    fn compound_statement(&mut self) -> Result<Block, Error> {
+    fn parse_block_stmt(&mut self) -> Result<Block, ()> {
         let mut stmts = Vec::new();
 
-        self.expect(&Token::LBrace)?;
+        let open_brace = self.expect(&TokenKind::LBrace)?;
 
-        while !self.cur_token_is(&Token::RBrace) {
-            stmts.push(self.stmt()?);
+        while !self.cur_token_is(&TokenKind::RBrace) {
+            stmts.push(self.parse_stmt()?);
         }
 
-        self.expect(&Token::RBrace)?;
+        let close_brace = self.expect(&TokenKind::RBrace)?;
 
-        Ok(Block(stmts))
+        Ok(Block {
+            open_brace,
+            stmts,
+            close_brace,
+        })
     }
 
     // This function is used only by macro expansion
-    pub fn parse_stmts(&mut self) -> Result<Vec<Stmt>, Error> {
+    pub fn parse_stmts(&mut self) -> Result<Vec<Stmt>, ()> {
         let mut stmts = Vec::new();
 
         while self.cur_token.is_some() {
-            stmts.push(self.stmt()?);
+            if let Ok(stmt) = self.parse_stmt() {
+                stmts.push(stmt);
+            }
         }
 
         Ok(stmts)
     }
 
-    fn parse_type(&mut self) -> Result<Ty, Error> {
-        let ty = match &self.cur_token {
-            Some(Token::Asterisk) => Ty::Ptr(Box::new(self.parse_type()?)),
-            Some(Token::LBracket) => {
+    fn parse_type(&mut self) -> Result<Ty, ()> {
+        let ty = match self.cur_token.as_ref().map(|token| &token.kind) {
+            Some(TokenKind::Asterisk) => Ty::Ptr(Box::new(self.parse_type()?)),
+            Some(TokenKind::LBracket) => {
                 self.bump()?;
 
                 match &self.cur_token {
-                    Some(Token::Integer(int)) => {
-                        let length: usize = str::parse(int).unwrap();
-                        self.expect(&Token::RBracket)?;
+                    Some(Token {
+                        kind: TokenKind::Integer(int),
+                        span,
+                    }) => {
+                        let length: usize = match str::parse(int) {
+                            Ok(value) => value,
+                            Err(_) => {
+                                let span = span.clone();
+
+                                self.bump()?;
+                                self.diag.error(Diagnostic::IntegerLitralTooLong, span);
+
+                                return Err(());
+                            }
+                        };
+                        self.expect(&TokenKind::RBracket)?;
 
                         Ty::Array {
                             ty: Box::new(self.parse_type()?),
                             len: length,
                         }
                     }
-                    token => panic!("Expected integer, got {token:?}"),
+                    _ => {
+                        self.expected(&[&TokenKind::Integer(Default::default())]);
+                        self.bump()?;
+
+                        return Err(())?;
+                    }
                 }
             }
-            Some(Token::U8) => Ty::UInt(UintTy::U8),
-            Some(Token::U16) => Ty::UInt(UintTy::U16),
-            Some(Token::U32) => Ty::UInt(UintTy::U32),
-            Some(Token::U64) => Ty::UInt(UintTy::U64),
-            Some(Token::I8) => Ty::Int(IntTy::I8),
-            Some(Token::I16) => Ty::Int(IntTy::I16),
-            Some(Token::I32) => Ty::Int(IntTy::I32),
-            Some(Token::I64) => Ty::Int(IntTy::I64),
-            Some(Token::Usize) => Ty::UInt(UintTy::Usize),
-            Some(Token::Isize) => Ty::Int(IntTy::Isize),
-            Some(Token::Bool) => Ty::Bool,
-            Some(Token::Void) => Ty::Void,
-            Some(Token::Ident(ident)) => Ty::Ident(ident.clone()),
-            Some(Token::Fn) => {
+            Some(TokenKind::U8) => Ty::UInt(UintTy::U8),
+            Some(TokenKind::U16) => Ty::UInt(UintTy::U16),
+            Some(TokenKind::U32) => Ty::UInt(UintTy::U32),
+            Some(TokenKind::U64) => Ty::UInt(UintTy::U64),
+            Some(TokenKind::I8) => Ty::Int(IntTy::I8),
+            Some(TokenKind::I16) => Ty::Int(IntTy::I16),
+            Some(TokenKind::I32) => Ty::Int(IntTy::I32),
+            Some(TokenKind::I64) => Ty::Int(IntTy::I64),
+            Some(TokenKind::Usize) => Ty::UInt(UintTy::Usize),
+            Some(TokenKind::Isize) => Ty::Int(IntTy::Isize),
+            Some(TokenKind::Bool) => Ty::Bool,
+            Some(TokenKind::Void) => Ty::Void,
+            Some(TokenKind::Ident(ident)) => Ty::Ident(ident.clone()),
+            Some(TokenKind::Fn) => {
                 self.bump()?;
-                self.expect(&Token::LParen)?;
+                self.expect(&TokenKind::LParen)?;
 
                 let mut params = Vec::new();
 
-                while !self.cur_token_is(&Token::RParen) {
+                while !self.cur_token_is(&TokenKind::RParen) {
                     params.push(self.parse_type()?);
 
-                    if !self.cur_token_is(&Token::RParen) {
-                        self.expect(&Token::Comma)?;
+                    if !self.cur_token_is(&TokenKind::RParen) {
+                        self.expect(&TokenKind::Comma)?;
                     }
                 }
 
-                self.expect(&Token::RParen)?;
-                self.expect(&Token::Arrow)?;
+                self.expect(&TokenKind::RParen)?;
+                self.expect(&TokenKind::Arrow)?;
 
                 return Ok(Ty::Fn(params, Box::new(self.parse_type()?)));
             }
-            token => return Err(Error::ParseType(token.clone().unwrap())),
+            _ => {
+                self.diag.error(
+                    Diagnostic::ParseExpected("type".to_string()),
+                    self.cur_token
+                        .as_ref()
+                        .map(|token| &token.span)
+                        .unwrap_or_else(|| {
+                            self.prev_token.as_ref().map(|token| &token.span).unwrap()
+                        })
+                        .clone(),
+                );
+                self.bump()?;
+
+                return Err(());
+            }
         };
 
         self.bump()?;
@@ -322,29 +407,29 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         Ok(ty)
     }
 
-    fn parse_return(&mut self) -> Result<Stmt, Error> {
-        self.expect(&Token::Return)?;
+    fn parse_return_stmt(&mut self) -> Result<Stmt, ()> {
+        self.expect(&TokenKind::Return)?;
 
-        let expr = if !self.cur_token_is(&Token::Semicolon) {
-            Some(self.expr(Precedence::default())?)
+        let expr = if !self.cur_token_is(&TokenKind::Semicolon) {
+            Some(self.parse_expr(Precedence::default())?)
         } else {
             None
         };
 
-        self.expect(&Token::Semicolon)?;
+        self.expect(&TokenKind::Semicolon)?;
 
         Ok(Stmt::Return(StmtReturn { expr }))
     }
 
-    fn if_stmt(&mut self) -> Result<Stmt, Error> {
-        self.expect(&Token::If)?;
+    fn parse_if_stmt(&mut self) -> Result<Stmt, ()> {
+        self.expect(&TokenKind::If)?;
 
-        let condition = self.expr(Precedence::default())?;
-        let consequence = self.compound_statement()?;
-        let alternative = if self.cur_token_is(&Token::Else) {
-            self.expect(&Token::Else)?;
+        let condition = self.parse_expr(Precedence::default())?;
+        let consequence = self.parse_block_stmt()?;
+        let alternative = if self.cur_token_is(&TokenKind::Else) {
+            self.expect(&TokenKind::Else)?;
 
-            Some(self.compound_statement()?)
+            Some(self.parse_block_stmt()?)
         } else {
             None
         };
@@ -356,44 +441,44 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         }))
     }
 
-    fn while_stmt(&mut self) -> Result<Stmt, Error> {
-        self.expect(&Token::While)?;
+    fn parse_while_stmt(&mut self) -> Result<Stmt, ()> {
+        self.expect(&TokenKind::While)?;
 
-        let condition = self.expr(Precedence::default())?;
-        let block = self.compound_statement()?;
+        let condition = self.parse_expr(Precedence::default())?;
+        let block = self.parse_block_stmt()?;
 
         Ok(Stmt::While(StmtWhile { condition, block }))
     }
 
-    fn for_stmt(&mut self) -> Result<Stmt, Error> {
-        self.expect(&Token::For)?;
+    fn parse_for_stmt(&mut self) -> Result<Stmt, ()> {
+        self.expect(&TokenKind::For)?;
 
-        let initializer = if self.cur_token_is(&Token::Semicolon) {
+        let initializer = if self.cur_token_is(&TokenKind::Semicolon) {
             None
         } else {
-            let stmt = if self.cur_token_is(&Token::Let) {
-                self.local()?
+            let stmt = if self.cur_token_is(&TokenKind::Let) {
+                self.parse_local_stmt()?
             } else {
-                Stmt::Expr(self.expr(Precedence::default())?)
+                Stmt::Expr(self.parse_expr(Precedence::default())?)
             };
 
             Some(stmt)
         };
 
-        let condition = if self.cur_token_is(&Token::Semicolon) {
+        let condition = if self.cur_token_is(&TokenKind::Semicolon) {
             None
         } else {
-            Some(self.expr(Precedence::default())?)
+            Some(self.parse_expr(Precedence::default())?)
         };
-        self.expect(&Token::Semicolon)?;
+        self.expect(&TokenKind::Semicolon)?;
 
-        let increment = if self.cur_token_is(&Token::LBrace) {
+        let increment = if self.cur_token_is(&TokenKind::LBrace) {
             None
         } else {
-            Some(self.expr(Precedence::default())?)
+            Some(self.parse_expr(Precedence::default())?)
         };
 
-        let block = self.compound_statement()?;
+        let block = self.parse_block_stmt()?;
 
         Ok(Stmt::For(StmtFor {
             initializer: initializer.map(|initializer| Box::new(initializer)),
@@ -403,27 +488,27 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         }))
     }
 
-    fn local(&mut self) -> Result<Stmt, Error> {
-        self.expect(&Token::Let)?;
+    fn parse_local_stmt(&mut self) -> Result<Stmt, ()> {
+        self.expect(&TokenKind::Let)?;
 
-        let name = self.parse_ident()?;
-        let ty = if self.cur_token_is(&Token::Colon) {
-            self.expect(&Token::Colon)?;
+        let (name, _) = self.parse_ident()?;
+        let ty = if self.cur_token_is(&TokenKind::Colon) {
+            self.expect(&TokenKind::Colon)?;
 
             self.parse_type()?
         } else {
             Ty::Infer
         };
 
-        let expr = if self.cur_token_is(&Token::Assign) {
-            self.expect(&Token::Assign)?;
+        let expr = if self.cur_token_is(&TokenKind::Assign) {
+            self.expect(&TokenKind::Assign)?;
 
-            Some(self.expr(Precedence::default())?)
+            Some(self.parse_expr(Precedence::default())?)
         } else {
             None
         };
 
-        self.expect(&Token::Semicolon)?;
+        self.expect(&TokenKind::Semicolon)?;
 
         Ok(Stmt::Local(Variable {
             name,
@@ -432,23 +517,23 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         }))
     }
 
-    fn global(&mut self) -> Result<Item, Error> {
-        self.expect(&Token::Let)?;
+    fn parse_global_item(&mut self) -> Result<Item, ()> {
+        self.expect(&TokenKind::Let)?;
 
-        let name = self.parse_ident()?;
-        self.expect(&Token::Colon)?;
+        let (name, _) = self.parse_ident()?;
+        self.expect(&TokenKind::Colon)?;
 
         let ty = self.parse_type()?;
 
-        let expr = if self.cur_token_is(&Token::Assign) {
-            self.expect(&Token::Assign)?;
+        let expr = if self.cur_token_is(&TokenKind::Assign) {
+            self.expect(&TokenKind::Assign)?;
 
-            Some(self.expr(Precedence::default())?)
+            Some(self.parse_expr(Precedence::default())?)
         } else {
             None
         };
 
-        self.expect(&Token::Semicolon)?;
+        self.expect(&TokenKind::Semicolon)?;
 
         Ok(Item::Global(Variable {
             name,
@@ -457,51 +542,54 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         }))
     }
 
-    fn function(&mut self, func_definition: bool) -> Result<Item, Error> {
-        self.expect(&Token::Fn)?;
+    fn parse_function_item(&mut self, func_definition: bool) -> Result<Item, ()> {
+        self.expect(&TokenKind::Fn)?;
+        let (name, _) = self.parse_ident()?;
+        self.expect(&TokenKind::LParen)?;
+        let params = self.parse_params(TokenKind::Comma, TokenKind::RParen)?;
+        self.expect(&TokenKind::Arrow)?;
 
-        let name = self.parse_ident()?;
-
-        self.expect(&Token::LParen)?;
-
-        let params = self.params(Token::Comma, Token::RParen)?;
-        self.expect(&Token::Arrow)?;
-
-        let type_ = self.parse_type()?;
-        let block = if self.cur_token_is(&Token::LBrace) {
-            Some(self.compound_statement()?)
+        let ty = self.parse_type()?;
+        let block = if self.cur_token_is(&TokenKind::LBrace) {
+            Some(self.parse_block_stmt()?)
         } else {
             None
         };
 
-        if block.is_some() & !func_definition {
-            panic!("Function definition is not supported here");
-        }
+        if let Some(block) = &block {
+            if !func_definition {
+                self.diag.error(
+                    Diagnostic::IllegalFunctionDefinition,
+                    block.open_brace.clone(),
+                );
 
-        if block.is_none() {
-            self.expect(&Token::Semicolon)?;
+                return Err(());
+            }
+        } else {
+            self.expect(&TokenKind::Semicolon)?;
         }
 
         Ok(Item::Fn(ItemFn {
-            ret_ty: type_,
+            ret_ty: ty,
             name,
             params,
             block,
         }))
     }
 
-    fn params(&mut self, delim: Token, end: Token) -> Result<Vec<(String, Ty)>, Error> {
+    fn parse_params(&mut self, delim: TokenKind, end: TokenKind) -> Result<Vec<(String, Ty)>, ()> {
         let mut params = Vec::new();
 
         while !self.cur_token_is(&end) {
-            let name = self.parse_ident()?;
-            self.expect(&Token::Colon)?;
-            let type_ = self.parse_type()?;
+            let (name, span) = self.parse_ident()?;
+            self.expect(&TokenKind::Colon)?;
+            let ty = self.parse_type()?;
 
-            match params.iter().find(|(field_name, _)| field_name == &name) {
-                Some(_) => todo!("Don't know yet what error to return"),
-                None => params.push((name, type_)),
-            };
+            if params.iter().any(|(field_name, _)| field_name == &name) {
+                self.diag.error(Diagnostic::RepeatingParam(name), span);
+            } else {
+                params.push((name, ty));
+            }
 
             if !self.cur_token_is(&end) {
                 self.expect(&delim)?;
@@ -513,91 +601,93 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         Ok(params)
     }
 
-    fn ident(&mut self) -> Result<Expr, Error> {
+    fn parse_ident_expr(&mut self) -> Result<Expr, ()> {
         match self.peek_token {
-            Some(Token::LBrace) => self.struct_expr(),
-            _ => Ok(Expr::Ident(ExprIdent(self.parse_ident()?))),
+            Some(Token {
+                kind: TokenKind::LBrace,
+                ..
+            }) => self.parse_struct_expr(),
+            _ => Ok(Expr::Ident(ExprIdent(self.parse_ident()?.0))),
         }
     }
 
-    fn struct_expr(&mut self) -> Result<Expr, Error> {
-        let name = self.parse_ident()?;
-
-        self.expect(&Token::LBrace)?;
+    fn parse_struct_expr(&mut self) -> Result<Expr, ()> {
+        let (name, _) = self.parse_ident()?;
+        self.expect(&TokenKind::LBrace)?;
         let mut fields = Vec::new();
 
-        while !self.cur_token_is(&Token::RBrace) {
-            match self.cur_token.clone() {
-                Some(Token::Ident(field)) => {
-                    self.bump()?;
-                    self.expect(&Token::Colon)?;
-                    let expr = self.expr(Precedence::Lowest)?;
+        while !self.cur_token_is(&TokenKind::RBrace) {
+            let (field, _) = self.parse_ident()?;
+            self.expect(&TokenKind::Colon)?;
+            let expr = self.parse_expr(Precedence::Lowest)?;
 
-                    if !self.cur_token_is(&Token::RBrace) {
-                        self.expect(&Token::Comma)?;
-                    }
-
-                    fields.push((field, expr));
-                }
-                _ => todo!("Don't know what error to return yet"),
+            if !self.cur_token_is(&TokenKind::RBrace) {
+                self.expect(&TokenKind::Comma)?;
             }
+
+            fields.push((field, expr));
         }
 
-        self.expect(&Token::RBrace)?;
+        self.expect(&TokenKind::RBrace)?;
 
         Ok(Expr::Struct(ExprStruct { name, fields }))
     }
 
-    fn string_lit(&mut self) -> Result<Expr, Error> {
+    fn parse_string_lit_expr(&mut self) -> Result<Expr, ()> {
         match &self.cur_token {
-            Some(Token::String(literal)) => {
+            Some(Token {
+                kind: TokenKind::String(literal),
+                ..
+            }) => {
                 let lit = literal.clone();
                 self.bump()?;
 
                 Ok(Expr::Lit(ExprLit::String(lit)))
             }
-            _ => unreachable!(),
-        }
-    }
-
-    fn int_lit(&mut self) -> Result<Expr, Error> {
-        match &self.cur_token {
-            Some(Token::Integer(num_str)) => {
-                let lit = num_str.parse().unwrap();
+            _ => {
+                self.expected(&[&TokenKind::String(Default::default())]);
                 self.bump()?;
 
-                Ok(Expr::Lit(ExprLit::UInt(lit)))
+                Err(())
             }
-            _ => unreachable!(),
         }
     }
 
-    fn null(&mut self) -> Result<Expr, Error> {
-        self.expect(&Token::Null)?;
+    fn parse_int_lit_expr(&mut self) -> Result<Expr, ()> {
+        Ok(Expr::Lit(ExprLit::UInt(self.parse_int_lit()?)))
+    }
+
+    fn parse_null_expr(&mut self) -> Result<Expr, ()> {
+        self.expect(&TokenKind::Null)?;
 
         Ok(Expr::Lit(ExprLit::Null))
     }
 
-    fn bool(&mut self) -> Result<Expr, Error> {
-        match &self.cur_token {
-            Some(Token::True) => {
+    fn parse_bool_expr(&mut self) -> Result<Expr, ()> {
+        match self.cur_token.as_ref().map(|token| &token.kind) {
+            Some(TokenKind::True) => {
                 self.bump()?;
 
                 Ok(Expr::Lit(ExprLit::Bool(true)))
             }
-            Some(Token::False) => {
+            Some(TokenKind::False) => {
                 self.bump()?;
 
                 Ok(Expr::Lit(ExprLit::Bool(false)))
             }
-            _ => unreachable!(),
+            _ => {
+                self.expected(&[&TokenKind::True, &TokenKind::False]);
+                self.bump()?;
+
+                Err(())
+            }
         }
     }
 
-    fn func_call_expr(&mut self, left: Expr) -> Result<Expr, Error> {
-        self.expect(&Token::LParen)?;
+    fn parse_call_expr(&mut self, left: Expr) -> Result<Expr, ()> {
+        self.expect(&TokenKind::LParen)?;
 
-        let args = self.expr_list()?;
+        let args = self.parse_expr_list()?;
 
         Ok(Expr::FunctionCall(ExprFunctionCall {
             expr: Box::new(left),
@@ -605,43 +695,46 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         }))
     }
 
-    fn macro_call_expr(&mut self, left: Expr) -> Result<Expr, Error> {
+    fn parse_macro_call_expr(&mut self, left: Expr) -> Result<Expr, ()> {
         let name = match left {
             Expr::Ident(expr) => expr.0,
             _ => panic!("Macro name can only be a string"),
         };
 
-        self.expect(&Token::Bang)?;
-        self.expect(&Token::LParen)?;
+        self.expect(&TokenKind::Bang)?;
+        self.expect(&TokenKind::LParen)?;
 
         let mut tokens = Vec::new();
 
-        while !self.cur_token_is(&Token::RParen) {
-            tokens.push(
-                self.cur_token
-                    .clone()
-                    .ok_or(Error::Expected(Token::RParen))?,
-            );
+        while !self.cur_token_is(&TokenKind::RParen) {
+            tokens.push(self.cur_token.clone().ok_or_else(|| {
+                self.expected(&[&TokenKind::RParen]);
+
+                ()
+            })?);
             self.bump()?;
         }
 
-        self.expect(&Token::RParen)?;
+        self.expect(&TokenKind::RParen)?;
 
         Ok(Expr::MacroCall(MacroCall { name, tokens }))
     }
 
-    fn bin_expr(&mut self, left: Expr) -> Result<Expr, Error> {
-        let token = self.cur_token.clone().unwrap();
+    fn parse_bin_expr(&mut self, left: Expr) -> Result<Expr, ()> {
+        let token = self.cur_token_unchecked();
         self.bump()?;
 
         // NOTE: assignment expression is right-associative
-        let precedence = if let &Token::Assign = &token {
-            Precedence::from(&token).lower()
+        let precedence = if let &TokenKind::Assign = &token.kind {
+            Precedence::from(&token.kind).lower()
         } else {
-            Precedence::from(&token)
+            Precedence::from(&token.kind)
         };
-        let right = self.expr(precedence)?;
-        let op = BinOp::try_from(&token).map_err(|e| Error::Operator(e))?;
+        let right = self.parse_expr(precedence)?;
+        let op = BinOp::try_from(&token.kind).map_err(|_| {
+            self.diag
+                .error(Diagnostic::ExpressionInfix(token.kind), token.span);
+        })?;
 
         Ok(Expr::Binary(ExprBinary {
             op,
@@ -650,10 +743,10 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         }))
     }
 
-    fn pointer_access(&mut self, left: Expr) -> Result<Expr, Error> {
-        self.expect(&Token::Arrow)?;
+    fn parse_pointer_access_expr(&mut self, left: Expr) -> Result<Expr, ()> {
+        self.expect(&TokenKind::Arrow)?;
 
-        let field = self.parse_ident()?;
+        let (field, _) = self.parse_ident()?;
 
         Ok(Expr::Field(ExprField {
             expr: Box::new(Expr::Unary(ExprUnary {
@@ -664,14 +757,14 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         }))
     }
 
-    fn struct_access(&mut self, expr: Expr) -> Result<Expr, Error> {
-        self.expect(&Token::Period)?;
+    fn parse_struct_access_expr(&mut self, expr: Expr) -> Result<Expr, ()> {
+        self.expect(&TokenKind::Period)?;
 
-        if self.peek_token_is(&Token::LParen) {
-            let method = self.parse_ident()?;
+        if self.peek_token_is(&TokenKind::LParen) {
+            let (method, _) = self.parse_ident()?;
 
-            self.expect(&Token::LParen)?;
-            let arguments = self.expr_list()?;
+            self.expect(&TokenKind::LParen)?;
+            let arguments = self.parse_expr_list()?;
 
             Ok(Expr::StructMethod(ExprStructMethod {
                 expr: Box::new(expr),
@@ -681,15 +774,15 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         } else {
             Ok(Expr::Field(ExprField {
                 expr: Box::new(expr),
-                field: self.parse_ident()?,
+                field: self.parse_ident()?.0,
             }))
         }
     }
 
-    fn array_access(&mut self, expr: Expr) -> Result<Expr, Error> {
-        self.expect(&Token::LBracket)?;
-        let index = self.expr(Precedence::Access)?;
-        self.expect(&Token::RBracket)?;
+    fn parse_array_access_expr(&mut self, expr: Expr) -> Result<Expr, ()> {
+        self.expect(&TokenKind::LBracket)?;
+        let index = self.parse_expr(Precedence::Access)?;
+        self.expect(&TokenKind::RBracket)?;
 
         Ok(Expr::ArrayAccess(ExprArrayAccess {
             expr: Box::new(expr),
@@ -697,8 +790,8 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         }))
     }
 
-    fn cast_expr(&mut self, expr: Expr) -> Result<Expr, Error> {
-        self.expect(&Token::As)?;
+    fn parse_cast_expr(&mut self, expr: Expr) -> Result<Expr, ()> {
+        self.expect(&TokenKind::As)?;
 
         Ok(Expr::Cast(ExprCast {
             expr: Box::new(expr),
@@ -706,11 +799,14 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         }))
     }
 
-    fn unary_expr(&mut self) -> Result<Expr, Error> {
-        let token = self.cur_token.clone().unwrap();
+    fn parse_unary_expr(&mut self) -> Result<Expr, ()> {
+        let token = self.cur_token_unchecked();
         self.bump()?;
-        let op = UnOp::try_from(&token).map_err(|e| Error::Operator(e))?;
-        let expr = self.expr(Precedence::Prefix)?;
+        let op = UnOp::try_from(&token.kind).map_err(|_| {
+            self.diag
+                .error(Diagnostic::ExpressionInfix(token.kind), token.span);
+        })?;
+        let expr = self.parse_expr(Precedence::Prefix)?;
 
         Ok(Expr::Unary(ExprUnary {
             op,
@@ -718,56 +814,104 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         }))
     }
 
-    fn expr_list(&mut self) -> Result<Vec<Expr>, Error> {
+    fn parse_expr_list(&mut self) -> Result<Vec<Expr>, ()> {
         let mut exprs = Vec::new();
 
-        while !self.cur_token_is(&Token::RParen) {
-            exprs.push(self.expr(Precedence::default())?);
-            if !self.cur_token_is(&Token::RParen) {
-                self.expect(&Token::Comma)?;
+        while !self.cur_token_is(&TokenKind::RParen) {
+            exprs.push(self.parse_expr(Precedence::default())?);
+            if !self.cur_token_is(&TokenKind::RParen) {
+                self.expect(&TokenKind::Comma)?;
             }
         }
 
-        self.expect(&Token::RParen)?;
+        self.expect(&TokenKind::RParen)?;
 
         Ok(exprs)
     }
 
-    fn grouped_expr(&mut self) -> Result<Expr, Error> {
-        self.expect(&Token::LParen)?;
+    fn parse_grouped_expr(&mut self) -> Result<Expr, ()> {
+        self.expect(&TokenKind::LParen)?;
 
-        let expr = self.expr(Precedence::default())?;
-        self.expect(&Token::RParen)?;
+        let expr = self.parse_expr(Precedence::default())?;
+        self.expect(&TokenKind::RParen)?;
 
         Ok(expr)
     }
 
-    fn array_expr(&mut self) -> Result<Expr, Error> {
-        self.expect(&Token::LBracket)?;
+    fn parse_array_expr(&mut self) -> Result<Expr, ()> {
+        self.expect(&TokenKind::LBracket)?;
         let mut items = Vec::new();
 
-        while !self.cur_token_is(&Token::RBracket) {
-            items.push(self.expr(Precedence::default())?);
+        while !self.cur_token_is(&TokenKind::RBracket) {
+            items.push(self.parse_expr(Precedence::default())?);
 
-            if !self.cur_token_is(&Token::RBracket) {
-                self.expect(&Token::Comma)?;
+            if !self.cur_token_is(&TokenKind::RBracket) {
+                self.expect(&TokenKind::Comma)?;
             }
         }
 
-        self.expect(&Token::RBracket)?;
+        self.expect(&TokenKind::RBracket)?;
 
         Ok(Expr::Array(ExprArray(items)))
     }
 
-    fn parse_ident(&mut self) -> Result<String, Error> {
-        match self.cur_token.clone() {
-            Some(Token::Ident(ident)) => {
+    fn parse_int_lit(&mut self) -> Result<u64, ()> {
+        match &self.cur_token {
+            Some(Token {
+                kind: TokenKind::Integer(num_str),
+                span,
+            }) => {
+                let lit = match num_str.parse() {
+                    Ok(value) => value,
+                    Err(_) => {
+                        let span = span.clone();
+
+                        self.bump()?;
+                        self.diag.error(Diagnostic::IntegerLitralTooLong, span);
+
+                        return Err(());
+                    }
+                };
                 self.bump()?;
 
-                Ok(ident)
+                Ok(lit)
             }
-            _ => todo!(),
+            _ => {
+                self.expected(&[&TokenKind::Integer(Default::default())]);
+                self.bump()?;
+
+                Err(())
+            }
         }
+    }
+
+    fn parse_ident(&mut self) -> Result<(String, Span), ()> {
+        match self.cur_token.clone() {
+            Some(Token {
+                kind: TokenKind::Ident(ident),
+                span,
+            }) => {
+                self.bump()?;
+
+                Ok((ident, span))
+            }
+            _ => {
+                self.expected(&[&TokenKind::Ident(Default::default())]);
+                self.bump()?;
+
+                Err(())
+            }
+        }
+    }
+
+    #[inline]
+    fn cur_token_unchecked(&self) -> Token {
+        self.cur_token.clone().unwrap()
+    }
+
+    #[inline]
+    fn cur_token_ref_unchecked(&self) -> &Token {
+        self.cur_token.as_ref().unwrap()
     }
 }
 
@@ -935,10 +1079,10 @@ mod test {
         for (input, expected) in tests {
             let mut diagnostics = Diagnostics::new(input);
             let mut parser = Parser::new(Lexer::new(input), &mut diagnostics).unwrap();
-            let ast = parser.compound_statement().unwrap();
+            let ast = parser.parse_block_stmt().unwrap();
 
             assert_eq!(
-                &ast.0, &expected,
+                &ast.stmts, &expected,
                 "expected: {:?}, got: {:?}",
                 expected, ast
             );

@@ -1,4 +1,4 @@
-use crate::lexer::Token;
+use crate::lexer::TokenKind;
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Default)]
 pub enum Precedence {
@@ -20,24 +20,25 @@ pub enum Precedence {
     Call,
 }
 
-impl From<&Token> for Precedence {
-    fn from(value: &Token) -> Self {
+impl From<&TokenKind> for Precedence {
+    fn from(value: &TokenKind) -> Self {
         match value {
-            Token::Plus | Token::Minus => Self::Sum,
-            Token::Asterisk | Token::Slash => Self::Product,
-            Token::LessThan | Token::LessEqual | Token::GreaterThan | Token::GreaterEqual => {
-                Self::Comparison
-            }
-            Token::Equal | Token::NotEqual => Self::Equality,
-            Token::Shl | Token::Shr => Self::Shift,
-            Token::Assign => Self::Assign,
-            Token::LParen | Token::Bang => Self::Call,
-            Token::As => Self::Cast,
-            Token::Period | Token::Arrow | Token::LBracket => Self::Access,
-            Token::And => Self::LogicalAnd,
-            Token::Or => Self::LogicalOr,
-            Token::Ampersand => Self::BitwiseAnd,
-            Token::Bar => Self::BitwiseOr,
+            TokenKind::Plus | TokenKind::Minus => Self::Sum,
+            TokenKind::Asterisk | TokenKind::Slash => Self::Product,
+            TokenKind::LessThan
+            | TokenKind::LessEqual
+            | TokenKind::GreaterThan
+            | TokenKind::GreaterEqual => Self::Comparison,
+            TokenKind::Equal | TokenKind::NotEqual => Self::Equality,
+            TokenKind::Shl | TokenKind::Shr => Self::Shift,
+            TokenKind::Assign => Self::Assign,
+            TokenKind::LParen | TokenKind::Bang => Self::Call,
+            TokenKind::As => Self::Cast,
+            TokenKind::Period | TokenKind::Arrow | TokenKind::LBracket => Self::Access,
+            TokenKind::And => Self::LogicalAnd,
+            TokenKind::Or => Self::LogicalOr,
+            TokenKind::Ampersand => Self::BitwiseAnd,
+            TokenKind::Bar => Self::BitwiseOr,
             _ => Self::Lowest,
         }
     }

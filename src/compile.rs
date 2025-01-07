@@ -46,15 +46,21 @@ pub fn compile(args: CompileArgs) -> Result<(), Box<dyn std::error::Error>> {
 
     file.read_to_string(&mut source_code)?;
 
-    let report_diag_and_exit = |diag: &Diagnostics| {
+    let report_diag_and_exit = |diag: &Diagnostics| -> ! {
         println!("{diag}");
 
-        std::process::exit(0x45);
+        std::process::exit(0x45)
     };
 
     let mut diagnostics = Diagnostics::new(&source_code);
     let lexer = Lexer::new(&source_code);
-    let ast = parser::Parser::new(lexer, &mut diagnostics)?.parse()?;
+    let ast = match parser::Parser::new(lexer, &mut diagnostics) {
+        Ok(mut parser) => match parser.parse() {
+            Ok(ast) => ast,
+            Err(_) => report_diag_and_exit(&diagnostics),
+        },
+        Err(_) => report_diag_and_exit(&diagnostics),
+    };
 
     if diagnostics.has_errors() {
         report_diag_and_exit(&mut diagnostics);

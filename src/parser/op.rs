@@ -1,12 +1,12 @@
-use crate::lexer::Token;
+use crate::lexer::TokenKind;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum OpParseError {
     #[error("Failed to parse binary operator from {0}")]
-    Bin(Token),
+    Bin(TokenKind),
     #[error("Failed to parse unary operator from {0}")]
-    Un(Token),
+    Un(TokenKind),
     #[error("Failed to parse comparison operator from binary operator {0:?}")]
     Cmp(BinOp),
     #[error("Failed to parse bitwise operator from binary operator {0:?}")]
@@ -34,28 +34,28 @@ pub enum BinOp {
     Shr,
 }
 
-impl TryFrom<&Token> for BinOp {
+impl TryFrom<&TokenKind> for BinOp {
     type Error = OpParseError;
 
-    fn try_from(value: &Token) -> Result<Self, Self::Error> {
+    fn try_from(value: &TokenKind) -> Result<Self, Self::Error> {
         match value {
-            Token::Asterisk => Ok(Self::Mul),
-            Token::Plus => Ok(Self::Add),
-            Token::Minus => Ok(Self::Sub),
-            Token::Slash => Ok(Self::Div),
-            Token::Equal => Ok(Self::Equal),
-            Token::NotEqual => Ok(Self::NotEqual),
-            Token::LessThan => Ok(Self::LessThan),
-            Token::GreaterThan => Ok(Self::GreaterThan),
-            Token::LessEqual => Ok(Self::LessEqual),
-            Token::GreaterEqual => Ok(Self::GreaterEqual),
-            Token::Assign => Ok(Self::Assign),
-            Token::And => Ok(Self::LogicalAnd),
-            Token::Or => Ok(Self::LogicalOr),
-            Token::Ampersand => Ok(Self::BitwiseAnd),
-            Token::Bar => Ok(Self::BitwiseOr),
-            Token::Shl => Ok(Self::Shl),
-            Token::Shr => Ok(Self::Shr),
+            TokenKind::Asterisk => Ok(Self::Mul),
+            TokenKind::Plus => Ok(Self::Add),
+            TokenKind::Minus => Ok(Self::Sub),
+            TokenKind::Slash => Ok(Self::Div),
+            TokenKind::Equal => Ok(Self::Equal),
+            TokenKind::NotEqual => Ok(Self::NotEqual),
+            TokenKind::LessThan => Ok(Self::LessThan),
+            TokenKind::GreaterThan => Ok(Self::GreaterThan),
+            TokenKind::LessEqual => Ok(Self::LessEqual),
+            TokenKind::GreaterEqual => Ok(Self::GreaterEqual),
+            TokenKind::Assign => Ok(Self::Assign),
+            TokenKind::And => Ok(Self::LogicalAnd),
+            TokenKind::Or => Ok(Self::LogicalOr),
+            TokenKind::Ampersand => Ok(Self::BitwiseAnd),
+            TokenKind::Bar => Ok(Self::BitwiseOr),
+            TokenKind::Shl => Ok(Self::Shl),
+            TokenKind::Shr => Ok(Self::Shr),
             token => Err(OpParseError::Bin(token.to_owned())),
         }
     }
@@ -70,16 +70,16 @@ pub enum UnOp {
     BitwiseNot,
 }
 
-impl TryFrom<&Token> for UnOp {
+impl TryFrom<&TokenKind> for UnOp {
     type Error = OpParseError;
 
-    fn try_from(value: &Token) -> Result<Self, Self::Error> {
+    fn try_from(value: &TokenKind) -> Result<Self, Self::Error> {
         match value {
-            Token::Bang => Ok(Self::LogicalNot),
-            Token::Minus => Ok(Self::Negative),
-            Token::Ampersand => Ok(Self::Address),
-            Token::Asterisk => Ok(Self::Deref),
-            Token::Tilde => Ok(Self::BitwiseNot),
+            TokenKind::Bang => Ok(Self::LogicalNot),
+            TokenKind::Minus => Ok(Self::Negative),
+            TokenKind::Ampersand => Ok(Self::Address),
+            TokenKind::Asterisk => Ok(Self::Deref),
+            TokenKind::Tilde => Ok(Self::BitwiseNot),
             token => Err(OpParseError::Un(token.to_owned())),
         }
     }

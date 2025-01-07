@@ -77,7 +77,7 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
 
                 let stmts = if let Some(block) = item.block {
                     block
-                        .0
+                        .stmts
                         .into_iter()
                         .map(|stmt| self.lower_stmt(stmt))
                         .collect()

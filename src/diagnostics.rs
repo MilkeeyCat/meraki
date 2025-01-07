@@ -1,10 +1,24 @@
-use crate::lexer::span::Span;
+use crate::lexer::{span::Span, TokenKind};
 use derive_more::derive::Display;
 
 #[derive(Debug, Display)]
 pub enum Diagnostic {
     #[display("syntax error: unknown character")]
     UnknownChar,
+    #[display("syntax error: expected {_0}")]
+    ParseExpected(String),
+    #[display("syntax error: {_0} is not a valid prefix operator")]
+    ExpressionPrefix(TokenKind),
+    #[display("syntax error: {_0} is not a valid infix operator")]
+    ExpressionInfix(TokenKind),
+    #[display("field `{_0}` is already declared")]
+    RepeatingField(String),
+    #[display("parameter `{_0}` is already declared")]
+    RepeatingParam(String),
+    #[display("integer literal is too large value exceeds limit of `{}`", u64::MAX)]
+    IntegerLitralTooLong,
+    #[display("function definition is not allowed here")]
+    IllegalFunctionDefinition,
 }
 
 #[derive(Debug, Eq, PartialEq, Display)]
@@ -70,7 +84,7 @@ impl<'src> Diagnostics<'src> {
     }
 
     fn lines(&self, span: &Span) -> usize {
-        self.source[span.end..span.start]
+        self.source[span.start..span.end]
             .chars()
             .filter(|ch| ch == &'\n')
             .count()

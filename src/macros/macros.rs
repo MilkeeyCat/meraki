@@ -109,7 +109,7 @@ pub fn symbol_to_macros<'lib>(symbol: Symbol<'lib, *const Slice<Macro>>) -> &'li
     }
 }
 
-impl Into<Token> for lexer::Token {
+impl Into<Token> for lexer::TokenKind {
     fn into(self) -> Token {
         match self {
             Self::Ident(ident) => {
@@ -189,90 +189,91 @@ impl Into<Token> for lexer::Token {
             Self::Void => Token::Void,
 
             Self::Null => Token::Null,
+            _ => todo!(),
         }
     }
 }
 
-impl Into<lexer::Token> for Token {
-    fn into(self) -> lexer::Token {
+impl Into<lexer::TokenKind> for Token {
+    fn into(self) -> lexer::TokenKind {
         match self {
             Self::Ident(ptr) => {
                 let ident = unsafe { CString::from_raw(ptr) }.into_string().unwrap();
 
-                lexer::Token::Ident(ident)
+                lexer::TokenKind::Ident(ident)
             }
             Self::String(ptr) => {
                 let string = unsafe { CString::from_raw(ptr) }.into_string().unwrap();
 
-                lexer::Token::String(string)
+                lexer::TokenKind::String(string)
             }
             Self::Integer(ptr) => {
                 let integer = unsafe { CString::from_raw(ptr) }.into_string().unwrap();
 
-                lexer::Token::Integer(integer)
+                lexer::TokenKind::Integer(integer)
             }
 
-            Self::Assign => lexer::Token::Assign,
-            Self::Plus => lexer::Token::Plus,
-            Self::Minus => lexer::Token::Minus,
-            Self::Bang => lexer::Token::Bang,
-            Self::Asterisk => lexer::Token::Asterisk,
-            Self::Slash => lexer::Token::Slash,
-            Self::Arrow => lexer::Token::Arrow,
-            Self::Period => lexer::Token::Period,
-            Self::Tilde => lexer::Token::Tilde,
-            Self::Ampersand => lexer::Token::Ampersand,
-            Self::Bar => lexer::Token::Bar,
-            Self::Equal => lexer::Token::Equal,
-            Self::NotEqual => lexer::Token::NotEqual,
-            Self::LessThan => lexer::Token::LessThan,
-            Self::GreaterThan => lexer::Token::GreaterThan,
-            Self::LessEqual => lexer::Token::LessEqual,
-            Self::GreaterEqual => lexer::Token::GreaterEqual,
-            Self::And => lexer::Token::And,
-            Self::Or => lexer::Token::Or,
-            Self::Shl => lexer::Token::Shl,
-            Self::Shr => lexer::Token::Shr,
-            Self::Comma => lexer::Token::Comma,
-            Self::Semicolon => lexer::Token::Semicolon,
-            Self::Colon => lexer::Token::Colon,
-            Self::LParen => lexer::Token::LParen,
-            Self::RParen => lexer::Token::RParen,
-            Self::LBrace => lexer::Token::LBrace,
-            Self::RBrace => lexer::Token::RBrace,
-            Self::LBracket => lexer::Token::LBracket,
-            Self::RBracket => lexer::Token::RBracket,
+            Self::Assign => lexer::TokenKind::Assign,
+            Self::Plus => lexer::TokenKind::Plus,
+            Self::Minus => lexer::TokenKind::Minus,
+            Self::Bang => lexer::TokenKind::Bang,
+            Self::Asterisk => lexer::TokenKind::Asterisk,
+            Self::Slash => lexer::TokenKind::Slash,
+            Self::Arrow => lexer::TokenKind::Arrow,
+            Self::Period => lexer::TokenKind::Period,
+            Self::Tilde => lexer::TokenKind::Tilde,
+            Self::Ampersand => lexer::TokenKind::Ampersand,
+            Self::Bar => lexer::TokenKind::Bar,
+            Self::Equal => lexer::TokenKind::Equal,
+            Self::NotEqual => lexer::TokenKind::NotEqual,
+            Self::LessThan => lexer::TokenKind::LessThan,
+            Self::GreaterThan => lexer::TokenKind::GreaterThan,
+            Self::LessEqual => lexer::TokenKind::LessEqual,
+            Self::GreaterEqual => lexer::TokenKind::GreaterEqual,
+            Self::And => lexer::TokenKind::And,
+            Self::Or => lexer::TokenKind::Or,
+            Self::Shl => lexer::TokenKind::Shl,
+            Self::Shr => lexer::TokenKind::Shr,
+            Self::Comma => lexer::TokenKind::Comma,
+            Self::Semicolon => lexer::TokenKind::Semicolon,
+            Self::Colon => lexer::TokenKind::Colon,
+            Self::LParen => lexer::TokenKind::LParen,
+            Self::RParen => lexer::TokenKind::RParen,
+            Self::LBrace => lexer::TokenKind::LBrace,
+            Self::RBrace => lexer::TokenKind::RBrace,
+            Self::LBracket => lexer::TokenKind::LBracket,
+            Self::RBracket => lexer::TokenKind::RBracket,
 
-            Self::Const => lexer::Token::Const,
-            Self::True => lexer::Token::True,
-            Self::False => lexer::Token::False,
-            Self::Let => lexer::Token::Let,
-            Self::Fn => lexer::Token::Fn,
-            Self::Enum => lexer::Token::Enum,
-            Self::Struct => lexer::Token::Struct,
-            Self::If => lexer::Token::If,
-            Self::While => lexer::Token::While,
-            Self::For => lexer::Token::For,
-            Self::Else => lexer::Token::Else,
-            Self::Return => lexer::Token::Return,
-            Self::As => lexer::Token::As,
-            Self::Continue => lexer::Token::Continue,
-            Self::Break => lexer::Token::Break,
+            Self::Const => lexer::TokenKind::Const,
+            Self::True => lexer::TokenKind::True,
+            Self::False => lexer::TokenKind::False,
+            Self::Let => lexer::TokenKind::Let,
+            Self::Fn => lexer::TokenKind::Fn,
+            Self::Enum => lexer::TokenKind::Enum,
+            Self::Struct => lexer::TokenKind::Struct,
+            Self::If => lexer::TokenKind::If,
+            Self::While => lexer::TokenKind::While,
+            Self::For => lexer::TokenKind::For,
+            Self::Else => lexer::TokenKind::Else,
+            Self::Return => lexer::TokenKind::Return,
+            Self::As => lexer::TokenKind::As,
+            Self::Continue => lexer::TokenKind::Continue,
+            Self::Break => lexer::TokenKind::Break,
 
-            Self::U8 => lexer::Token::U8,
-            Self::U16 => lexer::Token::U16,
-            Self::U32 => lexer::Token::U32,
-            Self::U64 => lexer::Token::U64,
-            Self::I8 => lexer::Token::I8,
-            Self::I16 => lexer::Token::I16,
-            Self::I32 => lexer::Token::I32,
-            Self::I64 => lexer::Token::I64,
-            Self::Usize => lexer::Token::Usize,
-            Self::Isize => lexer::Token::Isize,
-            Self::Bool => lexer::Token::Bool,
-            Self::Void => lexer::Token::Void,
+            Self::U8 => lexer::TokenKind::U8,
+            Self::U16 => lexer::TokenKind::U16,
+            Self::U32 => lexer::TokenKind::U32,
+            Self::U64 => lexer::TokenKind::U64,
+            Self::I8 => lexer::TokenKind::I8,
+            Self::I16 => lexer::TokenKind::I16,
+            Self::I32 => lexer::TokenKind::I32,
+            Self::I64 => lexer::TokenKind::I64,
+            Self::Usize => lexer::TokenKind::Usize,
+            Self::Isize => lexer::TokenKind::Isize,
+            Self::Bool => lexer::TokenKind::Bool,
+            Self::Void => lexer::TokenKind::Void,
 
-            Self::Null => lexer::Token::Null,
+            Self::Null => lexer::TokenKind::Null,
         }
     }
 }

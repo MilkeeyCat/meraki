@@ -1,5 +1,5 @@
 use super::{OpParseError, Ty};
-use crate::lexer::Token;
+use crate::lexer::TokenKind;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -9,15 +9,15 @@ pub enum Error {
     #[error(transparent)]
     Operator(#[from] OpParseError),
     #[error("Expected token {0}, got {1}")]
-    UnexpectedToken(Token, Token),
+    UnexpectedToken(TokenKind, TokenKind),
     #[error("Expected {0}")]
-    Expected(Token),
+    Expected(TokenKind),
     #[error("Failed to parse type, found {0}")]
-    ParseType(Token),
+    ParseType(TokenKind),
     #[error("Failed to parse prefix token {0}")]
-    Prefix(Token),
+    Prefix(TokenKind),
     #[error("Failed to parse infix token {0}")]
-    Infix(Token),
+    Infix(TokenKind),
 }
 
 #[derive(Error, Debug, PartialEq)]
