@@ -1,5 +1,171 @@
-use crate::lexer::TokenKind;
+use crate::lexer::{span::Span, Token, TokenKind};
+use derive_more::derive::Display;
 use thiserror::Error;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Variable {
+    pub ty: Ty,
+    pub name: String,
+    pub value: Option<Expr>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Block {
+    pub open_brace: Span,
+    pub stmts: Vec<Stmt>,
+    pub close_brace: Span,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Item {
+    Global(Variable),
+    Fn {
+        ret_ty: Ty,
+        name: String,
+        params: Vec<(String, Ty)>,
+        block: Option<Block>,
+    },
+    Struct {
+        name: String,
+        fields: Vec<(String, Ty)>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Stmt {
+    Local(Variable),
+    Item(Item),
+    Expr(Expr),
+    Return(Option<Expr>),
+    If {
+        condition: Expr,
+        consequence: Block,
+        alternative: Option<Block>,
+    },
+    While {
+        condition: Expr,
+        block: Block,
+    },
+    For {
+        initializer: Option<Box<Stmt>>,
+        condition: Option<Expr>,
+        increment: Option<Expr>,
+        block: Block,
+    },
+    Continue,
+    Break,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Expr {
+    Binary {
+        op: BinOp,
+        left: Box<Expr>,
+        right: Box<Expr>,
+    },
+    Unary {
+        op: UnOp,
+        expr: Box<Expr>,
+    },
+    Cast {
+        expr: Box<Expr>,
+        ty: Ty,
+    },
+    Lit(ExprLit),
+    Ident(String),
+    Struct {
+        name: String,
+        fields: Vec<(String, Expr)>,
+    },
+    Array(Vec<Expr>),
+    Field {
+        expr: Box<Expr>,
+        field: String,
+    },
+    StructMethod {
+        expr: Box<Expr>,
+        method: String,
+        arguments: Vec<Expr>,
+    },
+    ArrayAccess {
+        expr: Box<Expr>,
+        index: Box<Expr>,
+    },
+    FunctionCall {
+        expr: Box<Expr>,
+        arguments: Vec<Expr>,
+    },
+    MacroCall {
+        name: String,
+        tokens: Vec<Token>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ExprLit {
+    Int(i64),
+    UInt(u64),
+    Bool(bool),
+    String(String),
+    Null,
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash, Display)]
+pub enum IntTy {
+    #[display("i8")]
+    I8,
+    #[display("i16")]
+    I16,
+    #[display("i32")]
+    I32,
+    #[display("i64")]
+    I64,
+    #[display("isize")]
+    Isize,
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash, Display)]
+pub enum UintTy {
+    #[display("u8")]
+    U8,
+    #[display("u16")]
+    U16,
+    #[display("u32")]
+    U32,
+    #[display("u64")]
+    U64,
+    #[display("usize")]
+    Usize,
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash, Display)]
+pub enum Ty {
+    #[display("null")]
+    Null,
+    #[display("void")]
+    Void,
+    #[display("bool")]
+    Bool,
+    Int(IntTy),
+    UInt(UintTy),
+    Ident(String),
+    #[display("*{_0}")]
+    Ptr(Box<Ty>),
+    #[display("{ty}[{len}]")]
+    Array {
+        ty: Box<Ty>,
+        len: usize,
+    },
+    #[display("fn ({}) -> {_1}",
+        _0
+            .iter()
+            .map(|type_| type_.to_string())
+            .collect::<String>()
+    )]
+    Fn(Vec<Ty>, Box<Ty>),
+    #[display("infer")]
+    Infer,
+}
 
 #[derive(Error, Debug)]
 pub enum OpParseError {

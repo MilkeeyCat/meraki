@@ -4,8 +4,8 @@ mod register;
 
 use super::Codegen;
 use crate::{
+    ast::{BinOp, BitwiseOp, CmpOp, IntTy, OpParseError, UintTy, UnOp},
     ir::{Block, Expr, ExprKind, ExprLit, Id, Item, ItemFn, Node, Stmt, Ty, Variable},
-    parser::{BinOp, BitwiseOp, CmpOp, IntTy, OpParseError, UintTy, UnOp},
     Context,
 };
 use allocator::RegisterAllocator;

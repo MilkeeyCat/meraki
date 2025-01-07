@@ -1,8 +1,8 @@
 mod scopes;
 
 use crate::{
+    ast::{self, BinOp, IntTy, Item, UintTy, UnOp, Variable},
     ir::{self, Id, OrderedMap, Stmt},
-    parser::{self, BinOp, IntTy, Item, UintTy, UnOp, Variable},
     ty_problem, Context,
 };
 use scopes::Scopes;
@@ -11,7 +11,7 @@ use std::collections::HashMap;
 #[derive(Debug)]
 pub struct Lowering<'a, 'ir> {
     ctx: &'a mut Context<'ir>,
-    types: HashMap<parser::Ty, &'ir ir::Ty<'ir>>,
+    types: HashMap<ast::Ty, &'ir ir::Ty<'ir>>,
     scopes: Scopes<'ir>,
     nodes: Vec<ir::Node<'ir>>,
     globals: Vec<ir::Global<'ir>>,
@@ -47,16 +47,14 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
 
     pub fn lower_item(&mut self, item: Item) -> Option<ir::Item<'ir>> {
         match item {
-            Item::Struct(item) => {
-                let mut fields = Vec::new();
+            Item::Struct { name, fields } => {
                 let ty = self.ctx.allocator.alloc(ir::Ty::Struct(self.id));
+                self.types.insert(ast::Ty::Ident(name), ty);
 
-                self.types.insert(parser::Ty::Ident(item.name), ty);
-
-                for (field, ty) in item.fields {
-                    fields.push((&*self.ctx.allocator.alloc_str(&field), self.lower_ty(ty)));
-                }
-
+                let fields = fields
+                    .into_iter()
+                    .map(|(field, ty)| (&*self.ctx.allocator.alloc_str(&field), self.lower_ty(ty)))
+                    .collect::<Vec<_>>();
                 let fields = self.ctx.allocator.alloc_slice_copy(&fields);
 
                 self.globals.push(ir::Global(
@@ -68,14 +66,19 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
 
                 None
             }
-            Item::Fn(item) => {
+            Item::Fn {
+                ret_ty,
+                name,
+                params,
+                block,
+            } => {
                 self.id.node_id = 1;
                 self.scopes.enter();
 
-                let ret_ty = self.lower_ty(item.ret_ty);
+                let ret_ty = self.lower_ty(ret_ty);
                 self.ret_ty = Some(ret_ty);
 
-                let stmts = if let Some(block) = item.block {
+                let stmts = if let Some(block) = block {
                     block
                         .stmts
                         .into_iter()
@@ -88,8 +91,7 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                 self.ret_ty = None;
                 self.scopes.leave();
 
-                let params: Vec<&'ir ir::Ty<'ir>> = item
-                    .params
+                let params: Vec<&'ir ir::Ty<'ir>> = params
                     .into_iter()
                     .map(|(_, ty)| self.lower_ty(ty))
                     .collect();
@@ -105,7 +107,7 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                             global_id: self.id.global_id,
                             node_id: 0,
                         },
-                        name: self.ctx.allocator.alloc_str(&item.name),
+                        name: self.ctx.allocator.alloc_str(&name),
                         signature,
                         block: ir::Block(self.ctx.allocator.alloc_slice_copy(&stmts)),
                     }))),
@@ -161,9 +163,9 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
         ir_variable
     }
 
-    fn lower_stmt(&mut self, stmt: parser::Stmt) -> ir::Stmt<'ir> {
+    fn lower_stmt(&mut self, stmt: ast::Stmt) -> ir::Stmt<'ir> {
         match stmt {
-            parser::Stmt::Local(var) => {
+            ast::Stmt::Local(var) => {
                 let name = var.name.clone();
                 let ir_var = self.lower_var_decl(var);
                 let node = ir::Node::Stmt(ir::Stmt::Local(ir_var));
@@ -176,10 +178,10 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
 
                 ir::Stmt::Local(ir_var)
             }
-            parser::Stmt::Item(item) => ir::Stmt::Item(self.lower_item(item).unwrap()),
-            parser::Stmt::Expr(expr) => ir::Stmt::Expr(self.lower_expr(expr)),
-            parser::Stmt::Return(stmt) => {
-                let expr = stmt.expr.map(|expr| {
+            ast::Stmt::Item(item) => ir::Stmt::Item(self.lower_item(item).unwrap()),
+            ast::Stmt::Expr(expr) => ir::Stmt::Expr(self.lower_expr(expr)),
+            ast::Stmt::Return(expr) => {
+                let expr = expr.map(|expr| {
                     let expr = self.lower_expr(expr);
                     let expr_ty_var_id = self.tys_ty_var_id(expr.ty);
                     let ret_ty_var = self.tys_ty_var_id(self.ret_ty.unwrap());
@@ -195,13 +197,13 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
         }
     }
 
-    fn lower_expr(&mut self, expr: parser::Expr) -> ir::Expr<'ir> {
+    fn lower_expr(&mut self, expr: ast::Expr) -> ir::Expr<'ir> {
         match expr {
-            parser::Expr::Binary(parser::ExprBinary {
+            ast::Expr::Binary {
                 op,
                 ref left,
                 ref right,
-            }) => {
+            } => {
                 // TODO: remove clones
                 let lhs = self.lower_expr(*left.clone());
                 let rhs = self.lower_expr(*right.clone());
@@ -246,7 +248,7 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                     ),
                 }
             }
-            parser::Expr::Ident(parser::ExprIdent(ref ident)) => {
+            ast::Expr::Ident(ref ident) => {
                 let id = self.scopes.get_symbol(ident).unwrap();
                 let ty = self.expr_ty(&expr);
 
@@ -255,21 +257,21 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                     kind: ir::ExprKind::Ident(id),
                 }
             }
-            parser::Expr::Lit(ref lit) => {
+            ast::Expr::Lit(ref lit) => {
                 let ty = self.expr_ty(&expr);
                 let kind = match lit {
-                    parser::ExprLit::Int(lit) => ir::ExprKind::Lit(ir::ExprLit::Int(*lit)),
-                    parser::ExprLit::UInt(lit) => ir::ExprKind::Lit(ir::ExprLit::UInt(*lit)),
-                    parser::ExprLit::Bool(lit) => ir::ExprKind::Lit(ir::ExprLit::Bool(*lit)),
-                    parser::ExprLit::String(lit) => {
+                    ast::ExprLit::Int(lit) => ir::ExprKind::Lit(ir::ExprLit::Int(*lit)),
+                    ast::ExprLit::UInt(lit) => ir::ExprKind::Lit(ir::ExprLit::UInt(*lit)),
+                    ast::ExprLit::Bool(lit) => ir::ExprKind::Lit(ir::ExprLit::Bool(*lit)),
+                    ast::ExprLit::String(lit) => {
                         ir::ExprKind::Lit(ir::ExprLit::String(self.ctx.allocator.alloc_str(&lit)))
                     }
-                    parser::ExprLit::Null => ir::ExprKind::Lit(ir::ExprLit::Null),
+                    ast::ExprLit::Null => ir::ExprKind::Lit(ir::ExprLit::Null),
                 };
 
                 ir::Expr { ty, kind }
             }
-            parser::Expr::Unary(parser::ExprUnary { op, expr }) => {
+            ast::Expr::Unary { op, expr } => {
                 let ir_expr = self.lower_expr(*expr);
                 let ty = match op {
                     UnOp::Address => self.ctx.allocator.alloc(ir::Ty::Ptr(ir_expr.ty)),
@@ -296,8 +298,8 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                     kind: ir::ExprKind::Unary(op, self.ctx.allocator.alloc(ir_expr)),
                 }
             }
-            parser::Expr::Struct(parser::ExprStruct { name, fields }) => {
-                let ty = self.lower_ty(parser::Ty::Ident(name));
+            ast::Expr::Struct { name, fields } => {
+                let ty = self.lower_ty(ast::Ty::Ident(name));
                 let ir::Ty::Struct(id) = ty else {
                     unreachable!();
                 };
@@ -338,9 +340,9 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                     kind: ir::ExprKind::Struct(fields),
                 }
             }
-            parser::Expr::Field(parser::ExprField { expr, field }) => {
+            ast::Expr::Field { expr, field } => {
                 let expr = self.lower_expr(*expr);
-                let ty = self.lower_ty(parser::Ty::Infer);
+                let ty = self.lower_ty(ast::Ty::Infer);
                 let field = self.ctx.allocator.alloc_str(field.as_str());
                 let expr_ty_var = self.tys_ty_var_id(expr.ty);
                 let field_ty_var = self.tys_ty_var_id(ty);
@@ -352,7 +354,7 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                     kind: ir::ExprKind::Field(self.ctx.allocator.alloc(expr), field),
                 }
             }
-            parser::Expr::Cast(parser::ExprCast { expr, ty }) => {
+            ast::Expr::Cast { expr, ty } => {
                 let expr = self.lower_expr(*expr);
                 let ty = self.lower_ty(ty);
 
@@ -365,41 +367,39 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
         }
     }
 
-    fn lower_ty(&mut self, ty: parser::Ty) -> &'ir ir::Ty<'ir> {
+    fn lower_ty(&mut self, ty: ast::Ty) -> &'ir ir::Ty<'ir> {
         match self.types.get(&ty) {
             Some(ty) => *ty,
             None => {
                 let ir_ty = match &ty {
-                    parser::Ty::Null => self.ctx.allocator.alloc(ir::Ty::Null),
-                    parser::Ty::Void => self.ctx.allocator.alloc(ir::Ty::Void),
-                    parser::Ty::Bool => self.ctx.allocator.alloc(ir::Ty::Bool),
-                    parser::Ty::Int(ty) => match ty {
-                        parser::IntTy::I8 => self.ctx.allocator.alloc(ir::Ty::Int(IntTy::I8)),
-                        parser::IntTy::I16 => self.ctx.allocator.alloc(ir::Ty::Int(IntTy::I16)),
-                        parser::IntTy::I32 => self.ctx.allocator.alloc(ir::Ty::Int(IntTy::I32)),
-                        parser::IntTy::I64 => self.ctx.allocator.alloc(ir::Ty::Int(IntTy::I64)),
-                        parser::IntTy::Isize => self.ctx.allocator.alloc(ir::Ty::Int(IntTy::Isize)),
+                    ast::Ty::Null => self.ctx.allocator.alloc(ir::Ty::Null),
+                    ast::Ty::Void => self.ctx.allocator.alloc(ir::Ty::Void),
+                    ast::Ty::Bool => self.ctx.allocator.alloc(ir::Ty::Bool),
+                    ast::Ty::Int(ty) => match ty {
+                        ast::IntTy::I8 => self.ctx.allocator.alloc(ir::Ty::Int(IntTy::I8)),
+                        ast::IntTy::I16 => self.ctx.allocator.alloc(ir::Ty::Int(IntTy::I16)),
+                        ast::IntTy::I32 => self.ctx.allocator.alloc(ir::Ty::Int(IntTy::I32)),
+                        ast::IntTy::I64 => self.ctx.allocator.alloc(ir::Ty::Int(IntTy::I64)),
+                        ast::IntTy::Isize => self.ctx.allocator.alloc(ir::Ty::Int(IntTy::Isize)),
                     },
-                    parser::Ty::UInt(ty) => match ty {
-                        parser::UintTy::U8 => self.ctx.allocator.alloc(ir::Ty::UInt(UintTy::U8)),
-                        parser::UintTy::U16 => self.ctx.allocator.alloc(ir::Ty::UInt(UintTy::U16)),
-                        parser::UintTy::U32 => self.ctx.allocator.alloc(ir::Ty::UInt(UintTy::U32)),
-                        parser::UintTy::U64 => self.ctx.allocator.alloc(ir::Ty::UInt(UintTy::U64)),
-                        parser::UintTy::Usize => {
-                            self.ctx.allocator.alloc(ir::Ty::UInt(UintTy::Usize))
-                        }
+                    ast::Ty::UInt(ty) => match ty {
+                        ast::UintTy::U8 => self.ctx.allocator.alloc(ir::Ty::UInt(UintTy::U8)),
+                        ast::UintTy::U16 => self.ctx.allocator.alloc(ir::Ty::UInt(UintTy::U16)),
+                        ast::UintTy::U32 => self.ctx.allocator.alloc(ir::Ty::UInt(UintTy::U32)),
+                        ast::UintTy::U64 => self.ctx.allocator.alloc(ir::Ty::UInt(UintTy::U64)),
+                        ast::UintTy::Usize => self.ctx.allocator.alloc(ir::Ty::UInt(UintTy::Usize)),
                     },
-                    parser::Ty::Ptr(ref ty) => self
+                    ast::Ty::Ptr(ref ty) => self
                         .ctx
                         .allocator
                         .alloc(ir::Ty::Ptr(self.lower_ty(*ty.clone()))),
-                    parser::Ty::Array { ty, len } => {
+                    ast::Ty::Array { ty, len } => {
                         self.ctx.allocator.alloc(ir::Ty::Array(ir::TyArray {
                             len: *len,
                             ty: self.lower_ty(*ty.clone()),
                         }))
                     }
-                    parser::Ty::Fn(ref params, ref ret_ty) => {
+                    ast::Ty::Fn(ref params, ref ret_ty) => {
                         let mut alloced_params = Vec::new();
 
                         for ty in params {
@@ -412,16 +412,16 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                             .allocator
                             .alloc(ir::Ty::Fn(params, self.lower_ty(*ret_ty.clone())))
                     }
-                    parser::Ty::Ident(ident) => {
+                    ast::Ty::Ident(ident) => {
                         return self.scopes.get_type(ident).unwrap();
                     }
-                    parser::Ty::Infer => self
+                    ast::Ty::Infer => self
                         .ctx
                         .allocator
                         .alloc(ir::Ty::Infer(self.ctx.ty_problem.new_infer_ty_var())),
                 };
 
-                if !matches!(ty, parser::Ty::Infer) {
+                if ty != ast::Ty::Infer {
                     self.types.insert(ty, ir_ty);
                 }
 
@@ -430,21 +430,21 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
         }
     }
 
-    fn expr_ty(&mut self, expr: &parser::Expr) -> &'ir ir::Ty<'ir> {
+    fn expr_ty(&mut self, expr: &ast::Expr) -> &'ir ir::Ty<'ir> {
         match expr {
-            parser::Expr::Binary(_) => self
+            ast::Expr::Binary { .. } => self
                 .ctx
                 .allocator
                 .alloc(ir::Ty::Infer(self.ctx.ty_problem.new_infer_ty_var())),
-            parser::Expr::Lit(lit) => match lit {
-                parser::ExprLit::Bool(_) => &ir::Ty::Bool,
-                parser::ExprLit::String(_) => &ir::Ty::Ptr(&ir::Ty::UInt(UintTy::U8)),
+            ast::Expr::Lit(lit) => match lit {
+                ast::ExprLit::Bool(_) => &ir::Ty::Bool,
+                ast::ExprLit::String(_) => &ir::Ty::Ptr(&ir::Ty::UInt(UintTy::U8)),
                 _ => self
                     .ctx
                     .allocator
                     .alloc(ir::Ty::Infer(self.ctx.ty_problem.new_infer_ty_var())),
             },
-            parser::Expr::Ident(parser::ExprIdent(ident)) => {
+            ast::Expr::Ident(ident) => {
                 let id = self.scopes.get_symbol(ident).unwrap();
 
                 match self.nodes_map.get(&id).unwrap() {

@@ -1,39 +1,14 @@
 mod diagnostics;
-mod error;
-mod item;
-mod op;
 mod precedence;
-mod stmt;
-mod types;
 
-pub mod expr;
+pub use precedence::Precedence;
 
 use crate::{
+    ast::{BinOp, Block, Expr, ExprLit, IntTy, Item, Stmt, Ty, UintTy, UnOp, Variable},
     diagnostics::{Diagnostic, Diagnostics},
     lexer::{span::Span, Token, TokenKind},
 };
-pub use error::{Error, TyError};
-pub use expr::*;
-pub use item::{Item, ItemFn, ItemStruct};
-pub use op::{BinOp, BitwiseOp, CmpOp, OpParseError, UnOp};
-pub use precedence::Precedence;
 use std::collections::HashMap;
-pub use stmt::{Stmt, StmtFor, StmtIf, StmtReturn, StmtWhile};
-pub use types::{IntTy, Ty, UintTy};
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Variable {
-    pub ty: Ty,
-    pub name: String,
-    pub value: Option<Expr>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Block {
-    pub open_brace: Span,
-    pub stmts: Vec<Stmt>,
-    pub close_brace: Span,
-}
 
 type PrefixFn<'a, 'src, T> = fn(&mut Parser<'a, 'src, T>) -> Result<Expr, ()>;
 type InfixFn<'a, 'src, T> = fn(&mut Parser<'a, 'src, T>, left: Expr) -> Result<Expr, ()>;
@@ -239,7 +214,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
 
         self.expect(&TokenKind::RBrace)?;
 
-        Ok(Item::Struct(ItemStruct { name, fields }))
+        Ok(Item::Struct { name, fields })
     }
 
     fn parse_stmt(&mut self) -> Result<Stmt, ()> {
@@ -418,7 +393,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
 
         self.expect(&TokenKind::Semicolon)?;
 
-        Ok(Stmt::Return(StmtReturn { expr }))
+        Ok(Stmt::Return(expr))
     }
 
     fn parse_if_stmt(&mut self) -> Result<Stmt, ()> {
@@ -434,11 +409,11 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
             None
         };
 
-        Ok(Stmt::If(StmtIf {
+        Ok(Stmt::If {
             condition,
             consequence,
             alternative,
-        }))
+        })
     }
 
     fn parse_while_stmt(&mut self) -> Result<Stmt, ()> {
@@ -447,7 +422,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         let condition = self.parse_expr(Precedence::default())?;
         let block = self.parse_block_stmt()?;
 
-        Ok(Stmt::While(StmtWhile { condition, block }))
+        Ok(Stmt::While { condition, block })
     }
 
     fn parse_for_stmt(&mut self) -> Result<Stmt, ()> {
@@ -480,12 +455,12 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
 
         let block = self.parse_block_stmt()?;
 
-        Ok(Stmt::For(StmtFor {
+        Ok(Stmt::For {
             initializer: initializer.map(|initializer| Box::new(initializer)),
             condition,
             increment,
             block,
-        }))
+        })
     }
 
     fn parse_local_stmt(&mut self) -> Result<Stmt, ()> {
@@ -569,12 +544,12 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
             self.expect(&TokenKind::Semicolon)?;
         }
 
-        Ok(Item::Fn(ItemFn {
+        Ok(Item::Fn {
             ret_ty: ty,
             name,
             params,
             block,
-        }))
+        })
     }
 
     fn parse_params(&mut self, delim: TokenKind, end: TokenKind) -> Result<Vec<(String, Ty)>, ()> {
@@ -607,7 +582,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
                 kind: TokenKind::LBrace,
                 ..
             }) => self.parse_struct_expr(),
-            _ => Ok(Expr::Ident(ExprIdent(self.parse_ident()?.0))),
+            _ => Ok(Expr::Ident(self.parse_ident()?.0)),
         }
     }
 
@@ -630,7 +605,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
 
         self.expect(&TokenKind::RBrace)?;
 
-        Ok(Expr::Struct(ExprStruct { name, fields }))
+        Ok(Expr::Struct { name, fields })
     }
 
     fn parse_string_lit_expr(&mut self) -> Result<Expr, ()> {
@@ -689,15 +664,15 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
 
         let args = self.parse_expr_list()?;
 
-        Ok(Expr::FunctionCall(ExprFunctionCall {
+        Ok(Expr::FunctionCall {
             expr: Box::new(left),
             arguments: args,
-        }))
+        })
     }
 
     fn parse_macro_call_expr(&mut self, left: Expr) -> Result<Expr, ()> {
         let name = match left {
-            Expr::Ident(expr) => expr.0,
+            Expr::Ident(expr) => expr,
             _ => panic!("Macro name can only be a string"),
         };
 
@@ -717,7 +692,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
 
         self.expect(&TokenKind::RParen)?;
 
-        Ok(Expr::MacroCall(MacroCall { name, tokens }))
+        Ok(Expr::MacroCall { name, tokens })
     }
 
     fn parse_bin_expr(&mut self, left: Expr) -> Result<Expr, ()> {
@@ -736,11 +711,11 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
                 .error(Diagnostic::ExpressionInfix(token.kind), token.span);
         })?;
 
-        Ok(Expr::Binary(ExprBinary {
+        Ok(Expr::Binary {
             op,
             left: Box::new(left),
             right: Box::new(right),
-        }))
+        })
     }
 
     fn parse_pointer_access_expr(&mut self, left: Expr) -> Result<Expr, ()> {
@@ -748,13 +723,13 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
 
         let (field, _) = self.parse_ident()?;
 
-        Ok(Expr::Field(ExprField {
-            expr: Box::new(Expr::Unary(ExprUnary {
+        Ok(Expr::Field {
+            expr: Box::new(Expr::Unary {
                 op: UnOp::Deref,
                 expr: Box::new(left),
-            })),
+            }),
             field,
-        }))
+        })
     }
 
     fn parse_struct_access_expr(&mut self, expr: Expr) -> Result<Expr, ()> {
@@ -766,16 +741,16 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
             self.expect(&TokenKind::LParen)?;
             let arguments = self.parse_expr_list()?;
 
-            Ok(Expr::StructMethod(ExprStructMethod {
+            Ok(Expr::StructMethod {
                 expr: Box::new(expr),
                 method,
                 arguments,
-            }))
+            })
         } else {
-            Ok(Expr::Field(ExprField {
+            Ok(Expr::Field {
                 expr: Box::new(expr),
                 field: self.parse_ident()?.0,
-            }))
+            })
         }
     }
 
@@ -784,19 +759,19 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         let index = self.parse_expr(Precedence::Access)?;
         self.expect(&TokenKind::RBracket)?;
 
-        Ok(Expr::ArrayAccess(ExprArrayAccess {
+        Ok(Expr::ArrayAccess {
             expr: Box::new(expr),
             index: Box::new(index),
-        }))
+        })
     }
 
     fn parse_cast_expr(&mut self, expr: Expr) -> Result<Expr, ()> {
         self.expect(&TokenKind::As)?;
 
-        Ok(Expr::Cast(ExprCast {
+        Ok(Expr::Cast {
             expr: Box::new(expr),
             ty: self.parse_type()?,
-        }))
+        })
     }
 
     fn parse_unary_expr(&mut self) -> Result<Expr, ()> {
@@ -808,10 +783,10 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         })?;
         let expr = self.parse_expr(Precedence::Prefix)?;
 
-        Ok(Expr::Unary(ExprUnary {
+        Ok(Expr::Unary {
             op,
             expr: Box::new(expr),
-        }))
+        })
     }
 
     fn parse_expr_list(&mut self) -> Result<Vec<Expr>, ()> {
@@ -852,7 +827,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
 
         self.expect(&TokenKind::RBracket)?;
 
-        Ok(Expr::Array(ExprArray(items)))
+        Ok(Expr::Array(items))
     }
 
     fn parse_int_lit(&mut self) -> Result<u64, ()> {
@@ -919,16 +894,13 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
 mod test {
     use super::Parser;
     use crate::{
+        ast::{BinOp, Expr, ExprLit, IntTy, Stmt, Ty, UintTy, UnOp, Variable},
         diagnostics::Diagnostics,
         lexer::Lexer,
-        parser::{
-            BinOp, Error, Expr, ExprBinary, ExprCast, ExprIdent, ExprLit, ExprUnary, IntTy, Stmt,
-            Ty, UintTy, UnOp, Variable,
-        },
     };
 
     #[test]
-    fn parse_arithmetic_expression() -> Result<(), Error> {
+    fn parse_arithmetic_expression() {
         let tests = [
             (
                 "
@@ -936,26 +908,26 @@ mod test {
                     1 * 2 + 3 / (4 + 1 as u8);
                 }
                 ",
-                vec![Stmt::Expr(Expr::Binary(ExprBinary {
+                vec![Stmt::Expr(Expr::Binary {
                     op: BinOp::Add,
-                    left: Box::new(Expr::Binary(ExprBinary {
+                    left: Box::new(Expr::Binary {
                         op: BinOp::Mul,
                         left: Box::new(Expr::Lit(ExprLit::UInt(1))),
                         right: Box::new(Expr::Lit(ExprLit::UInt(2))),
-                    })),
-                    right: Box::new(Expr::Binary(ExprBinary {
+                    }),
+                    right: Box::new(Expr::Binary {
                         op: BinOp::Div,
                         left: Box::new(Expr::Lit(ExprLit::UInt(3))),
-                        right: Box::new(Expr::Binary(ExprBinary {
+                        right: Box::new(Expr::Binary {
                             op: BinOp::Add,
                             left: Box::new(Expr::Lit(ExprLit::UInt(4))),
-                            right: Box::new(Expr::Cast(ExprCast {
+                            right: Box::new(Expr::Cast {
                                 ty: Ty::UInt(UintTy::U8),
                                 expr: Box::new(Expr::Lit(ExprLit::UInt(1))),
-                            })),
-                        })),
-                    })),
-                }))],
+                            }),
+                        }),
+                    }),
+                })],
             ),
             (
                 "
@@ -970,21 +942,21 @@ mod test {
                         ty: Ty::UInt(UintTy::U8),
                         value: None,
                     }),
-                    Stmt::Expr(Expr::Binary(ExprBinary {
+                    Stmt::Expr(Expr::Binary {
                         op: BinOp::Assign,
-                        left: Box::new(Expr::Ident(ExprIdent("foo".to_owned()))),
-                        right: Box::new(Expr::Binary(ExprBinary {
+                        left: Box::new(Expr::Ident("foo".to_owned())),
+                        right: Box::new(Expr::Binary {
                             op: BinOp::Add,
-                            left: Box::new(Expr::Cast(ExprCast {
+                            left: Box::new(Expr::Cast {
                                 ty: Ty::UInt(UintTy::U8),
-                                expr: Box::new(Expr::Unary(ExprUnary {
+                                expr: Box::new(Expr::Unary {
                                     op: UnOp::Negative,
                                     expr: Box::new(Expr::Lit(ExprLit::UInt(1))),
-                                })),
-                            })),
+                                }),
+                            }),
                             right: Box::new(Expr::Lit(ExprLit::UInt(5))),
-                        })),
-                    })),
+                        }),
+                    }),
                 ],
             ),
             (
@@ -1006,22 +978,22 @@ mod test {
                         ty: Ty::Int(IntTy::I8),
                         value: None,
                     }),
-                    Stmt::Expr(Expr::Binary(ExprBinary {
+                    Stmt::Expr(Expr::Binary {
                         op: BinOp::Assign,
-                        left: Box::new(Expr::Ident(ExprIdent("bar".to_owned()))),
-                        right: Box::new(Expr::Binary(ExprBinary {
+                        left: Box::new(Expr::Ident("bar".to_owned())),
+                        right: Box::new(Expr::Binary {
                             op: BinOp::Add,
-                            left: Box::new(Expr::Cast(ExprCast {
+                            left: Box::new(Expr::Cast {
                                 ty: Ty::Int(IntTy::I8),
-                                expr: Box::new(Expr::Ident(ExprIdent("foo".to_owned()))),
-                            })),
-                            right: Box::new(Expr::Binary(ExprBinary {
+                                expr: Box::new(Expr::Ident("foo".to_owned())),
+                            }),
+                            right: Box::new(Expr::Binary {
                                 op: BinOp::Div,
                                 left: Box::new(Expr::Lit(ExprLit::UInt(5))),
                                 right: Box::new(Expr::Lit(ExprLit::UInt(10))),
-                            })),
-                        })),
-                    })),
+                            }),
+                        }),
+                    }),
                 ],
             ),
             (
@@ -1030,18 +1002,18 @@ mod test {
                     1 as i8 + 2 / 3;
                 }
                 ",
-                vec![Stmt::Expr(Expr::Binary(ExprBinary {
+                vec![Stmt::Expr(Expr::Binary {
                     op: BinOp::Add,
-                    left: Box::new(Expr::Cast(ExprCast {
+                    left: Box::new(Expr::Cast {
                         ty: Ty::Int(IntTy::I8),
                         expr: Box::new(Expr::Lit(ExprLit::UInt(1))),
-                    })),
-                    right: Box::new(Expr::Binary(ExprBinary {
+                    }),
+                    right: Box::new(Expr::Binary {
                         op: BinOp::Div,
                         left: Box::new(Expr::Lit(ExprLit::UInt(2))),
                         right: Box::new(Expr::Lit(ExprLit::UInt(3))),
-                    })),
-                }))],
+                    }),
+                })],
             ),
             (
                 "
@@ -1063,15 +1035,15 @@ mod test {
                         ty: Ty::UInt(UintTy::U8),
                         value: None,
                     }),
-                    Stmt::Expr(Expr::Binary(ExprBinary {
+                    Stmt::Expr(Expr::Binary {
                         op: BinOp::Assign,
-                        left: Box::new(Expr::Ident(ExprIdent("a".to_owned()))),
-                        right: Box::new(Expr::Binary(ExprBinary {
+                        left: Box::new(Expr::Ident("a".to_owned())),
+                        right: Box::new(Expr::Binary {
                             op: BinOp::Assign,
-                            left: Box::new(Expr::Ident(ExprIdent("b".to_owned()))),
+                            left: Box::new(Expr::Ident("b".to_owned())),
                             right: Box::new(Expr::Lit(ExprLit::UInt(69))),
-                        })),
-                    })),
+                        }),
+                    }),
                 ],
             ),
         ];
@@ -1087,7 +1059,5 @@ mod test {
                 expected, ast
             );
         }
-
-        Ok(())
     }
 }

@@ -1,5 +1,5 @@
 use crate::{
-    parser::{IntTy, UintTy},
+    ast::{IntTy, UintTy},
     ty_problem,
 };
 

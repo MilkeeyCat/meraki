@@ -1,7 +1,7 @@
 mod ordered_map;
 mod types;
 
-use crate::parser::{BinOp, UnOp};
+use crate::ast::{BinOp, UnOp};
 use bumpalo::Bump;
 
 pub use ordered_map::OrderedMap;

@@ -1,6 +1,6 @@
 pub mod amd64_asm;
 
-use crate::{parser::OpParseError, Context};
+use crate::{ast::OpParseError, Context};
 use thiserror::Error;
 
 #[derive(Error, Debug)]

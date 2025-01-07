@@ -1,6 +1,6 @@
 use crate::{
-    ir::{self, Ir, Item, Node, OrderedMap, Ty},
-    parser::IntTy,
+    ast::IntTy,
+    ir::{Ir, Item, Node, OrderedMap, Ty},
     Context,
 };
 

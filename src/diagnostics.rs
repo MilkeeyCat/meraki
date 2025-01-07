@@ -19,6 +19,14 @@ pub enum Diagnostic {
     IntegerLitralTooLong,
     #[display("function definition is not allowed here")]
     IllegalFunctionDefinition,
+    #[display("type mismatch: `{_0}` expected, `{_1}` found")]
+    TypeMismatch(String, String),
+    #[display("type hint required")]
+    TypeHintRequired,
+    #[display("{_0} is not a pointer type")]
+    NotAPointer(String),
+    #[display("cannot cast `{_0}` into `{_1}`")]
+    InvalidCast(String, String),
 }
 
 #[derive(Debug, Eq, PartialEq, Display)]
