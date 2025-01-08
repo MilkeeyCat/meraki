@@ -54,11 +54,8 @@ pub fn compile(args: CompileArgs) -> Result<(), Box<dyn std::error::Error>> {
 
     let mut diagnostics = Diagnostics::new(&source_code);
     let lexer = Lexer::new(&source_code);
-    let ast = match parser::Parser::new(lexer, &mut diagnostics) {
-        Ok(mut parser) => match parser.parse() {
-            Ok(ast) => ast,
-            Err(_) => report_diag_and_exit(&diagnostics),
-        },
+    let ast = match parser::Parser::new(lexer, &mut diagnostics).parse() {
+        Ok(ast) => ast,
         Err(_) => report_diag_and_exit(&diagnostics),
     };
 

@@ -24,7 +24,7 @@ pub struct Parser<'a, 'src, T: Iterator<Item = Result<Token, Span>>> {
 }
 
 impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
-    pub fn new(lexer: T, diag: &'a mut Diagnostics<'src>) -> Result<Self, ()> {
+    pub fn new(lexer: T, diag: &'a mut Diagnostics<'src>) -> Self {
         let mut parser = Self {
             prev_token: None,
             cur_token: None,
@@ -83,20 +83,18 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
             ]),
         };
 
-        parser.bump()?;
-        parser.bump()?;
+        parser.bump();
+        parser.bump();
 
-        Ok(parser)
+        parser
     }
 
-    fn bump(&mut self) -> Result<(), ()> {
+    fn bump(&mut self) {
         match self.lexer.next().transpose() {
             Ok(mut token) => {
                 std::mem::swap(&mut self.prev_token, &mut self.cur_token);
                 std::mem::swap(&mut self.cur_token, &mut self.peek_token);
                 std::mem::swap(&mut token, &mut self.peek_token);
-
-                Ok(())
             }
             Err(span) => {
                 self.diag.error(Diagnostic::UnknownChar, span);
@@ -118,7 +116,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         match &self.cur_token {
             Some(cur) if &cur.kind == kind => {
                 let span = cur.span.clone();
-                self.bump()?;
+                self.bump();
 
                 Ok(span)
             }
@@ -135,13 +133,12 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
 
         while let Some(token) = &self.cur_token {
             let item = match token.kind {
-                TokenKind::Struct => Some(self.parse_struct_item()?),
-                TokenKind::Let => Some(self.parse_global_item()?),
-                TokenKind::Fn => Some(self.parse_function_item(true)?),
+                TokenKind::Struct => self.parse_struct_item().ok(),
+                TokenKind::Let => self.parse_global_item().ok(),
+                TokenKind::Fn => self.parse_function_item(true).ok(),
                 _ => {
                     self.expected(&[&TokenKind::Struct, &TokenKind::Let, &TokenKind::Fn]);
-
-                    self.bump()?;
+                    self.bump();
 
                     None
                 }
@@ -266,7 +263,9 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         let open_brace = self.expect(&TokenKind::LBrace)?;
 
         while !self.cur_token_is(&TokenKind::RBrace) {
-            stmts.push(self.parse_stmt()?);
+            if let Ok(stmt) = self.parse_stmt() {
+                stmts.push(stmt);
+            }
         }
 
         let close_brace = self.expect(&TokenKind::RBrace)?;
@@ -295,7 +294,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         let ty = match self.cur_token.as_ref().map(|token| &token.kind) {
             Some(TokenKind::Asterisk) => Ty::Ptr(Box::new(self.parse_type()?)),
             Some(TokenKind::LBracket) => {
-                self.bump()?;
+                self.bump();
 
                 match &self.cur_token {
                     Some(Token {
@@ -307,7 +306,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
                             Err(_) => {
                                 let span = span.clone();
 
-                                self.bump()?;
+                                self.bump();
                                 self.diag.error(Diagnostic::IntegerLitralTooLong, span);
 
                                 return Err(());
@@ -322,7 +321,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
                     }
                     _ => {
                         self.expected(&[&TokenKind::Integer(Default::default())]);
-                        self.bump()?;
+                        self.bump();
 
                         return Err(())?;
                     }
@@ -342,7 +341,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
             Some(TokenKind::Void) => Ty::Void,
             Some(TokenKind::Ident(ident)) => Ty::Ident(ident.clone()),
             Some(TokenKind::Fn) => {
-                self.bump()?;
+                self.bump();
                 self.expect(&TokenKind::LParen)?;
 
                 let mut params = Vec::new();
@@ -371,13 +370,13 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
                         })
                         .clone(),
                 );
-                self.bump()?;
+                self.bump();
 
                 return Err(());
             }
         };
 
-        self.bump()?;
+        self.bump();
 
         Ok(ty)
     }
@@ -615,13 +614,13 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
                 ..
             }) => {
                 let lit = literal.clone();
-                self.bump()?;
+                self.bump();
 
                 Ok(Expr::Lit(ExprLit::String(lit)))
             }
             _ => {
                 self.expected(&[&TokenKind::String(Default::default())]);
-                self.bump()?;
+                self.bump();
 
                 Err(())
             }
@@ -641,18 +640,18 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
     fn parse_bool_expr(&mut self) -> Result<Expr, ()> {
         match self.cur_token.as_ref().map(|token| &token.kind) {
             Some(TokenKind::True) => {
-                self.bump()?;
+                self.bump();
 
                 Ok(Expr::Lit(ExprLit::Bool(true)))
             }
             Some(TokenKind::False) => {
-                self.bump()?;
+                self.bump();
 
                 Ok(Expr::Lit(ExprLit::Bool(false)))
             }
             _ => {
                 self.expected(&[&TokenKind::True, &TokenKind::False]);
-                self.bump()?;
+                self.bump();
 
                 Err(())
             }
@@ -687,7 +686,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
 
                 ()
             })?);
-            self.bump()?;
+            self.bump();
         }
 
         self.expect(&TokenKind::RParen)?;
@@ -697,7 +696,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
 
     fn parse_bin_expr(&mut self, left: Expr) -> Result<Expr, ()> {
         let token = self.cur_token_unchecked();
-        self.bump()?;
+        self.bump();
 
         // NOTE: assignment expression is right-associative
         let precedence = if let &TokenKind::Assign = &token.kind {
@@ -776,7 +775,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
 
     fn parse_unary_expr(&mut self) -> Result<Expr, ()> {
         let token = self.cur_token_unchecked();
-        self.bump()?;
+        self.bump();
         let op = UnOp::try_from(&token.kind).map_err(|_| {
             self.diag
                 .error(Diagnostic::ExpressionInfix(token.kind), token.span);
@@ -841,19 +840,19 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
                     Err(_) => {
                         let span = span.clone();
 
-                        self.bump()?;
+                        self.bump();
                         self.diag.error(Diagnostic::IntegerLitralTooLong, span);
 
                         return Err(());
                     }
                 };
-                self.bump()?;
+                self.bump();
 
                 Ok(lit)
             }
             _ => {
                 self.expected(&[&TokenKind::Integer(Default::default())]);
-                self.bump()?;
+                self.bump();
 
                 Err(())
             }
@@ -866,13 +865,13 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
                 kind: TokenKind::Ident(ident),
                 span,
             }) => {
-                self.bump()?;
+                self.bump();
 
                 Ok((ident, span))
             }
             _ => {
                 self.expected(&[&TokenKind::Ident(Default::default())]);
-                self.bump()?;
+                self.bump();
 
                 Err(())
             }
@@ -1050,7 +1049,7 @@ mod test {
 
         for (input, expected) in tests {
             let mut diagnostics = Diagnostics::new(input);
-            let mut parser = Parser::new(Lexer::new(input), &mut diagnostics).unwrap();
+            let mut parser = Parser::new(Lexer::new(input), &mut diagnostics);
             let ast = parser.parse_block_stmt().unwrap();
 
             assert_eq!(
