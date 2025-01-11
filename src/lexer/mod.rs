@@ -11,6 +11,11 @@ pub mod span {
     }
 
     impl Span {
+        pub const DUMMY: Self = Self {
+            start: usize::MAX,
+            end: usize::MAX,
+        };
+
         pub fn to(self, end: Span) -> Span {
             Span {
                 start: std::cmp::min(self.start, end.start),

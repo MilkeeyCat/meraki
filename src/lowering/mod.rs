@@ -198,8 +198,8 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
     }
 
     fn lower_expr(&mut self, expr: ast::Expr) -> ir::Expr<'ir> {
-        match expr {
-            ast::Expr::Binary {
+        match expr.kind {
+            ast::ExprKind::Binary {
                 op,
                 ref left,
                 ref right,
@@ -248,7 +248,7 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                     ),
                 }
             }
-            ast::Expr::Ident(ref ident) => {
+            ast::ExprKind::Ident(ref ident) => {
                 let id = self.scopes.get_symbol(ident).unwrap();
                 let ty = self.expr_ty(&expr);
 
@@ -257,7 +257,7 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                     kind: ir::ExprKind::Ident(id),
                 }
             }
-            ast::Expr::Lit(ref lit) => {
+            ast::ExprKind::Lit(ref lit) => {
                 let ty = self.expr_ty(&expr);
                 let kind = match lit {
                     ast::ExprLit::Int(lit) => ir::ExprKind::Lit(ir::ExprLit::Int(*lit)),
@@ -271,7 +271,7 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
 
                 ir::Expr { ty, kind }
             }
-            ast::Expr::Unary { op, expr } => {
+            ast::ExprKind::Unary { op, expr } => {
                 let ir_expr = self.lower_expr(*expr);
                 let ty = match op {
                     UnOp::Address => self.ctx.allocator.alloc(ir::Ty::Ptr(ir_expr.ty)),
@@ -298,7 +298,7 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                     kind: ir::ExprKind::Unary(op, self.ctx.allocator.alloc(ir_expr)),
                 }
             }
-            ast::Expr::Struct { name, fields } => {
+            ast::ExprKind::Struct { name, fields } => {
                 let ty = self.lower_ty(ast::Ty::Ident(name));
                 let ir::Ty::Struct(id) = ty else {
                     unreachable!();
@@ -340,7 +340,7 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                     kind: ir::ExprKind::Struct(fields),
                 }
             }
-            ast::Expr::Field { expr, field } => {
+            ast::ExprKind::Field { expr, field } => {
                 let expr = self.lower_expr(*expr);
                 let ty = self.lower_ty(ast::Ty::Infer);
                 let field = self.ctx.allocator.alloc_str(field.as_str());
@@ -354,7 +354,7 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                     kind: ir::ExprKind::Field(self.ctx.allocator.alloc(expr), field),
                 }
             }
-            ast::Expr::Cast { expr, ty } => {
+            ast::ExprKind::Cast { expr, ty } => {
                 let expr = self.lower_expr(*expr);
                 let ty = self.lower_ty(ty);
 
@@ -431,12 +431,12 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
     }
 
     fn expr_ty(&mut self, expr: &ast::Expr) -> &'ir ir::Ty<'ir> {
-        match expr {
-            ast::Expr::Binary { .. } => self
+        match &expr.kind {
+            ast::ExprKind::Binary { .. } => self
                 .ctx
                 .allocator
                 .alloc(ir::Ty::Infer(self.ctx.ty_problem.new_infer_ty_var())),
-            ast::Expr::Lit(lit) => match lit {
+            ast::ExprKind::Lit(lit) => match lit {
                 ast::ExprLit::Bool(_) => &ir::Ty::Bool,
                 ast::ExprLit::String(_) => &ir::Ty::Ptr(&ir::Ty::UInt(UintTy::U8)),
                 _ => self
@@ -444,7 +444,7 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                     .allocator
                     .alloc(ir::Ty::Infer(self.ctx.ty_problem.new_infer_ty_var())),
             },
-            ast::Expr::Ident(ident) => {
+            ast::ExprKind::Ident(ident) => {
                 let id = self.scopes.get_symbol(ident).unwrap();
 
                 match self.nodes_map.get(&id).unwrap() {

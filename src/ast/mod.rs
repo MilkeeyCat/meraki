@@ -57,7 +57,13 @@ pub enum Stmt {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Expr {
+pub struct Expr {
+    pub kind: ExprKind,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ExprKind {
     Binary {
         op: BinOp,
         left: Box<Expr>,
