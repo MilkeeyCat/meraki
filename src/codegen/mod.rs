@@ -1,13 +1,6 @@
 pub mod amd64_asm;
 
-use crate::{ast::OpParseError, Context};
-use thiserror::Error;
-
-#[derive(Error, Debug)]
-pub enum CodeGenError {
-    #[error(transparent)]
-    OpParse(#[from] OpParseError),
-}
+use crate::Context;
 
 pub trait Codegen<'a, 'ir> {
     fn new(ctx: &'a Context<'ir>) -> Self
