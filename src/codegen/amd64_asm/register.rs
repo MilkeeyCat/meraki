@@ -1,6 +1,6 @@
 use super::{
-    operand::{Base, Destination, EffectiveAddress, Offset, Source},
     OperandSize,
+    operand::{Base, Destination, EffectiveAddress, Offset, Source},
 };
 use derive_more::derive::Display;
 

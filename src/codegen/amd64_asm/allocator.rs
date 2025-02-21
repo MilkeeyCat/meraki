@@ -1,4 +1,4 @@
-use super::{register::Register, OperandSize};
+use super::{OperandSize, register::Register};
 use thiserror::Error;
 
 #[derive(Error, Debug)]

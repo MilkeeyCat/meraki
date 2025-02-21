@@ -1,4 +1,4 @@
-use super::{register::Register, OperandSize};
+use super::{OperandSize, register::Register};
 use crate::ir::ExprLit;
 use derive_more::derive::Display;
 use thiserror::Error;

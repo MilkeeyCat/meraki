@@ -6,7 +6,7 @@ pub use precedence::Precedence;
 use crate::{
     ast::{BinOp, Block, Expr, ExprKind, ExprLit, IntTy, Item, Stmt, Ty, UintTy, UnOp, Variable},
     diagnostics::{Diagnostic, Diagnostics},
-    lexer::{span::Span, Token, TokenKind},
+    lexer::{Token, TokenKind, span::Span},
 };
 use std::collections::HashMap;
 

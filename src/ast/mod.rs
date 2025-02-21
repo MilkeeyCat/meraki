@@ -1,4 +1,4 @@
-use crate::lexer::{span::Span, Token, TokenKind};
+use crate::lexer::{Token, TokenKind, span::Span};
 use derive_more::derive::Display;
 use thiserror::Error;
 

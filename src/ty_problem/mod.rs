@@ -1,7 +1,7 @@
 use crate::{
+    Context,
     ast::IntTy,
     ir::{Ir, Item, Node, OrderedMap, Ty},
-    Context,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq)]

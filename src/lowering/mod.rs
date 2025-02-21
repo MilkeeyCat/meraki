@@ -1,9 +1,10 @@
 mod scopes;
 
 use crate::{
+    Context,
     ast::{self, BinOp, IntTy, Item, UintTy, UnOp, Variable},
     ir::{self, Id, OrderedMap, Stmt},
-    ty_problem, Context,
+    ty_problem,
 };
 use scopes::Scopes;
 use std::collections::HashMap;
@@ -389,7 +390,7 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                         ast::UintTy::U64 => self.ctx.allocator.alloc(ir::Ty::UInt(UintTy::U64)),
                         ast::UintTy::Usize => self.ctx.allocator.alloc(ir::Ty::UInt(UintTy::Usize)),
                     },
-                    ast::Ty::Ptr(ref ty) => self
+                    ast::Ty::Ptr(ty) => self
                         .ctx
                         .allocator
                         .alloc(ir::Ty::Ptr(self.lower_ty(*ty.clone()))),
@@ -399,7 +400,7 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                             ty: self.lower_ty(*ty.clone()),
                         }))
                     }
-                    ast::Ty::Fn(ref params, ref ret_ty) => {
+                    ast::Ty::Fn(params, ret_ty) => {
                         let mut alloced_params = Vec::new();
 
                         for ty in params {

@@ -1,6 +1,6 @@
 use crate::lexer;
 use libloading::Symbol;
-use std::ffi::{c_char, CStr, CString};
+use std::ffi::{CStr, CString, c_char};
 
 #[repr(C)]
 #[derive(Debug)]

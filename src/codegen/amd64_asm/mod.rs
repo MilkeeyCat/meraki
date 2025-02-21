@@ -4,9 +4,9 @@ mod register;
 
 use super::Codegen;
 use crate::{
+    Context,
     ast::{BinOp, BitwiseOp, CmpOp, IntTy, OpParseError, UintTy, UnOp},
     ir::{Block, Expr, ExprKind, ExprLit, Id, Item, ItemFn, Node, Stmt, Ty, Variable},
-    Context,
 };
 use allocator::RegisterAllocator;
 use derive_more::derive::Display;

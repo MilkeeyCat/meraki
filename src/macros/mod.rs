@@ -1,3 +1,3 @@
 mod macros;
 
-pub use macros::{symbol_to_macros, Macro, MacroFn, Slice, Token};
+pub use macros::{Macro, MacroFn, Slice, Token, symbol_to_macros};

@@ -1,9 +1,10 @@
 use crate::{
-    codegen::{amd64_asm::Amd64Asm, Codegen},
+    Context,
+    codegen::{Codegen, amd64_asm::Amd64Asm},
     diagnostics::Diagnostics,
     lexer::Lexer,
     lowering::Lowering,
-    parser, Context,
+    parser,
 };
 use bumpalo::Bump;
 use clap::Parser;

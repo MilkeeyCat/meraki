@@ -1,4 +1,4 @@
-use meraki::compile::{compile, CompileArgs};
+use meraki::compile::{CompileArgs, compile};
 use std::{path::Path, process::Output};
 
 pub fn run(path: &Path) -> std::io::Result<Output> {

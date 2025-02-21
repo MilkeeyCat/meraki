@@ -1,4 +1,4 @@
-use crate::lexer::{span::Span, TokenKind};
+use crate::lexer::{TokenKind, span::Span};
 use derive_more::derive::Display;
 
 #[derive(Debug, Display)]

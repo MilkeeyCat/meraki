@@ -1,5 +1,5 @@
 use clap::Parser;
-use meraki::compile::{compile, CompileArgs};
+use meraki::compile::{CompileArgs, compile};
 
 fn main() {
     let options = CompileArgs::parse();

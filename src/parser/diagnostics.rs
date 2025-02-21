@@ -1,7 +1,7 @@
 use super::Parser;
 use crate::{
     diagnostics::Diagnostic,
-    lexer::{span::Span, Token, TokenKind},
+    lexer::{Token, TokenKind, span::Span},
 };
 
 impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
