@@ -1,13 +1,15 @@
 mod diagnostics;
 mod precedence;
 
-pub use precedence::Precedence;
-
 use crate::{
-    ast::{BinOp, Block, Expr, ExprKind, ExprLit, IntTy, Item, Stmt, Ty, UintTy, UnOp, Variable},
+    ast::{
+        BinOp, Block, Expr, ExprKind, ExprLit, IntTy, Item, ItemKind, Stmt, StmtKind, Ty, UintTy,
+        UnOp, Variable,
+    },
     diagnostics::{Diagnostic, Diagnostics},
     lexer::{Token, TokenKind, span::Span},
 };
+pub use precedence::Precedence;
 use std::collections::HashMap;
 
 type PrefixFn<'a, 'src, T> = fn(&mut Parser<'a, 'src, T>) -> Result<Expr, ()>;
@@ -211,7 +213,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
 
         self.expect(&TokenKind::RBrace)?;
 
-        Ok(Item::Struct { name, fields })
+        Ok(Item::new(ItemKind::Struct { name, fields }))
     }
 
     fn parse_stmt(&mut self) -> Result<Stmt, ()> {
@@ -225,17 +227,17 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
                 self.expect(&TokenKind::Continue)?;
                 self.expect(&TokenKind::Semicolon)?;
 
-                Ok(Stmt::Continue)
+                Ok(Stmt::new(StmtKind::Continue))
             }
             Some(TokenKind::Break) => {
                 self.expect(&TokenKind::Break)?;
                 self.expect(&TokenKind::Semicolon)?;
 
-                Ok(Stmt::Break)
+                Ok(Stmt::new(StmtKind::Break))
             }
-            Some(TokenKind::Fn) => Ok(Stmt::Item(self.parse_function_item(false)?)),
+            Some(TokenKind::Fn) => Ok(Stmt::new(StmtKind::Item(self.parse_function_item(false)?))),
             Some(_) => {
-                let expr = Stmt::Expr(self.parse_expr(Precedence::default())?);
+                let expr = Stmt::new(StmtKind::Expr(self.parse_expr(Precedence::default())?));
 
                 self.expect(&TokenKind::Semicolon)?;
 
@@ -392,7 +394,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
 
         self.expect(&TokenKind::Semicolon)?;
 
-        Ok(Stmt::Return(expr))
+        Ok(Stmt::new(StmtKind::Return(expr)))
     }
 
     fn parse_if_stmt(&mut self) -> Result<Stmt, ()> {
@@ -408,11 +410,11 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
             None
         };
 
-        Ok(Stmt::If {
+        Ok(Stmt::new(StmtKind::If {
             condition,
             consequence,
             alternative,
-        })
+        }))
     }
 
     fn parse_while_stmt(&mut self) -> Result<Stmt, ()> {
@@ -421,7 +423,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         let condition = self.parse_expr(Precedence::default())?;
         let block = self.parse_block_stmt()?;
 
-        Ok(Stmt::While { condition, block })
+        Ok(Stmt::new(StmtKind::While { condition, block }))
     }
 
     fn parse_for_stmt(&mut self) -> Result<Stmt, ()> {
@@ -433,7 +435,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
             let stmt = if self.cur_token_is(&TokenKind::Let) {
                 self.parse_local_stmt()?
             } else {
-                Stmt::Expr(self.parse_expr(Precedence::default())?)
+                Stmt::new(StmtKind::Expr(self.parse_expr(Precedence::default())?))
             };
 
             Some(stmt)
@@ -454,12 +456,12 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
 
         let block = self.parse_block_stmt()?;
 
-        Ok(Stmt::For {
+        Ok(Stmt::new(StmtKind::For {
             initializer: initializer.map(|initializer| Box::new(initializer)),
             condition,
             increment,
             block,
-        })
+        }))
     }
 
     fn parse_local_stmt(&mut self) -> Result<Stmt, ()> {
@@ -484,11 +486,11 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
 
         self.expect(&TokenKind::Semicolon)?;
 
-        Ok(Stmt::Local(Variable {
+        Ok(Stmt::new(StmtKind::Local(Variable {
             name,
             ty,
             value: expr,
-        }))
+        })))
     }
 
     fn parse_global_item(&mut self) -> Result<Item, ()> {
@@ -509,11 +511,11 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
 
         self.expect(&TokenKind::Semicolon)?;
 
-        Ok(Item::Global(Variable {
+        Ok(Item::new(ItemKind::Global(Variable {
             name,
             ty,
             value: expr,
-        }))
+        })))
     }
 
     fn parse_function_item(&mut self, func_definition: bool) -> Result<Item, ()> {
@@ -543,12 +545,12 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
             self.expect(&TokenKind::Semicolon)?;
         }
 
-        Ok(Item::Fn {
+        Ok(Item::new(ItemKind::Fn {
             ret_ty: ty,
             name,
             params,
             block,
-        })
+        }))
     }
 
     fn parse_params(&mut self, delim: TokenKind, end: TokenKind) -> Result<Vec<(String, Ty)>, ()> {
@@ -584,10 +586,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
             _ => {
                 let (ident, span) = self.parse_ident()?;
 
-                Ok(Expr {
-                    kind: ExprKind::Ident(ident),
-                    span,
-                })
+                Ok(Expr::new(ExprKind::Ident(ident), span))
             }
         }
     }
@@ -611,10 +610,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
 
         let end = self.expect(&TokenKind::RBrace)?;
 
-        Ok(Expr {
-            kind: ExprKind::Struct { name, fields },
-            span: start.to(end),
-        })
+        Ok(Expr::new(ExprKind::Struct { name, fields }, start.to(end)))
     }
 
     fn parse_string_lit_expr(&mut self) -> Result<Expr, ()> {
@@ -625,10 +621,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
             }) => {
                 self.bump();
 
-                Ok(Expr {
-                    kind: ExprKind::Lit(ExprLit::String(literal)),
-                    span,
-                })
+                Ok(Expr::new(ExprKind::Lit(ExprLit::String(literal)), span))
             }
             _ => {
                 self.expected(&[&TokenKind::String(Default::default())]);
@@ -642,19 +635,13 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
     fn parse_int_lit_expr(&mut self) -> Result<Expr, ()> {
         let (lit, span) = self.parse_int_lit()?;
 
-        Ok(Expr {
-            kind: ExprKind::Lit(ExprLit::UInt(lit)),
-            span,
-        })
+        Ok(Expr::new(ExprKind::Lit(ExprLit::UInt(lit)), span))
     }
 
     fn parse_null_expr(&mut self) -> Result<Expr, ()> {
         let span = self.expect(&TokenKind::Null)?;
 
-        Ok(Expr {
-            kind: ExprKind::Lit(ExprLit::Null),
-            span,
-        })
+        Ok(Expr::new(ExprKind::Lit(ExprLit::Null), span))
     }
 
     fn parse_bool_expr(&mut self) -> Result<Expr, ()> {
@@ -662,18 +649,12 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
             Some(TokenKind::True) => {
                 let span = self.expect(&TokenKind::True)?;
 
-                Ok(Expr {
-                    kind: ExprKind::Lit(ExprLit::Bool(true)),
-                    span,
-                })
+                Ok(Expr::new(ExprKind::Lit(ExprLit::Bool(true)), span))
             }
             Some(TokenKind::False) => {
                 let span = self.expect(&TokenKind::True)?;
 
-                Ok(Expr {
-                    kind: ExprKind::Lit(ExprLit::Bool(false)),
-                    span,
-                })
+                Ok(Expr::new(ExprKind::Lit(ExprLit::Bool(false)), span))
             }
             _ => {
                 self.expected(&[&TokenKind::True, &TokenKind::False]);
@@ -688,14 +669,15 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         self.expect(&TokenKind::LParen)?;
 
         let (args, end) = self.parse_expr_list()?;
+        let span = left.span.clone();
 
-        Ok(Expr {
-            span: left.span.clone().to(end),
-            kind: ExprKind::FunctionCall {
+        Ok(Expr::new(
+            ExprKind::FunctionCall {
                 expr: Box::new(left),
                 arguments: args,
             },
-        })
+            span.clone().to(end),
+        ))
     }
 
     fn parse_macro_call_expr(&mut self, left: Expr) -> Result<Expr, ()> {
@@ -703,6 +685,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
             Expr {
                 kind: ExprKind::Ident(expr),
                 span,
+                ..
             } => (expr, span),
             _ => panic!("Macro name can only be a string"),
         };
@@ -723,10 +706,10 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
 
         let end = self.expect(&TokenKind::RParen)?;
 
-        Ok(Expr {
-            kind: ExprKind::MacroCall { name, tokens },
-            span: start.to(end),
-        })
+        Ok(Expr::new(
+            ExprKind::MacroCall { name, tokens },
+            start.to(end),
+        ))
     }
 
     fn parse_bin_expr(&mut self, left: Expr) -> Result<Expr, ()> {
@@ -740,19 +723,20 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
             Precedence::from(&kind)
         };
         let right = self.parse_expr(precedence)?;
+        let right_span = right.span.clone();
         let op = BinOp::try_from(&kind).map_err(|_| {
             self.diag
                 .error(Diagnostic::ExpressionInfix(kind), span.clone());
         })?;
 
-        Ok(Expr {
-            span: span.to(right.span.clone()),
-            kind: ExprKind::Binary {
+        Ok(Expr::new(
+            ExprKind::Binary {
                 op,
                 left: Box::new(left),
                 right: Box::new(right),
             },
-        })
+            span.to(right_span.clone()),
+        ))
     }
 
     fn parse_pointer_access_expr(&mut self, left: Expr) -> Result<Expr, ()> {
@@ -760,22 +744,23 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
 
         let (field, end) = self.parse_ident()?;
 
-        Ok(Expr {
-            kind: ExprKind::Field {
-                expr: Box::new(Expr {
-                    kind: ExprKind::Unary {
+        Ok(Expr::new(
+            ExprKind::Field {
+                expr: Box::new(Expr::new(
+                    ExprKind::Unary {
                         op: UnOp::Deref,
                         expr: Box::new(left),
                     },
-                    span: Span::DUMMY,
-                }),
+                    Span::DUMMY,
+                )),
                 field,
             },
-            span: start.to(end),
-        })
+            start.to(end),
+        ))
     }
 
     fn parse_struct_access_expr(&mut self, expr: Expr) -> Result<Expr, ()> {
+        let span = expr.span.clone();
         self.expect(&TokenKind::Period)?;
 
         if self.peek_token_is(&TokenKind::LParen) {
@@ -784,24 +769,24 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
             self.expect(&TokenKind::LParen)?;
             let (arguments, end) = self.parse_expr_list()?;
 
-            Ok(Expr {
-                span: expr.span.clone().to(end),
-                kind: ExprKind::StructMethod {
+            Ok(Expr::new(
+                ExprKind::StructMethod {
                     expr: Box::new(expr),
                     method,
                     arguments,
                 },
-            })
+                span.clone().to(end),
+            ))
         } else {
             let (ident, end) = self.parse_ident()?;
 
-            Ok(Expr {
-                span: expr.span.clone().to(end),
-                kind: ExprKind::Field {
+            Ok(Expr::new(
+                ExprKind::Field {
                     expr: Box::new(expr),
                     field: ident,
                 },
-            })
+                span.clone().to(end),
+            ))
         }
     }
 
@@ -809,27 +794,28 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         self.expect(&TokenKind::LBracket)?;
         let index = self.parse_expr(Precedence::Access)?;
         let end = self.expect(&TokenKind::RBracket)?;
+        let span = expr.span.clone();
 
-        Ok(Expr {
-            span: expr.span.clone().to(end),
-            kind: ExprKind::ArrayAccess {
+        Ok(Expr::new(
+            ExprKind::ArrayAccess {
                 expr: Box::new(expr),
                 index: Box::new(index),
             },
-        })
+            span.clone().to(end),
+        ))
     }
 
     fn parse_cast_expr(&mut self, expr: Expr) -> Result<Expr, ()> {
         let dummy = self.expect(&TokenKind::As)?;
 
-        Ok(Expr {
-            kind: ExprKind::Cast {
+        Ok(Expr::new(
+            ExprKind::Cast {
                 expr: Box::new(expr),
                 //FIXME: types should also return span
                 ty: self.parse_type()?,
             },
-            span: dummy,
-        })
+            dummy,
+        ))
     }
 
     fn parse_unary_expr(&mut self) -> Result<Expr, ()> {
@@ -840,14 +826,15 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
                 .error(Diagnostic::ExpressionInfix(kind), span.clone());
         })?;
         let expr = self.parse_expr(Precedence::Prefix)?;
+        let expr_span = expr.span.clone();
 
-        Ok(Expr {
-            span: span.to(expr.span.clone()),
-            kind: ExprKind::Unary {
+        Ok(Expr::new(
+            ExprKind::Unary {
                 op,
                 expr: Box::new(expr),
             },
-        })
+            span.to(expr_span.clone()),
+        ))
     }
 
     fn parse_expr_list(&mut self) -> Result<(Vec<Expr>, Span), ()> {
@@ -887,10 +874,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
 
         let end = self.expect(&TokenKind::RBracket)?;
 
-        Ok(Expr {
-            kind: ExprKind::Array(items),
-            span: start.to(end),
-        })
+        Ok(Expr::new(ExprKind::Array(items), start.to(end)))
     }
 
     fn parse_int_lit(&mut self) -> Result<(u64, Span), ()> {

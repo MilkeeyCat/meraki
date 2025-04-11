@@ -2,7 +2,7 @@ mod scopes;
 
 use crate::{
     Context,
-    ast::{self, BinOp, IntTy, Item, UintTy, UnOp, Variable},
+    ast::{self, BinOp, IntTy, Item, ItemKind, UintTy, UnOp, Variable},
     ir::{self, Id, OrderedMap, Stmt},
     ty_problem,
 };
@@ -47,8 +47,8 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
     }
 
     pub fn lower_item(&mut self, item: Item) -> Option<ir::Item<'ir>> {
-        match item {
-            Item::Struct { name, fields } => {
+        match item.kind {
+            ItemKind::Struct { name, fields } => {
                 let ty = self.ctx.allocator.alloc(ir::Ty::Struct(self.id));
                 self.types.insert(ast::Ty::Ident(name), ty);
 
@@ -67,7 +67,7 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
 
                 None
             }
-            Item::Fn {
+            ItemKind::Fn {
                 ret_ty,
                 name,
                 params,
@@ -122,7 +122,7 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
 
                 None
             }
-            Item::Global(var) => {
+            ItemKind::Global(var) => {
                 let name = var.name.clone();
                 let ir_var = self.lower_var_decl(var);
                 let node = ir::Node::Item(ir::Item::Global(ir_var));
@@ -165,8 +165,8 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
     }
 
     fn lower_stmt(&mut self, stmt: ast::Stmt) -> ir::Stmt<'ir> {
-        match stmt {
-            ast::Stmt::Local(var) => {
+        match stmt.kind {
+            ast::StmtKind::Local(var) => {
                 let name = var.name.clone();
                 let ir_var = self.lower_var_decl(var);
                 let node = ir::Node::Stmt(ir::Stmt::Local(ir_var));
@@ -179,9 +179,9 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
 
                 ir::Stmt::Local(ir_var)
             }
-            ast::Stmt::Item(item) => ir::Stmt::Item(self.lower_item(item).unwrap()),
-            ast::Stmt::Expr(expr) => ir::Stmt::Expr(self.lower_expr(expr)),
-            ast::Stmt::Return(expr) => {
+            ast::StmtKind::Item(item) => ir::Stmt::Item(self.lower_item(item).unwrap()),
+            ast::StmtKind::Expr(expr) => ir::Stmt::Expr(self.lower_expr(expr)),
+            ast::StmtKind::Return(expr) => {
                 let expr = expr.map(|expr| {
                     let expr = self.lower_expr(expr);
                     let expr_ty_var_id = self.tys_ty_var_id(expr.ty);

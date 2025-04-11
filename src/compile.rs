@@ -1,5 +1,6 @@
 use crate::{
     Context,
+    ast::node_id::assign_node_ids,
     codegen::{Codegen, amd64_asm::Amd64Asm},
     diagnostics::Diagnostics,
     lexer::Lexer,
@@ -55,7 +56,7 @@ pub fn compile(args: CompileArgs) -> Result<(), Box<dyn std::error::Error>> {
 
     let mut diagnostics = Diagnostics::new(&source_code);
     let lexer = Lexer::new(&source_code);
-    let ast = match parser::Parser::new(lexer, &mut diagnostics).parse() {
+    let mut ast = match parser::Parser::new(lexer, &mut diagnostics).parse() {
         Ok(ast) => ast,
         Err(_) => report_diag_and_exit(&diagnostics),
     };
@@ -67,6 +68,7 @@ pub fn compile(args: CompileArgs) -> Result<(), Box<dyn std::error::Error>> {
     let allocator = Bump::new();
     let mut ctx = Context::new(&allocator);
 
+    assign_node_ids(&mut ast);
     Lowering::new(&mut ctx).lower(ast);
     ctx.ty_problem.solve(&ctx.ir);
 
