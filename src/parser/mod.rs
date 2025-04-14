@@ -314,12 +314,14 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
                                 return Err(());
                             }
                         };
+
+                        self.bump();
                         self.expect(&TokenKind::RBracket)?;
 
-                        Ty::Array {
+                        return Ok(Ty::Array {
                             ty: Box::new(self.parse_type()?),
                             len: length,
-                        }
+                        });
                     }
                     _ => {
                         self.expected(&[&TokenKind::Integer(Default::default())]);
