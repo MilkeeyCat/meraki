@@ -210,22 +210,22 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
 
     fn lower_ty(&mut self, ty: ast::Ty) -> &'ir ir::Ty<'ir> {
         match ty {
-            ast::Ty::Null => self.ctx.allocator.alloc(ir::Ty::Null),
-            ast::Ty::Void => self.ctx.allocator.alloc(ir::Ty::Void),
-            ast::Ty::Bool => self.ctx.allocator.alloc(ir::Ty::Bool),
+            ast::Ty::Null => self.ctx.types.null,
+            ast::Ty::Void => self.ctx.types.void,
+            ast::Ty::Bool => self.ctx.types.bool,
             ast::Ty::Int(ty) => match ty {
-                ast::IntTy::I8 => self.ctx.allocator.alloc(ir::Ty::Int(IntTy::I8)),
-                ast::IntTy::I16 => self.ctx.allocator.alloc(ir::Ty::Int(IntTy::I16)),
-                ast::IntTy::I32 => self.ctx.allocator.alloc(ir::Ty::Int(IntTy::I32)),
-                ast::IntTy::I64 => self.ctx.allocator.alloc(ir::Ty::Int(IntTy::I64)),
-                ast::IntTy::Isize => self.ctx.allocator.alloc(ir::Ty::Int(IntTy::Isize)),
+                ast::IntTy::I8 => self.ctx.types.i8,
+                ast::IntTy::I16 => self.ctx.types.i16,
+                ast::IntTy::I32 => self.ctx.types.i32,
+                ast::IntTy::I64 => self.ctx.types.i64,
+                ast::IntTy::Isize => self.ctx.types.isize,
             },
             ast::Ty::UInt(ty) => match ty {
-                ast::UintTy::U8 => self.ctx.allocator.alloc(ir::Ty::UInt(UintTy::U8)),
-                ast::UintTy::U16 => self.ctx.allocator.alloc(ir::Ty::UInt(UintTy::U16)),
-                ast::UintTy::U32 => self.ctx.allocator.alloc(ir::Ty::UInt(UintTy::U32)),
-                ast::UintTy::U64 => self.ctx.allocator.alloc(ir::Ty::UInt(UintTy::U64)),
-                ast::UintTy::Usize => self.ctx.allocator.alloc(ir::Ty::UInt(UintTy::Usize)),
+                ast::UintTy::U8 => self.ctx.types.u8,
+                ast::UintTy::U16 => self.ctx.types.u16,
+                ast::UintTy::U32 => self.ctx.types.u32,
+                ast::UintTy::U64 => self.ctx.types.u64,
+                ast::UintTy::Usize => self.ctx.types.usize,
             },
             ast::Ty::Ptr(ty) => self
                 .ctx
