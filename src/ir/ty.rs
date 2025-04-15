@@ -1,7 +1,7 @@
-use crate::{
-    ast::{IntTy, UintTy},
-    ty_problem,
-};
+use crate::ast::{IntTy, UintTy};
+
+pub type AdtIdx = usize;
+pub type FieldIdx = usize;
 
 #[derive(Debug, PartialEq)]
 pub struct TyArray<'ir> {
@@ -43,6 +43,32 @@ impl UintTy {
     }
 }
 
+#[derive(Debug)]
+pub struct AdtDef<'ir> {
+    pub name: String,
+    pub kind: AdtKind,
+    pub variants: Vec<VariantDef<'ir>>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum AdtKind {
+    Struct,
+    Enum,
+    Union,
+}
+
+#[derive(Debug)]
+pub struct VariantDef<'ir> {
+    pub name: String,
+    pub fields: Vec<FieldDef<'ir>>,
+}
+
+#[derive(Debug)]
+pub struct FieldDef<'ir> {
+    pub name: String,
+    pub ty: &'ir Ty<'ir>,
+}
+
 #[derive(Debug, PartialEq)]
 pub enum Ty<'ir> {
     Void,
@@ -53,8 +79,8 @@ pub enum Ty<'ir> {
     Ptr(&'ir Ty<'ir>),
     Array(TyArray<'ir>),
     Fn(&'ir [&'ir Ty<'ir>], &'ir Ty<'ir>),
-    Struct(super::Id),
-    Infer(ty_problem::Id),
+    Adt(AdtIdx),
+    Infer(usize), // FIXME
 }
 
 impl Ty<'_> {
@@ -68,32 +94,8 @@ impl Ty<'_> {
             Self::Int(int) => int.size().unwrap_or_else(|| f(self)),
             Self::UInt(uint) => uint.size().unwrap_or_else(|| f(self)),
             Self::Array(ty_arr) => ty_arr.ty.size(f) * ty_arr.len,
-            Self::Ptr(_) | Self::Fn(_, _) | Self::Struct(_) => f(self),
+            Self::Ptr(_) | Self::Fn(_, _) | Self::Adt(_) => f(self),
             Self::Infer(_) => unreachable!(),
-        }
-    }
-}
-
-impl std::fmt::Display for Ty<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Int(int) => int.fmt(f),
-            Self::UInt(uint) => uint.fmt(f),
-            Self::Bool => write!(f, "bool"),
-            Self::Void => write!(f, "void"),
-            Self::Ptr(type_) => write!(f, "*{type_}"),
-            Self::Array(array) => write!(f, "{}[{}]", array.ty, array.len),
-            Self::Fn(params, return_type) => write!(
-                f,
-                "fn ({}) -> {return_type}",
-                params
-                    .iter()
-                    .map(|type_| type_.to_string())
-                    .collect::<String>()
-            ),
-            Self::Null => write!(f, "NULL"),
-            Self::Struct(_) => write!(f, "owo"),
-            Self::Infer(id) => write!(f, "infer({id:?})"),
         }
     }
 }

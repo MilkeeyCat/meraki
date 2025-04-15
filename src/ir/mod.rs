@@ -1,124 +1,129 @@
-mod ordered_map;
-mod types;
+pub mod ty;
 
 use crate::ast::{BinOp, UnOp};
-use bumpalo::Bump;
+use ty::FieldIdx;
+pub use ty::{Ty, TyArray};
 
-pub use ordered_map::OrderedMap;
-pub use types::{Ty, TyArray};
+pub type FunctionIdx = usize;
+pub type LocalIdx = usize;
+pub type GlobalIdx = usize;
+pub type BasicBlockIdx = usize;
 
-#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, Hash)]
-pub struct Id {
-    pub global_id: usize,
-    pub node_id: usize,
+#[derive(Debug)]
+pub struct Module<'ir> {
+    pub functions: Vec<Function<'ir>>,
+    pub globals: Vec<&'ir Ty<'ir>>,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub struct Expr<'ir> {
-    pub ty: &'ir Ty<'ir>,
-    pub kind: ExprKind<'ir>,
+impl<'ir> Module<'ir> {
+    pub fn new() -> Self {
+        Self {
+            functions: Vec::new(),
+            globals: Vec::new(),
+        }
+    }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub enum ExprKind<'ir> {
-    // It's a reference only because it doesn't work without indirection
-    Binary(BinOp, &'ir Expr<'ir>, &'ir Expr<'ir>),
-    Unary(UnOp, &'ir Expr<'ir>),
-    Ident(Id),
-    Lit(ExprLit<'ir>),
-    Struct(&'ir [(&'ir str, Expr<'ir>)]),
-    Field(&'ir Expr<'ir>, &'ir str),
-    Cast(&'ir Expr<'ir>, &'ir Ty<'ir>),
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum ExprLit<'ir> {
-    Int(i64),
-    UInt(u64),
-    Bool(bool),
-    String(&'ir str),
-    Null,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub enum Stmt<'ir> {
-    Local(&'ir Variable<'ir>),
-    Item(Item<'ir>),
-    Expr(Expr<'ir>),
-    Return(Option<Expr<'ir>>),
-}
-
-#[derive(Debug, PartialEq)]
-pub struct Block<'ir>(pub &'ir [Stmt<'ir>]);
-
-#[derive(Debug, PartialEq)]
-pub struct Signature<'ir> {
-    pub params: &'ir [&'ir Ty<'ir>],
+#[derive(Debug)]
+pub struct Function<'ir> {
+    pub name: String,
+    pub basic_blocks: Vec<BasicBlock>,
+    pub locals: Vec<&'ir Ty<'ir>>,
+    pub arg_count: usize,
     pub ret_ty: &'ir Ty<'ir>,
 }
 
-#[derive(Debug, PartialEq)]
-pub struct ItemFn<'ir> {
-    pub id: Id,
-    pub name: &'ir str,
-    pub signature: Signature<'ir>,
-    pub block: Block<'ir>,
-}
+impl<'ir> Function<'ir> {
+    pub fn create_block(&mut self) -> BasicBlockIdx {
+        let idx = self.basic_blocks.len();
+        self.basic_blocks.push(BasicBlock::new());
 
-#[derive(Debug, PartialEq)]
-pub struct Variable<'ir> {
-    pub id: Id,
-    pub name: &'ir str,
-    pub ty: &'ir Ty<'ir>,
-    pub initializer: Option<Expr<'ir>>,
-}
+        idx
+    }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub enum Item<'ir> {
-    Fn(&'ir ItemFn<'ir>),
-    Global(&'ir Variable<'ir>),
-    Struct(&'ir [(&'ir str, &'ir Ty<'ir>)]),
-}
+    pub fn get_block_mut(&mut self, idx: BasicBlockIdx) -> &mut BasicBlock {
+        &mut self.basic_blocks[idx]
+    }
 
-#[derive(Debug, Clone, Copy)]
-pub enum Node<'ir> {
-    Item(Item<'ir>),
-    Stmt(Stmt<'ir>),
-    Expr(Expr<'ir>),
-}
+    pub fn create_local(&mut self, ty: &'ir Ty<'ir>) -> LocalIdx {
+        let idx = self.locals.len();
+        self.locals.push(ty);
 
-#[derive(Debug, Clone, Copy)]
-pub struct Global<'ir>(pub &'ir [Node<'ir>]);
+        idx
+    }
+}
 
 #[derive(Debug)]
-pub struct Ir<'ir> {
-    allocator: &'ir Bump,
-    globals: &'ir [Global<'ir>],
+pub struct BasicBlock {
+    pub statements: Vec<Statement>,
+    pub terminator: Terminator,
 }
 
-impl<'ir> Ir<'ir> {
-    pub fn new(allocator: &'ir Bump) -> Self {
-        Ir {
-            allocator,
-            globals: &[],
+impl BasicBlock {
+    pub fn new() -> Self {
+        Self {
+            statements: Vec::new(),
+            terminator: Terminator::Return,
         }
     }
+}
 
-    pub fn set_globals(&mut self, globals: &'ir [Global<'ir>]) {
-        self.globals = globals;
-    }
+#[derive(Debug)]
+pub enum Statement {
+    Assign(Place, Rvalue),
+}
 
-    pub fn iter_items(&self) -> impl Iterator<Item = Item<'ir>> {
-        self.globals
-            .iter()
-            .map(|global| match global.0[0] {
-                Node::Item(item) => item,
-                _ => unreachable!(),
-            })
-            .into_iter()
-    }
+#[derive(Debug)]
+pub enum Terminator {
+    Goto(BasicBlockIdx),
+    Return,
+}
 
-    pub fn get_node(&self, id: Id) -> &'ir Node<'ir> {
-        &self.globals[id.global_id].0[id.node_id]
-    }
+#[derive(Debug)]
+pub enum Const {
+    I8(i8),
+    U8(u8),
+}
+
+#[derive(Debug)]
+pub enum Operand {
+    Place(Place),
+    Const(ValueTree),
+}
+
+#[derive(Debug)]
+pub enum ValueTree {
+    Leaf(Const),
+    Branch(Vec<Self>),
+}
+
+#[derive(Debug)]
+pub enum Storage {
+    Local(LocalIdx),
+    Global(GlobalIdx),
+}
+
+#[derive(Debug)]
+pub struct Place {
+    pub storage: Storage,
+    pub projection: Vec<Projection>,
+}
+
+#[derive(Debug)]
+pub enum Projection {
+    Deref,
+    Field(FieldIdx),
+    Index(Operand),
+}
+
+#[derive(Debug)]
+pub enum Rvalue {
+    Use(Operand),
+    BinaryOp(BinOp, Operand, Operand),
+    UnaryOp(UnOp, Operand),
+    Call {
+        fn_idx: FunctionIdx,
+        args: Vec<Rvalue>,
+        destination: Place,
+    },
 }

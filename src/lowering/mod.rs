@@ -1,71 +1,123 @@
 mod scopes;
 
-use crate::{
-    Context,
-    ast::{self, BinOp, IntTy, Item, ItemKind, UintTy, UnOp, Variable},
-    ir::{self, Id, OrderedMap, Stmt},
-    ty_problem,
+use crate::Context;
+use crate::ast::{self, IntTy, Item, ItemKind, UintTy};
+use crate::ir::{
+    self, BasicBlockIdx, FunctionIdx, Module,
+    ty::{AdtKind, FieldDef, VariantDef},
 };
-use scopes::Scopes;
+use scopes::ScopeTable;
 use std::collections::HashMap;
+
+impl From<scopes::VariableKind> for ir::Storage {
+    fn from(value: scopes::VariableKind) -> Self {
+        match value {
+            scopes::VariableKind::Global(idx) => Self::Global(idx),
+            scopes::VariableKind::Local(idx) => Self::Local(idx),
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct Lowering<'a, 'ir> {
     ctx: &'a mut Context<'ir>,
-    types: HashMap<ast::Ty, &'ir ir::Ty<'ir>>,
-    scopes: Scopes<'ir>,
-    nodes: Vec<ir::Node<'ir>>,
-    globals: Vec<ir::Global<'ir>>,
-    nodes_map: HashMap<Id, ir::Node<'ir>>,
-    id: Id,
-    ret_ty: Option<&'ir ir::Ty<'ir>>,
+    scopes: ScopeTable<'ir>,
+    module: Module<'ir>,
+    fn_idx: FunctionIdx,
+    block_idx: BasicBlockIdx,
+    globals: HashMap<ir::GlobalIdx, &'ir ir::Ty<'ir>>,
 }
 
 impl<'a, 'ir> Lowering<'a, 'ir> {
     pub fn new(ctx: &'a mut Context<'ir>) -> Self {
         Self {
             ctx,
-            types: HashMap::new(),
-            scopes: Scopes::new(),
-            nodes: Vec::new(),
-            globals: Vec::new(),
-            nodes_map: HashMap::new(),
-            id: Id::default(),
-            ret_ty: None,
+            scopes: ScopeTable::new(),
+            module: Module::new(),
+            fn_idx: 0,
+            block_idx: 0,
+            globals: HashMap::new(),
         }
     }
 
-    pub fn lower(mut self, ast: Vec<Item>) {
-        self.scopes.enter();
+    pub fn lower(mut self, ast: Vec<Item>) -> Module<'ir> {
+        self.prefill_scopes_table(&ast);
 
-        ast.into_iter().for_each(|item| {
+        for item in ast {
             self.lower_item(item);
-        });
+        }
 
-        let globals = self.ctx.allocator.alloc_slice_copy(&self.globals);
-        self.ctx.ir.set_globals(globals);
+        let globals = std::mem::take(&mut self.globals);
+        let mut globals = globals.into_iter().collect::<Vec<_>>();
+        globals.sort_by_key(|(idx, _)| *idx);
+
+        for (expected, real) in (0..globals.len()).zip(globals.iter().map(|(idx, _)| idx)) {
+            assert_eq!(expected, *real, "global indices are not consecutive");
+        }
+
+        self.module.globals = globals.into_iter().map(|(_, ty)| ty).collect();
+        self.module
     }
 
-    pub fn lower_item(&mut self, item: Item) -> Option<ir::Item<'ir>> {
+    fn prefill_scopes_table(&mut self, ast: &[Item]) {
+        let mut precalc_global_idx: ir::GlobalIdx = 0;
+
+        for item in ast {
+            match &item.kind {
+                ItemKind::Global(variable) => {
+                    let ty = self.lower_ty(variable.ty.clone());
+
+                    self.scopes
+                        .insert_global(variable.name.clone(), ty, precalc_global_idx);
+                    precalc_global_idx += 1;
+                }
+                ItemKind::Fn {
+                    ret_ty,
+                    name,
+                    params,
+                    ..
+                } => {
+                    let params = params
+                        .iter()
+                        .map(|(_, ty)| self.lower_ty(ty.clone()))
+                        .collect();
+                    let ret_ty = self.lower_ty(ret_ty.clone());
+
+                    self.scopes.insert_fn(name.clone(), params, ret_ty);
+                }
+                ItemKind::Struct { name, fields } => {
+                    let variant = VariantDef {
+                        name: name.clone(),
+                        fields: fields
+                            .iter()
+                            .map(|(name, ty)| FieldDef {
+                                name: name.clone(),
+                                ty: self.lower_ty(ty.clone()),
+                            })
+                            .collect(),
+                    };
+                    let adt_idx = self.ctx.mk_adt(name.clone(), AdtKind::Struct);
+                    let adt = self.ctx.get_adt_mut(adt_idx);
+
+                    adt.variants.push(variant);
+                    self.scopes
+                        .insert_ty(name.clone(), self.ctx.allocator.alloc(ir::Ty::Adt(adt_idx)))
+                }
+            }
+        }
+    }
+
+    fn lower_item(&mut self, item: Item) {
         match item.kind {
-            ItemKind::Struct { name, fields } => {
-                let ty = self.ctx.allocator.alloc(ir::Ty::Struct(self.id));
-                self.types.insert(ast::Ty::Ident(name), ty);
+            ItemKind::Global(variable) => {
+                let variable = self.scopes.get_variable(&variable.name).unwrap();
+                let idx = if let scopes::VariableKind::Global(idx) = variable.kind {
+                    idx
+                } else {
+                    unreachable!();
+                };
 
-                let fields = fields
-                    .into_iter()
-                    .map(|(field, ty)| (&*self.ctx.allocator.alloc_str(&field), self.lower_ty(ty)))
-                    .collect::<Vec<_>>();
-                let fields = self.ctx.allocator.alloc_slice_copy(&fields);
-
-                self.globals.push(ir::Global(
-                    self.ctx
-                        .allocator
-                        .alloc([ir::Node::Item(ir::Item::Struct(fields))]),
-                ));
-                self.id.global_id += 1;
-
-                None
+                self.globals.insert(idx, variable.ty);
             }
             ItemKind::Fn {
                 ret_ty,
@@ -73,397 +125,144 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                 params,
                 block,
             } => {
-                self.id.node_id = 1;
-                self.scopes.enter();
+                self.scopes.enter_new(item.id);
+
+                let arg_count = params.len();
+                let locals: Vec<_> = params
+                    .iter()
+                    .map(|(_, ty)| self.lower_ty(ty.clone()))
+                    .collect();
+
+                for (i, (ty, (name, _))) in locals.iter().zip(params.iter()).enumerate() {
+                    self.scopes.insert_local(name.clone(), *ty, i);
+                }
 
                 let ret_ty = self.lower_ty(ret_ty);
-                self.ret_ty = Some(ret_ty);
+                let idx = self.module.functions.len();
 
-                let stmts = if let Some(block) = block {
-                    block
-                        .stmts
-                        .into_iter()
-                        .map(|stmt| self.lower_stmt(stmt))
-                        .collect()
-                } else {
-                    Vec::new()
-                };
-
-                self.ret_ty = None;
-                self.scopes.leave();
-
-                let params: Vec<&'ir ir::Ty<'ir>> = params
-                    .into_iter()
-                    .map(|(_, ty)| self.lower_ty(ty))
-                    .collect();
-                let signature = ir::Signature {
-                    params: self.ctx.allocator.alloc_slice_copy(&params),
+                self.module.functions.push(ir::Function {
+                    name,
+                    basic_blocks: Vec::new(),
+                    locals,
+                    arg_count,
                     ret_ty,
-                };
-
-                self.nodes.insert(
-                    0,
-                    ir::Node::Item(ir::Item::Fn(self.ctx.allocator.alloc(ir::ItemFn {
-                        id: Id {
-                            global_id: self.id.global_id,
-                            node_id: 0,
-                        },
-                        name: self.ctx.allocator.alloc_str(&name),
-                        signature,
-                        block: ir::Block(self.ctx.allocator.alloc_slice_copy(&stmts)),
-                    }))),
-                );
-
-                self.globals
-                    .push(ir::Global(self.ctx.allocator.alloc_slice_copy(&self.nodes)));
-                self.nodes.clear();
-                self.id.global_id += 1;
-                self.id.node_id = 0;
-
-                None
-            }
-            ItemKind::Global(var) => {
-                let name = var.name.clone();
-                let ir_var = self.lower_var_decl(var);
-                let node = ir::Node::Item(ir::Item::Global(ir_var));
-
-                self.scopes.insert_symbol(name, self.id);
-                self.nodes_map.insert(self.id, node);
-
-                self.globals
-                    .push(ir::Global(self.ctx.allocator.alloc_slice_copy(&[node])));
-                self.id.global_id += 1;
-
-                Some(ir::Item::Global(ir_var))
-            }
-        }
-    }
-
-    fn lower_var_decl(&mut self, variable: Variable) -> &'ir ir::Variable<'ir> {
-        let ty = self.lower_ty(variable.ty);
-
-        let initializer = if let Some(expr) = variable.value {
-            let expr = self.lower_expr(expr);
-            let let_ty_var_id = self.tys_ty_var_id(ty);
-            let expr_ty_var_id = self.tys_ty_var_id(expr.ty);
-
-            self.ctx.ty_problem.eq(let_ty_var_id, expr_ty_var_id);
-
-            Some(expr)
-        } else {
-            None
-        };
-
-        let ir_variable = self.ctx.allocator.alloc(ir::Variable {
-            id: self.id,
-            name: self.ctx.allocator.alloc_str(&variable.name),
-            ty,
-            initializer,
-        });
-
-        ir_variable
-    }
-
-    fn lower_stmt(&mut self, stmt: ast::Stmt) -> ir::Stmt<'ir> {
-        match stmt.kind {
-            ast::StmtKind::Local(var) => {
-                let name = var.name.clone();
-                let ir_var = self.lower_var_decl(var);
-                let node = ir::Node::Stmt(ir::Stmt::Local(ir_var));
-
-                self.scopes.insert_symbol(name, self.id);
-                self.nodes_map.insert(self.id, node);
-
-                self.nodes.push(node);
-                self.id.node_id += 1;
-
-                ir::Stmt::Local(ir_var)
-            }
-            ast::StmtKind::Item(item) => ir::Stmt::Item(self.lower_item(item).unwrap()),
-            ast::StmtKind::Expr(expr) => ir::Stmt::Expr(self.lower_expr(expr)),
-            ast::StmtKind::Return(expr) => {
-                let expr = expr.map(|expr| {
-                    let expr = self.lower_expr(expr);
-                    let expr_ty_var_id = self.tys_ty_var_id(expr.ty);
-                    let ret_ty_var = self.tys_ty_var_id(self.ret_ty.unwrap());
-
-                    self.ctx.ty_problem.eq(expr_ty_var_id, ret_ty_var);
-
-                    expr
                 });
+                self.fn_idx = idx;
+                self.block_idx = self.get_fn().create_block();
 
-                ir::Stmt::Return(expr)
+                if let Some(block) = block {
+                    self.lower_block(block);
+                }
+
+                self.scopes.leave();
+            }
+            ItemKind::Struct { .. } => (),
+        }
+    }
+
+    fn lower_block(&mut self, block: ast::Block) {
+        for stmt in block.stmts {
+            self.lower_stmt(stmt);
+        }
+    }
+
+    fn lower_stmt(&mut self, stmt: ast::Stmt) {
+        match stmt.kind {
+            ast::StmtKind::Local(variable) => {
+                let ty = self.lower_ty(variable.ty);
+                let idx = self.get_fn().create_local(ty);
+
+                self.scopes.insert_local(variable.name, ty, idx);
+
+                if let Some(expr) = variable.value {
+                    let rvalue = self.lower_expr(expr);
+                    self.get_basic_block()
+                        .statements
+                        .push(ir::Statement::Assign(
+                            ir::Place {
+                                storage: ir::Storage::Local(idx),
+                                projection: Vec::new(),
+                            },
+                            rvalue,
+                        ));
+                }
             }
             _ => todo!(),
         }
     }
 
-    fn lower_expr(&mut self, expr: ast::Expr) -> ir::Expr<'ir> {
+    fn lower_expr(&mut self, expr: ast::Expr) -> ir::Rvalue {
         match expr.kind {
-            ast::ExprKind::Binary {
-                op,
-                ref left,
-                ref right,
-            } => {
-                // TODO: remove clones
-                let lhs = self.lower_expr(*left.clone());
-                let rhs = self.lower_expr(*right.clone());
+            ast::ExprKind::Ident(ident) => {
+                let variable = self
+                    .scopes
+                    .get_variable(&ident)
+                    .expect(&format!("ident `{ident}` not found"));
 
-                let lhs_ty_var_id = self.tys_ty_var_id(lhs.ty);
-                let rhs_ty_var_id = self.tys_ty_var_id(rhs.ty);
-
-                let ty = match op {
-                    BinOp::Add => {
-                        let ty = self.expr_ty(&expr);
-                        let expr = self.tys_ty_var_id(ty);
-
-                        self.ctx
-                            .ty_problem
-                            .bin_add(expr, lhs_ty_var_id, rhs_ty_var_id);
-
-                        ty
-                    }
-                    BinOp::Sub => {
-                        let ty = self.expr_ty(&expr);
-                        let expr = self.tys_ty_var_id(ty);
-
-                        self.ctx
-                            .ty_problem
-                            .bin_sub(expr, lhs_ty_var_id, rhs_ty_var_id);
-
-                        ty
-                    }
-                    _ => {
-                        self.ctx.ty_problem.eq(lhs_ty_var_id, rhs_ty_var_id);
-
-                        lhs.ty
-                    }
-                };
-
-                ir::Expr {
-                    ty,
-                    kind: ir::ExprKind::Binary(
-                        op,
-                        self.ctx.allocator.alloc(lhs),
-                        self.ctx.allocator.alloc(rhs),
-                    ),
-                }
+                ir::Rvalue::Use(ir::Operand::Place(ir::Place {
+                    storage: variable.kind.clone().into(),
+                    projection: Vec::new(),
+                }))
             }
-            ast::ExprKind::Ident(ref ident) => {
-                let id = self.scopes.get_symbol(ident).unwrap();
-                let ty = self.expr_ty(&expr);
-
-                ir::Expr {
-                    ty,
-                    kind: ir::ExprKind::Ident(id),
-                }
-            }
-            ast::ExprKind::Lit(ref lit) => {
-                let ty = self.expr_ty(&expr);
-                let kind = match lit {
-                    ast::ExprLit::Int(lit) => ir::ExprKind::Lit(ir::ExprLit::Int(*lit)),
-                    ast::ExprLit::UInt(lit) => ir::ExprKind::Lit(ir::ExprLit::UInt(*lit)),
-                    ast::ExprLit::Bool(lit) => ir::ExprKind::Lit(ir::ExprLit::Bool(*lit)),
-                    ast::ExprLit::String(lit) => {
-                        ir::ExprKind::Lit(ir::ExprLit::String(self.ctx.allocator.alloc_str(&lit)))
-                    }
-                    ast::ExprLit::Null => ir::ExprKind::Lit(ir::ExprLit::Null),
-                };
-
-                ir::Expr { ty, kind }
-            }
-            ast::ExprKind::Unary { op, expr } => {
-                let ir_expr = self.lower_expr(*expr);
-                let ty = match op {
-                    UnOp::Address => self.ctx.allocator.alloc(ir::Ty::Ptr(ir_expr.ty)),
-                    UnOp::Deref => {
-                        let deref = &*self
-                            .ctx
-                            .allocator
-                            .alloc(ir::Ty::Infer(self.ctx.ty_problem.new_infer_ty_var()));
-                        let reference = self
-                            .ctx
-                            .ty_problem
-                            .new_typed_ty_var(self.ctx.allocator.alloc(ir::Ty::Ptr(deref)));
-                        let expr_ty_var_id = self.tys_ty_var_id(ir_expr.ty);
-
-                        self.ctx.ty_problem.eq(expr_ty_var_id, reference);
-
-                        deref
-                    }
-                    _ => ir_expr.ty,
-                };
-
-                ir::Expr {
-                    ty,
-                    kind: ir::ExprKind::Unary(op, self.ctx.allocator.alloc(ir_expr)),
-                }
-            }
-            ast::ExprKind::Struct { name, fields } => {
-                let ty = self.lower_ty(ast::Ty::Ident(name));
-                let ir::Ty::Struct(id) = ty else {
-                    unreachable!();
-                };
-                let fields = &*self.ctx.allocator.alloc_slice_copy(
-                    fields
-                        .into_iter()
-                        .map(|(field, expr)| {
-                            let expr = self.lower_expr(expr);
-
-                            match self.globals[id.global_id].0[id.node_id] {
-                                ir::Node::Item(item) => match item {
-                                    ir::Item::Struct(fields) => {
-                                        match OrderedMap::get(&fields, &field.as_str()) {
-                                            Some(ty) => {
-                                                let expr_ty_var_id = self.tys_ty_var_id(expr.ty);
-                                                let field_ty_var_id = self.tys_ty_var_id(*ty);
-
-                                                self.ctx
-                                                    .ty_problem
-                                                    .eq(expr_ty_var_id, field_ty_var_id);
-                                            }
-                                            None => unreachable!(),
-                                        }
-                                    }
-                                    _ => unreachable!(),
-                                },
-                                _ => unreachable!(),
-                            };
-
-                            (&*self.ctx.allocator.alloc_str(&field), expr)
-                        })
-                        .collect::<Vec<_>>()
-                        .as_slice(),
-                );
-
-                ir::Expr {
-                    ty,
-                    kind: ir::ExprKind::Struct(fields),
-                }
-            }
-            ast::ExprKind::Field { expr, field } => {
-                let expr = self.lower_expr(*expr);
-                let ty = self.lower_ty(ast::Ty::Infer);
-                let field = self.ctx.allocator.alloc_str(field.as_str());
-                let expr_ty_var = self.tys_ty_var_id(expr.ty);
-                let field_ty_var = self.tys_ty_var_id(ty);
-
-                self.ctx.ty_problem.field(expr_ty_var, field_ty_var, field);
-
-                ir::Expr {
-                    ty,
-                    kind: ir::ExprKind::Field(self.ctx.allocator.alloc(expr), field),
-                }
-            }
-            ast::ExprKind::Cast { expr, ty } => {
-                let expr = self.lower_expr(*expr);
-                let ty = self.lower_ty(ty);
-
-                ir::Expr {
-                    ty,
-                    kind: ir::ExprKind::Cast(self.ctx.allocator.alloc(expr), ty),
-                }
-            }
-            _ => todo!(),
+            _ => unreachable!(),
         }
     }
 
     fn lower_ty(&mut self, ty: ast::Ty) -> &'ir ir::Ty<'ir> {
-        match self.types.get(&ty) {
-            Some(ty) => *ty,
-            None => {
-                let ir_ty = match &ty {
-                    ast::Ty::Null => self.ctx.allocator.alloc(ir::Ty::Null),
-                    ast::Ty::Void => self.ctx.allocator.alloc(ir::Ty::Void),
-                    ast::Ty::Bool => self.ctx.allocator.alloc(ir::Ty::Bool),
-                    ast::Ty::Int(ty) => match ty {
-                        ast::IntTy::I8 => self.ctx.allocator.alloc(ir::Ty::Int(IntTy::I8)),
-                        ast::IntTy::I16 => self.ctx.allocator.alloc(ir::Ty::Int(IntTy::I16)),
-                        ast::IntTy::I32 => self.ctx.allocator.alloc(ir::Ty::Int(IntTy::I32)),
-                        ast::IntTy::I64 => self.ctx.allocator.alloc(ir::Ty::Int(IntTy::I64)),
-                        ast::IntTy::Isize => self.ctx.allocator.alloc(ir::Ty::Int(IntTy::Isize)),
-                    },
-                    ast::Ty::UInt(ty) => match ty {
-                        ast::UintTy::U8 => self.ctx.allocator.alloc(ir::Ty::UInt(UintTy::U8)),
-                        ast::UintTy::U16 => self.ctx.allocator.alloc(ir::Ty::UInt(UintTy::U16)),
-                        ast::UintTy::U32 => self.ctx.allocator.alloc(ir::Ty::UInt(UintTy::U32)),
-                        ast::UintTy::U64 => self.ctx.allocator.alloc(ir::Ty::UInt(UintTy::U64)),
-                        ast::UintTy::Usize => self.ctx.allocator.alloc(ir::Ty::UInt(UintTy::Usize)),
-                    },
-                    ast::Ty::Ptr(ty) => self
-                        .ctx
-                        .allocator
-                        .alloc(ir::Ty::Ptr(self.lower_ty(*ty.clone()))),
-                    ast::Ty::Array { ty, len } => {
-                        self.ctx.allocator.alloc(ir::Ty::Array(ir::TyArray {
-                            len: *len,
-                            ty: self.lower_ty(*ty.clone()),
-                        }))
-                    }
-                    ast::Ty::Fn(params, ret_ty) => {
-                        let mut alloced_params = Vec::new();
-
-                        for ty in params {
-                            alloced_params.push(self.lower_ty(ty.clone()));
-                        }
-
-                        let params = &*self.ctx.allocator.alloc_slice_copy(&alloced_params);
-
-                        self.ctx
-                            .allocator
-                            .alloc(ir::Ty::Fn(params, self.lower_ty(*ret_ty.clone())))
-                    }
-                    ast::Ty::Ident(ident) => {
-                        return self.scopes.get_type(ident).unwrap();
-                    }
-                    ast::Ty::Infer => self
-                        .ctx
-                        .allocator
-                        .alloc(ir::Ty::Infer(self.ctx.ty_problem.new_infer_ty_var())),
-                };
-
-                if ty != ast::Ty::Infer {
-                    self.types.insert(ty, ir_ty);
-                }
-
-                ir_ty
-            }
-        }
-    }
-
-    fn expr_ty(&mut self, expr: &ast::Expr) -> &'ir ir::Ty<'ir> {
-        match &expr.kind {
-            ast::ExprKind::Binary { .. } => self
+        match ty {
+            ast::Ty::Null => self.ctx.allocator.alloc(ir::Ty::Null),
+            ast::Ty::Void => self.ctx.allocator.alloc(ir::Ty::Void),
+            ast::Ty::Bool => self.ctx.allocator.alloc(ir::Ty::Bool),
+            ast::Ty::Int(ty) => match ty {
+                ast::IntTy::I8 => self.ctx.allocator.alloc(ir::Ty::Int(IntTy::I8)),
+                ast::IntTy::I16 => self.ctx.allocator.alloc(ir::Ty::Int(IntTy::I16)),
+                ast::IntTy::I32 => self.ctx.allocator.alloc(ir::Ty::Int(IntTy::I32)),
+                ast::IntTy::I64 => self.ctx.allocator.alloc(ir::Ty::Int(IntTy::I64)),
+                ast::IntTy::Isize => self.ctx.allocator.alloc(ir::Ty::Int(IntTy::Isize)),
+            },
+            ast::Ty::UInt(ty) => match ty {
+                ast::UintTy::U8 => self.ctx.allocator.alloc(ir::Ty::UInt(UintTy::U8)),
+                ast::UintTy::U16 => self.ctx.allocator.alloc(ir::Ty::UInt(UintTy::U16)),
+                ast::UintTy::U32 => self.ctx.allocator.alloc(ir::Ty::UInt(UintTy::U32)),
+                ast::UintTy::U64 => self.ctx.allocator.alloc(ir::Ty::UInt(UintTy::U64)),
+                ast::UintTy::Usize => self.ctx.allocator.alloc(ir::Ty::UInt(UintTy::Usize)),
+            },
+            ast::Ty::Ptr(ty) => self
                 .ctx
                 .allocator
-                .alloc(ir::Ty::Infer(self.ctx.ty_problem.new_infer_ty_var())),
-            ast::ExprKind::Lit(lit) => match lit {
-                ast::ExprLit::Bool(_) => &ir::Ty::Bool,
-                ast::ExprLit::String(_) => &ir::Ty::Ptr(&ir::Ty::UInt(UintTy::U8)),
-                _ => self
-                    .ctx
-                    .allocator
-                    .alloc(ir::Ty::Infer(self.ctx.ty_problem.new_infer_ty_var())),
-            },
-            ast::ExprKind::Ident(ident) => {
-                let id = self.scopes.get_symbol(ident).unwrap();
+                .alloc(ir::Ty::Ptr(self.lower_ty(*ty.clone()))),
+            ast::Ty::Array { ty, len } => self.ctx.allocator.alloc(ir::Ty::Array(ir::TyArray {
+                len,
+                ty: self.lower_ty(*ty.clone()),
+            })),
+            ast::Ty::Fn(params, ret_ty) => {
+                let mut alloced_params = Vec::new();
 
-                match self.nodes_map.get(&id).unwrap() {
-                    ir::Node::Stmt(stmt) => match stmt {
-                        Stmt::Local(stmt) => stmt.ty,
-                        _ => unreachable!(),
-                    },
-                    _ => panic!("nono"),
+                for ty in params {
+                    alloced_params.push(self.lower_ty(ty.clone()));
                 }
+
+                let params = &*self.ctx.allocator.alloc_slice_copy(&alloced_params);
+
+                self.ctx
+                    .allocator
+                    .alloc(ir::Ty::Fn(params, self.lower_ty(*ret_ty.clone())))
             }
-            _ => todo!(),
+            ast::Ty::Ident(ident) => self.scopes.get_variable(&ident).unwrap().ty,
+            ast::Ty::Infer => {
+                todo!();
+                //self.ctx
+                //    .allocator
+                //    .alloc(ir::Ty::Infer(self.ctx.ty_problem.new_infer_ty_var()));
+            }
         }
     }
 
-    fn tys_ty_var_id(&mut self, ty: &'ir ir::Ty<'ir>) -> ty_problem::Id {
-        match ty {
-            ir::Ty::Infer(id) => *id,
-            ty => self.ctx.ty_problem.new_typed_ty_var(ty),
-        }
+    fn get_fn(&mut self) -> &mut ir::Function<'ir> {
+        &mut self.module.functions[self.fn_idx]
+    }
+
+    fn get_basic_block(&mut self) -> &mut ir::BasicBlock {
+        self.module.functions[self.fn_idx].get_block_mut(self.block_idx)
     }
 }
