@@ -22,6 +22,12 @@ impl<'ir> Module<'ir> {
             globals: Vec::new(),
         }
     }
+
+    pub fn add_global_with_idx(&mut self, idx: GlobalIdx, ty: &'ir Ty<'ir>) {
+        assert_eq!(self.globals.len(), idx);
+
+        self.globals.push(ty);
+    }
 }
 
 #[derive(Debug)]

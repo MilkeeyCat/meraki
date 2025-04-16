@@ -1,13 +1,12 @@
 mod scopes;
 
 use crate::Context;
-use crate::ast::{self, IntTy, Item, ItemKind, UintTy};
+use crate::ast::{self, Item, ItemKind};
 use crate::ir::{
     self, BasicBlockIdx, FunctionIdx, Module,
     ty::{AdtKind, FieldDef, VariantDef},
 };
 use scopes::ScopeTable;
-use std::collections::HashMap;
 
 impl From<scopes::VariableKind> for ir::Storage {
     fn from(value: scopes::VariableKind) -> Self {
@@ -25,7 +24,6 @@ pub struct Lowering<'a, 'ir> {
     module: Module<'ir>,
     fn_idx: FunctionIdx,
     block_idx: BasicBlockIdx,
-    globals: HashMap<ir::GlobalIdx, &'ir ir::Ty<'ir>>,
 }
 
 impl<'a, 'ir> Lowering<'a, 'ir> {
@@ -36,7 +34,6 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
             module: Module::new(),
             fn_idx: 0,
             block_idx: 0,
-            globals: HashMap::new(),
         }
     }
 
@@ -47,15 +44,6 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
             self.lower_item(item);
         }
 
-        let globals = std::mem::take(&mut self.globals);
-        let mut globals = globals.into_iter().collect::<Vec<_>>();
-        globals.sort_by_key(|(idx, _)| *idx);
-
-        for (expected, real) in (0..globals.len()).zip(globals.iter().map(|(idx, _)| idx)) {
-            assert_eq!(expected, *real, "global indices are not consecutive");
-        }
-
-        self.module.globals = globals.into_iter().map(|(_, ty)| ty).collect();
         self.module
     }
 
@@ -117,7 +105,8 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                     unreachable!();
                 };
 
-                self.globals.insert(idx, variable.ty);
+                self.module.add_global_with_idx(idx, variable.ty);
+                //TODO: lower global's value
             }
             ItemKind::Fn {
                 ret_ty,
