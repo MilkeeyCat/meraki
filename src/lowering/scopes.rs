@@ -85,8 +85,8 @@ impl<'ir> ScopeTable<'ir> {
         self.stack
             .iter()
             .cloned()
-            .map(|idx| &self.scopes[idx])
-            .find_map(f)
+            .rev()
+            .find_map(|idx| f(&self.scopes[idx]))
     }
 
     pub fn insert_ty(&mut self, name: String, ty: &'ir Ty<'ir>) {
