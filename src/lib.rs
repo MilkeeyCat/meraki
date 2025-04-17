@@ -7,7 +7,7 @@ pub mod lowering;
 //pub mod macros;
 pub mod parser;
 pub mod passes;
-//pub mod ty_problem;
+pub mod ty_problem;
 
 use ast::{IntTy, UintTy};
 use bumpalo::Bump;
@@ -79,6 +79,10 @@ impl<'ir> Context<'ir> {
         });
 
         idx
+    }
+
+    pub fn get_adt(&self, idx: AdtIdx) -> &AdtDef<'ir> {
+        &self.aggregates[idx]
     }
 
     pub fn get_adt_mut(&mut self, idx: AdtIdx) -> &mut AdtDef<'ir> {

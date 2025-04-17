@@ -1,4 +1,5 @@
 mod scopes;
+mod ty_collector;
 
 use crate::Context;
 use crate::ast::node_id::NodeId;
@@ -9,6 +10,7 @@ use crate::ir::{
 };
 use scopes::ScopeTable;
 use std::collections::{HashMap, HashSet};
+use ty_collector::collect_nodes_types;
 
 impl From<scopes::VariableKind> for ir::Storage {
     fn from(value: scopes::VariableKind) -> Self {
@@ -29,6 +31,7 @@ pub struct Lowering<'a, 'ir> {
     functions: HashMap<NodeId, ir::FunctionIdx>,
     types: HashMap<NodeId, ir::AdtIdx>,
     referenced_types: HashMap<ir::AdtIdx, HashSet<ir::AdtIdx>>,
+    nodes_types: HashMap<NodeId, &'ir ir::Ty<'ir>>,
 }
 
 impl<'a, 'ir> Lowering<'a, 'ir> {
@@ -42,6 +45,7 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
             functions: HashMap::new(),
             types: HashMap::new(),
             referenced_types: HashMap::new(),
+            nodes_types: HashMap::new(),
         }
     }
 
@@ -55,13 +59,10 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
         self.module
     }
 
-    fn prefill_scopes_table(&mut self, ast: &[Item]) {
-        let mut precalc_global_idx: ir::GlobalIdx = 0;
+    fn populate_types(&mut self, ast: &[Item]) {
+        let pred = |item: &&Item| matches!(item.kind, ItemKind::Struct { .. });
 
-        for item in ast
-            .iter()
-            .filter(|item| matches!(item.kind, ItemKind::Struct { .. }))
-        {
+        for item in ast.iter().filter(pred) {
             match &item.kind {
                 ItemKind::Struct { name, .. } => {
                     let adt_idx = self.ctx.mk_adt(name.clone(), AdtKind::Struct);
@@ -73,6 +74,52 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                 ItemKind::Global(_) | ItemKind::Fn { .. } => unreachable!(),
             }
         }
+
+        for item in ast.iter().filter(pred) {
+            match &item.kind {
+                ItemKind::Struct { name, fields } => {
+                    let variant = VariantDef {
+                        name: name.clone(),
+                        fields: fields
+                            .into_iter()
+                            .map(|(name, ty)| {
+                                let ty = self.lower_ty(ty.clone());
+
+                                if let ir::Ty::Adt(idx) = ty {
+                                    assert!(
+                                        self.referenced_types
+                                            .get(idx)
+                                            .map(|set| set.contains(&self.types[&item.id]))
+                                            .is_none(),
+                                        "Recursive types, field `{name}`"
+                                    );
+
+                                    self.referenced_types
+                                        .entry(self.types[&item.id])
+                                        .or_default()
+                                        .insert(*idx);
+                                }
+
+                                FieldDef {
+                                    name: name.clone(),
+                                    ty,
+                                }
+                            })
+                            .collect(),
+                    };
+                    let adt_idx = self.types[&item.id];
+                    let adt = self.ctx.get_adt_mut(adt_idx);
+
+                    adt.variants.push(variant);
+                }
+                ItemKind::Global(_) | ItemKind::Fn { .. } => unreachable!(),
+            }
+        }
+    }
+
+    fn prefill_scopes_table(&mut self, ast: &[Item]) {
+        self.populate_types(ast);
+        let mut precalc_global_idx: ir::GlobalIdx = 0;
 
         for item in ast.iter() {
             match &item.kind {
@@ -117,8 +164,12 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                 self.module.add_global_with_idx(idx, variable.ty);
                 //TODO: lower global's value
             }
-            ItemKind::Fn { block, .. } => {
-                self.scopes.enter_new(item.id);
+            ItemKind::Fn { mut block, .. } => {
+                if let Some(block) = &mut block {
+                    self.nodes_types = collect_nodes_types(self, block, item.id);
+                }
+
+                self.scopes.enter(item.id);
                 self.fn_idx = self.functions[&item.id];
                 self.block_idx = self.get_fn().create_block();
 
@@ -128,38 +179,7 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
 
                 self.scopes.leave();
             }
-            ItemKind::Struct { name, fields } => {
-                let variant = VariantDef {
-                    name: name.clone(),
-                    fields: fields
-                        .into_iter()
-                        .map(|(name, ty)| {
-                            let ty = self.lower_ty(ty);
-
-                            if let ir::Ty::Adt(idx) = ty {
-                                assert!(
-                                    self.referenced_types
-                                        .get(idx)
-                                        .map(|set| set.contains(&self.types[&item.id]))
-                                        .is_none(),
-                                    "Recursive types, field `{name}`"
-                                );
-
-                                self.referenced_types
-                                    .entry(self.types[&item.id])
-                                    .or_default()
-                                    .insert(*idx);
-                            }
-
-                            FieldDef { name, ty }
-                        })
-                        .collect(),
-                };
-                let adt_idx = self.types[&item.id];
-                let adt = self.ctx.get_adt_mut(adt_idx);
-
-                adt.variants.push(variant);
-            }
+            ItemKind::Struct { .. } => (),
         }
     }
 
@@ -172,7 +192,7 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
     fn lower_stmt(&mut self, stmt: ast::Stmt) {
         match stmt.kind {
             ast::StmtKind::Local(variable) => {
-                let ty = self.lower_ty(variable.ty);
+                let ty = self.nodes_types[&stmt.id];
                 let idx = self.get_fn().create_local(ty);
 
                 self.scopes.insert_local(variable.name, ty, idx);
@@ -236,16 +256,11 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                 .alloc(ir::Ty::Ptr(self.lower_ty(*ty.clone()))),
             ast::Ty::Array { ty, len } => self.ctx.allocator.alloc(ir::Ty::Array(ir::TyArray {
                 len,
-                ty: self.lower_ty(*ty.clone()),
+                ty: self.lower_ty(*ty),
             })),
             ast::Ty::Fn(params, ret_ty) => {
-                let mut alloced_params = Vec::new();
-
-                for ty in params {
-                    alloced_params.push(self.lower_ty(ty.clone()));
-                }
-
-                let params = &*self.ctx.allocator.alloc_slice_copy(&alloced_params);
+                let params: Vec<_> = params.into_iter().map(|ty| self.lower_ty(ty)).collect();
+                let params = self.ctx.allocator.alloc_slice_copy(&params);
 
                 self.ctx
                     .allocator
@@ -255,12 +270,7 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                 .scopes
                 .get_ty(&ident)
                 .expect(&format!("type `{ident}` not found")),
-            ast::Ty::Infer => {
-                todo!();
-                //self.ctx
-                //    .allocator
-                //    .alloc(ir::Ty::Infer(self.ctx.ty_problem.new_infer_ty_var()));
-            }
+            ast::Ty::Infer => unreachable!(),
         }
     }
 

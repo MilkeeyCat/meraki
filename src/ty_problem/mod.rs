@@ -1,10 +1,7 @@
-use crate::{
-    Context,
-    ast::IntTy,
-    ir::{Ir, Item, Node, OrderedMap, Ty},
-};
+use crate::{Context, ast::IntTy, ir::Ty};
+use std::collections::HashMap;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Id(usize);
 
 #[derive(Debug, Clone)]
@@ -32,7 +29,7 @@ impl<'ir> From<&'ir Ty<'ir>> for TyVar<'ir> {
 }
 
 #[derive(Debug)]
-enum Constraint<'ir> {
+enum Constraint {
     Eq(Id, Id),
     BinAdd {
         expr: Id,
@@ -47,14 +44,14 @@ enum Constraint<'ir> {
     Field {
         expr: Id,
         field_ty: Id,
-        field: &'ir str,
+        field_name: String,
     },
 }
 
 #[derive(Debug)]
 pub struct TyProblem<'ir> {
     ty_vars: Vec<TyVar<'ir>>,
-    constraints: Vec<Constraint<'ir>>,
+    constraints: Vec<Constraint>,
 }
 
 impl<'ir> TyProblem<'ir> {
@@ -103,11 +100,11 @@ impl<'ir> TyProblem<'ir> {
         self.constraints.push(Constraint::BinSub { expr, lhs, rhs });
     }
 
-    pub fn field(&mut self, expr_ty_var: Id, field_ty: Id, field: &'ir str) {
+    pub fn field(&mut self, expr_ty_var: Id, field_ty: Id, field_name: String) {
         self.constraints.push(Constraint::Field {
             expr: expr_ty_var,
             field_ty,
-            field,
+            field_name,
         });
     }
 
@@ -126,7 +123,7 @@ impl<'ir> TyProblem<'ir> {
             (TyVar::Typed(lhs), TyVar::Typed(rhs)) => match (lhs, rhs) {
                 (Ty::Ptr(lhs), Ty::Ptr(rhs)) => self.unify((*lhs).into(), (*rhs).into()),
                 _ => {
-                    assert_eq!(lhs, rhs, "Failed to unify {lhs} and {rhs}");
+                    assert_eq!(lhs, rhs, "Failed to unify {lhs:?} and {rhs:?}");
 
                     false
                 }
@@ -134,7 +131,7 @@ impl<'ir> TyProblem<'ir> {
         }
     }
 
-    fn apply_constraints(&mut self, ir: &Ir<'ir>) -> bool {
+    fn apply_constraints(&mut self, ctx: &Context<'ir>) -> bool {
         let mut constraints = std::mem::take(&mut self.constraints);
         let mut progress = false;
 
@@ -164,7 +161,7 @@ impl<'ir> TyProblem<'ir> {
                             *self.get_ty_var_mut(*expr) = TyVar::Typed(ty);
                             progress |= true;
                         }
-                        _ => unreachable!("Bad type, expected integer or pointer, got {}", ty),
+                        _ => unreachable!("Bad type, expected integer or pointer, got {ty:?}"),
                     };
 
                     false
@@ -208,24 +205,18 @@ impl<'ir> TyProblem<'ir> {
             Constraint::Field {
                 expr,
                 field_ty,
-                field,
-            } => match self.get_ty_var(*expr) {
+                field_name,
+            } => match self.get_ty_var(*expr).clone() {
                 TyVar::Typed(ty) => match ty {
-                    Ty::Struct(id) => match ir.get_node(*id) {
-                        Node::Item(item) => match item {
-                            Item::Struct(fields) => {
-                                let ty = OrderedMap::get(fields, field).unwrap();
+                    Ty::Adt(idx) => {
+                        let variant = &ctx.get_adt(*idx).variants[0];
+                        let field = variant.get_field_by_name(&field_name).unwrap();
 
-                                *self.get_ty_var_mut(*field_ty) = TyVar::Typed(ty);
+                        *self.get_ty_var_mut(*field_ty) = TyVar::Typed(field.ty);
+                        progress |= true;
 
-                                progress |= true;
-
-                                false
-                            }
-                            _ => unreachable!(),
-                        },
-                        _ => unreachable!(),
-                    },
+                        false
+                    }
                     _ => unreachable!(),
                 },
                 TyVar::Infer(_) => true,
@@ -236,22 +227,26 @@ impl<'ir> TyProblem<'ir> {
         progress
     }
 
-    pub fn solve(&mut self, ir: &Ir<'ir>) {
+    pub fn solve(mut self, ctx: &Context<'ir>) -> HashMap<Id, &'ir Ty<'ir>> {
         loop {
-            if !self.apply_constraints(ir) {
+            if !self.apply_constraints(ctx) {
                 break;
             }
         }
 
         assert!(self.constraints.is_empty());
-    }
+        self.ty_vars
+            .into_iter()
+            .enumerate()
+            .map(|(idx, ty_var)| {
+                let ty = if let TyVar::Typed(ty) = ty_var {
+                    ty
+                } else {
+                    unreachable!()
+                };
 
-    pub fn resolve_ty(&self, ctx: &Context<'ir>, ty: &'ir Ty<'ir>) -> &'ir Ty<'ir> {
-        // TODO: check if there already exist such a type instead of allocationg a new one
-        match ty {
-            Ty::Infer(id) => self.resolve_ty(ctx, self.get_ty_var(*id).ty().unwrap()),
-            Ty::Ptr(ty) => ctx.allocator.alloc(Ty::Ptr(self.resolve_ty(ctx, *ty))),
-            ty => ty,
-        }
+                (Id(idx), ty)
+            })
+            .collect()
     }
 }

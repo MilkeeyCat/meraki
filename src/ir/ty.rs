@@ -1,4 +1,7 @@
-use crate::ast::{IntTy, UintTy};
+use crate::{
+    ast::{IntTy, UintTy},
+    ty_problem,
+};
 
 pub type AdtIdx = usize;
 pub type FieldIdx = usize;
@@ -63,6 +66,12 @@ pub struct VariantDef<'ir> {
     pub fields: Vec<FieldDef<'ir>>,
 }
 
+impl<'ir> VariantDef<'ir> {
+    pub fn get_field_by_name(&self, name: &str) -> Option<&FieldDef<'ir>> {
+        self.fields.iter().find(|field| field.name == name)
+    }
+}
+
 #[derive(Debug)]
 pub struct FieldDef<'ir> {
     pub name: String,
@@ -80,7 +89,7 @@ pub enum Ty<'ir> {
     Array(TyArray<'ir>),
     Fn(&'ir [&'ir Ty<'ir>], &'ir Ty<'ir>),
     Adt(AdtIdx),
-    Infer(usize), // FIXME
+    Infer(ty_problem::Id),
 }
 
 impl Ty<'_> {
