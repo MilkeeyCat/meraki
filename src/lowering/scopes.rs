@@ -1,6 +1,6 @@
 use crate::{
     ast::node_id::NodeId,
-    ir::{self, ty::Ty},
+    ir::{self, FunctionIdx, ty::Ty},
 };
 use std::collections::HashMap;
 
@@ -23,10 +23,16 @@ struct FnSig<'ir> {
 }
 
 #[derive(Debug)]
+struct Function<'ir> {
+    idx: FunctionIdx,
+    signature: FnSig<'ir>,
+}
+
+#[derive(Debug)]
 pub struct Scope<'ir> {
     types: HashMap<String, &'ir Ty<'ir>>,
     variables: HashMap<String, Variable<'ir>>,
-    functions: HashMap<String, FnSig<'ir>>,
+    functions: HashMap<String, Function<'ir>>,
 }
 
 impl<'ir> Scope<'ir> {
@@ -117,13 +123,23 @@ impl<'ir> ScopeTable<'ir> {
         self.find(|scope| scope.variables.get(name))
     }
 
-    pub fn insert_fn(&mut self, name: String, params: Vec<&'ir Ty<'ir>>, ret_ty: &'ir Ty<'ir>) {
-        self.scopes[*self.stack.last().unwrap()]
-            .functions
-            .insert(name, FnSig { params, ret_ty });
+    pub fn insert_fn(
+        &mut self,
+        name: String,
+        params: Vec<&'ir Ty<'ir>>,
+        ret_ty: &'ir Ty<'ir>,
+        idx: FunctionIdx,
+    ) {
+        self.scopes[*self.stack.last().unwrap()].functions.insert(
+            name,
+            Function {
+                idx,
+                signature: FnSig { params, ret_ty },
+            },
+        );
     }
 
-    pub fn get_fn(&self, name: &str) -> Option<&FnSig<'ir>> {
+    pub fn get_fn(&self, name: &str) -> Option<&Function<'ir>> {
         self.find(|scope| scope.functions.get(name))
     }
 }

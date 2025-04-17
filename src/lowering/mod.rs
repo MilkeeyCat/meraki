@@ -1,12 +1,14 @@
 mod scopes;
 
 use crate::Context;
+use crate::ast::node_id::NodeId;
 use crate::ast::{self, Item, ItemKind};
 use crate::ir::{
     self, BasicBlockIdx, FunctionIdx, Module,
     ty::{AdtKind, FieldDef, VariantDef},
 };
 use scopes::ScopeTable;
+use std::collections::{HashMap, HashSet};
 
 impl From<scopes::VariableKind> for ir::Storage {
     fn from(value: scopes::VariableKind) -> Self {
@@ -24,6 +26,9 @@ pub struct Lowering<'a, 'ir> {
     module: Module<'ir>,
     fn_idx: FunctionIdx,
     block_idx: BasicBlockIdx,
+    functions: HashMap<NodeId, ir::FunctionIdx>,
+    types: HashMap<NodeId, ir::AdtIdx>,
+    referenced_types: HashMap<ir::AdtIdx, HashSet<ir::AdtIdx>>,
 }
 
 impl<'a, 'ir> Lowering<'a, 'ir> {
@@ -34,6 +39,9 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
             module: Module::new(),
             fn_idx: 0,
             block_idx: 0,
+            functions: HashMap::new(),
+            types: HashMap::new(),
+            referenced_types: HashMap::new(),
         }
     }
 
@@ -50,7 +58,23 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
     fn prefill_scopes_table(&mut self, ast: &[Item]) {
         let mut precalc_global_idx: ir::GlobalIdx = 0;
 
-        for item in ast {
+        for item in ast
+            .iter()
+            .filter(|item| matches!(item.kind, ItemKind::Struct { .. }))
+        {
+            match &item.kind {
+                ItemKind::Struct { name, .. } => {
+                    let adt_idx = self.ctx.mk_adt(name.clone(), AdtKind::Struct);
+
+                    self.scopes
+                        .insert_ty(name.clone(), self.ctx.allocator.alloc(ir::Ty::Adt(adt_idx)));
+                    self.types.insert(item.id, adt_idx);
+                }
+                ItemKind::Global(_) | ItemKind::Fn { .. } => unreachable!(),
+            }
+        }
+
+        for item in ast.iter() {
             match &item.kind {
                 ItemKind::Global(variable) => {
                     let ty = self.lower_ty(variable.ty.clone());
@@ -65,32 +89,17 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                     params,
                     ..
                 } => {
-                    let params = params
+                    let params: Vec<_> = params
                         .iter()
                         .map(|(_, ty)| self.lower_ty(ty.clone()))
                         .collect();
                     let ret_ty = self.lower_ty(ret_ty.clone());
+                    let idx = self.module.create_fn(name.clone(), &params, ret_ty);
 
-                    self.scopes.insert_fn(name.clone(), params, ret_ty);
+                    self.scopes.insert_fn(name.clone(), params, ret_ty, idx);
+                    self.functions.insert(item.id, idx);
                 }
-                ItemKind::Struct { name, fields } => {
-                    let variant = VariantDef {
-                        name: name.clone(),
-                        fields: fields
-                            .iter()
-                            .map(|(name, ty)| FieldDef {
-                                name: name.clone(),
-                                ty: self.lower_ty(ty.clone()),
-                            })
-                            .collect(),
-                    };
-                    let adt_idx = self.ctx.mk_adt(name.clone(), AdtKind::Struct);
-                    let adt = self.ctx.get_adt_mut(adt_idx);
-
-                    adt.variants.push(variant);
-                    self.scopes
-                        .insert_ty(name.clone(), self.ctx.allocator.alloc(ir::Ty::Adt(adt_idx)))
-                }
+                ItemKind::Struct { .. } => (),
             }
         }
     }
@@ -108,35 +117,9 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                 self.module.add_global_with_idx(idx, variable.ty);
                 //TODO: lower global's value
             }
-            ItemKind::Fn {
-                ret_ty,
-                name,
-                params,
-                block,
-            } => {
+            ItemKind::Fn { block, .. } => {
                 self.scopes.enter_new(item.id);
-
-                let arg_count = params.len();
-                let locals: Vec<_> = params
-                    .iter()
-                    .map(|(_, ty)| self.lower_ty(ty.clone()))
-                    .collect();
-
-                for (i, (ty, (name, _))) in locals.iter().zip(params.iter()).enumerate() {
-                    self.scopes.insert_local(name.clone(), *ty, i);
-                }
-
-                let ret_ty = self.lower_ty(ret_ty);
-                let idx = self.module.functions.len();
-
-                self.module.functions.push(ir::Function {
-                    name,
-                    basic_blocks: Vec::new(),
-                    locals,
-                    arg_count,
-                    ret_ty,
-                });
-                self.fn_idx = idx;
+                self.fn_idx = self.functions[&item.id];
                 self.block_idx = self.get_fn().create_block();
 
                 if let Some(block) = block {
@@ -145,7 +128,38 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
 
                 self.scopes.leave();
             }
-            ItemKind::Struct { .. } => (),
+            ItemKind::Struct { name, fields } => {
+                let variant = VariantDef {
+                    name: name.clone(),
+                    fields: fields
+                        .into_iter()
+                        .map(|(name, ty)| {
+                            let ty = self.lower_ty(ty);
+
+                            if let ir::Ty::Adt(idx) = ty {
+                                assert!(
+                                    self.referenced_types
+                                        .get(idx)
+                                        .map(|set| set.contains(&self.types[&item.id]))
+                                        .is_none(),
+                                    "Recursive types, field `{name}`"
+                                );
+
+                                self.referenced_types
+                                    .entry(self.types[&item.id])
+                                    .or_default()
+                                    .insert(*idx);
+                            }
+
+                            FieldDef { name, ty }
+                        })
+                        .collect(),
+                };
+                let adt_idx = self.types[&item.id];
+                let adt = self.ctx.get_adt_mut(adt_idx);
+
+                adt.variants.push(variant);
+            }
         }
     }
 
@@ -237,7 +251,10 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                     .allocator
                     .alloc(ir::Ty::Fn(params, self.lower_ty(*ret_ty.clone())))
             }
-            ast::Ty::Ident(ident) => self.scopes.get_variable(&ident).unwrap().ty,
+            ast::Ty::Ident(ident) => self
+                .scopes
+                .get_ty(&ident)
+                .expect(&format!("type `{ident}` not found")),
             ast::Ty::Infer => {
                 todo!();
                 //self.ctx

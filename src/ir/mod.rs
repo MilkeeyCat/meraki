@@ -2,7 +2,7 @@ pub mod ty;
 
 use crate::ast::{BinOp, UnOp};
 use ty::FieldIdx;
-pub use ty::{Ty, TyArray};
+pub use ty::{AdtIdx, Ty, TyArray};
 
 pub type FunctionIdx = usize;
 pub type LocalIdx = usize;
@@ -27,6 +27,24 @@ impl<'ir> Module<'ir> {
         assert_eq!(self.globals.len(), idx);
 
         self.globals.push(ty);
+    }
+
+    pub fn create_fn(
+        &mut self,
+        name: String,
+        params: &[&'ir Ty<'ir>],
+        ret_ty: &'ir Ty<'ir>,
+    ) -> FunctionIdx {
+        let idx = self.functions.len();
+        self.functions.push(Function {
+            name,
+            basic_blocks: Vec::new(),
+            locals: params.to_vec(),
+            arg_count: params.len(),
+            ret_ty,
+        });
+
+        idx
     }
 }
 

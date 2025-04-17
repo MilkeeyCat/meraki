@@ -294,7 +294,11 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
 
     fn parse_type(&mut self) -> Result<Ty, ()> {
         let ty = match self.cur_token.as_ref().map(|token| &token.kind) {
-            Some(TokenKind::Asterisk) => Ty::Ptr(Box::new(self.parse_type()?)),
+            Some(TokenKind::Asterisk) => {
+                self.expect(&TokenKind::Asterisk)?;
+
+                return Ok(Ty::Ptr(Box::new(self.parse_type()?)));
+            }
             Some(TokenKind::LBracket) => {
                 self.bump();
 
