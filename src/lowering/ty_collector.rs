@@ -4,10 +4,12 @@ use crate::{
         node_id::NodeId,
         visitor::{Visitor, walk_block},
     },
-    ir::Ty,
+    ir::{self, Ty},
     ty_problem::{self, TyProblem},
 };
 use std::collections::HashMap;
+
+const DUMMY_LOCAL_IDX: ir::LocalIdx = 0;
 
 struct Collector<'a, 'ctx, 'ir> {
     lowering: &'a mut super::Lowering<'ctx, 'ir>,
@@ -71,12 +73,6 @@ impl<'a, 'ctx, 'ir> Collector<'a, 'ctx, 'ir> {
 }
 
 impl<'ast> Visitor<'ast> for Collector<'_, '_, '_> {
-    fn visit_block(&mut self, block: &'ast mut Block) {
-        self.lowering.scopes.enter_new(self.node_id);
-        walk_block(self, block);
-        self.lowering.scopes.leave();
-    }
-
     fn visit_stmt(&mut self, stmt: &'ast mut Stmt) {
         match &mut stmt.kind {
             StmtKind::Local(variable) => {
@@ -92,10 +88,9 @@ impl<'ast> Visitor<'ast> for Collector<'_, '_, '_> {
                 };
 
                 self.nodes_types.insert(stmt.id, ty);
-                // FIXME: remove dummy local id
                 self.lowering
                     .scopes
-                    .insert_local(variable.name.clone(), ty, 0);
+                    .insert_local(variable.name.clone(), ty, DUMMY_LOCAL_IDX);
             }
             _ => unimplemented!(),
         }

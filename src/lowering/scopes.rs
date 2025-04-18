@@ -23,7 +23,7 @@ struct FnSig<'ir> {
 }
 
 #[derive(Debug)]
-struct Function<'ir> {
+pub struct Function<'ir> {
     idx: FunctionIdx,
     signature: FnSig<'ir>,
 }
@@ -78,15 +78,31 @@ impl<'ir> ScopeTable<'ir> {
         self.stack.pop();
     }
 
-    fn find<'a, T, O>(&'a self, f: T) -> Option<O>
+    fn find<'a, F, O>(&'a self, f: F) -> Option<O>
     where
-        T: Fn(&'a Scope<'ir>) -> Option<O>,
+        F: Fn(&'a Scope<'ir>) -> Option<O>,
     {
         self.stack
             .iter()
-            .cloned()
             .rev()
-            .find_map(|idx| f(&self.scopes[idx]))
+            .find_map(|&idx| f(&self.scopes[idx]))
+    }
+
+    fn find_mut<F, O>(&mut self, f: F) -> Option<&mut O>
+    where
+        F: for<'s> Fn(&'s mut Scope<'ir>) -> Option<&'s mut O>,
+    {
+        let mut scope_idx = None;
+
+        for &idx in &self.stack {
+            if f(&mut self.scopes[idx]).is_some() {
+                scope_idx = Some(idx);
+
+                break;
+            }
+        }
+
+        scope_idx.and_then(|idx| f(&mut self.scopes[idx]))
     }
 
     pub fn insert_ty(&mut self, name: String, ty: &'ir Ty<'ir>) {
@@ -121,6 +137,10 @@ impl<'ir> ScopeTable<'ir> {
 
     pub fn get_variable(&self, name: &str) -> Option<&Variable<'ir>> {
         self.find(|scope| scope.variables.get(name))
+    }
+
+    pub fn get_variable_mut(&mut self, name: &str) -> Option<&mut Variable<'ir>> {
+        self.find_mut(|scope| scope.variables.get_mut(name))
     }
 
     pub fn insert_fn(

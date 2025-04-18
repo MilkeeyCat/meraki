@@ -164,14 +164,22 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                 self.module.add_global_with_idx(idx, variable.ty);
                 //TODO: lower global's value
             }
-            ItemKind::Fn { mut block, .. } => {
+            ItemKind::Fn {
+                mut block, params, ..
+            } => {
+                self.fn_idx = self.functions[&item.id];
+                self.block_idx = self.get_fn().create_block();
+                self.scopes.enter_new(item.id);
+
+                for (idx, (name, _)) in params.into_iter().enumerate() {
+                    let ty = self.get_fn().locals[idx];
+
+                    self.scopes.insert_local(name, ty, idx);
+                }
+
                 if let Some(block) = &mut block {
                     self.nodes_types = collect_nodes_types(self, block, item.id);
                 }
-
-                self.scopes.enter(item.id);
-                self.fn_idx = self.functions[&item.id];
-                self.block_idx = self.get_fn().create_block();
 
                 if let Some(block) = block {
                     self.lower_block(block);
@@ -194,8 +202,10 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
             ast::StmtKind::Local(variable) => {
                 let ty = self.nodes_types[&stmt.id];
                 let idx = self.get_fn().create_local(ty);
-
-                self.scopes.insert_local(variable.name, ty, idx);
+                *self.scopes.get_variable_mut(&variable.name).unwrap() = scopes::Variable {
+                    kind: scopes::VariableKind::Local(idx),
+                    ty,
+                };
 
                 if let Some(expr) = variable.value {
                     let rvalue = self.lower_expr(expr);
