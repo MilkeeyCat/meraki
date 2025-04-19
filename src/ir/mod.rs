@@ -87,7 +87,7 @@ impl BasicBlock {
     pub fn new() -> Self {
         Self {
             statements: Vec::new(),
-            terminator: Terminator::Return,
+            terminator: Terminator::Return(None),
         }
     }
 }
@@ -100,7 +100,7 @@ pub enum Statement {
 #[derive(Debug)]
 pub enum Terminator {
     Goto(BasicBlockIdx),
-    Return,
+    Return(Option<Rvalue>),
 }
 
 #[derive(Debug)]
