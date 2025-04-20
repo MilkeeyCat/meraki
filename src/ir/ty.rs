@@ -125,4 +125,11 @@ impl<'ir> Ty<'ir> {
     pub fn int(&self) -> bool {
         matches!(self, Self::UInt(_) | Self::Int(_))
     }
+
+    pub fn pointee(&self) -> &'ir Ty<'ir> {
+        match self {
+            Self::Ptr(ty) => ty,
+            _ => unreachable!(),
+        }
+    }
 }

@@ -12,7 +12,7 @@ pub type BasicBlockIdx = usize;
 #[derive(Debug)]
 pub struct Module<'ir> {
     pub functions: Vec<Function<'ir>>,
-    pub globals: Vec<&'ir Ty<'ir>>,
+    pub globals: Vec<Global<'ir>>,
 }
 
 impl<'ir> Module<'ir> {
@@ -23,10 +23,10 @@ impl<'ir> Module<'ir> {
         }
     }
 
-    pub fn add_global_with_idx(&mut self, idx: GlobalIdx, ty: &'ir Ty<'ir>) {
+    pub fn add_global_with_idx(&mut self, idx: GlobalIdx, global: Global<'ir>) {
         assert_eq!(self.globals.len(), idx);
 
-        self.globals.push(ty);
+        self.globals.push(global);
     }
 
     pub fn create_fn(
@@ -46,6 +46,12 @@ impl<'ir> Module<'ir> {
 
         idx
     }
+}
+
+#[derive(Debug)]
+pub struct Global<'ir> {
+    pub name: String,
+    pub ty: &'ir Ty<'ir>,
 }
 
 #[derive(Debug)]

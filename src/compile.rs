@@ -1,5 +1,5 @@
 use crate::{
-    Context, ast::node_id::assign_node_ids, diagnostics::Diagnostics, lexer::Lexer,
+    Context, ast::node_id::assign_node_ids, codegen, diagnostics::Diagnostics, lexer::Lexer,
     lowering::Lowering, parser,
 };
 use bumpalo::Bump;
@@ -60,6 +60,7 @@ pub fn compile(args: CompileArgs) -> Result<(), Box<dyn std::error::Error>> {
 
     assign_node_ids(&mut ast);
     let module = Lowering::new(&mut ctx).lower(ast);
+    codegen::compile(&ctx, &module);
 
     dbg!(module);
 

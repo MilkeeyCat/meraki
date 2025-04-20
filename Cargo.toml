@@ -12,6 +12,7 @@ derive_more = { version = "1.0.0", features = ["display"] }
 indoc = "2.0.5"
 libloading = "0.8.5"
 thiserror = "1.0.64"
+tja = { git = "https://github.com/MilkeeyCat/tja" }
 
 [lib]
 name = "meraki"

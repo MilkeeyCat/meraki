@@ -1,8 +1,7 @@
 use crate::{
     ast::{
-        self, BinOp, Block, Expr, ExprKind, ExprLit, Stmt, StmtKind, UnOp,
-        node_id::NodeId,
-        visitor::{Visitor, walk_block},
+        self, BinOp, Block, Expr, ExprKind, ExprLit, Stmt, StmtKind, UnOp, node_id::NodeId,
+        visitor::Visitor,
     },
     ir::{self, Ty},
     ty_problem::{self, TyProblem},

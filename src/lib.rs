@@ -5,6 +5,7 @@ pub mod ir;
 pub mod lexer;
 pub mod lowering;
 //pub mod macros;
+pub mod codegen;
 pub mod parser;
 pub mod passes;
 pub mod ty_problem;

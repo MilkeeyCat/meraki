@@ -154,14 +154,21 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
     fn lower_item(&mut self, item: Item) {
         match item.kind {
             ItemKind::Global(variable) => {
-                let variable = self.scopes.get_variable(&variable.name).unwrap();
-                let idx = if let scopes::VariableKind::Global(idx) = variable.kind {
+                let var = self.scopes.get_variable(&variable.name).unwrap();
+                let idx = if let scopes::VariableKind::Global(idx) = var.kind {
                     idx
                 } else {
                     unreachable!();
                 };
 
-                self.module.add_global_with_idx(idx, variable.ty);
+                self.module.add_global_with_idx(
+                    idx,
+                    ir::Global {
+                        name: variable.name,
+                        ty: var.ty,
+                    },
+                );
+
                 //TODO: lower global's value
             }
             ItemKind::Fn {
