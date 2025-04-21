@@ -108,7 +108,7 @@ impl<'a, 'b, 'ir> FunctionCtx<'a, 'b, 'ir> {
     fn lower_rvalue(
         &mut self,
         bb_idx: repr::basic_block::BlockIdx,
-        rvalue: &Rvalue,
+        rvalue: &Rvalue<'ir>,
     ) -> repr::Operand {
         match rvalue {
             Rvalue::Use(operand) => self.lower_operand(bb_idx, operand).0,
@@ -139,13 +139,14 @@ impl<'a, 'b, 'ir> FunctionCtx<'a, 'b, 'ir> {
     fn lower_operand(
         &mut self,
         bb_idx: repr::basic_block::BlockIdx,
-        operand: &ir::Operand,
+        operand: &ir::Operand<'ir>,
     ) -> (repr::Operand, &'ir ir::Ty<'ir>) {
         match operand {
             ir::Operand::Place(place) => self.load_place(bb_idx, place),
-            ir::Operand::Const(_valtree) => {
-                todo!();
-            }
+            ir::Operand::Const(valtree, ty) => (
+                repr::Operand::Const(self.lower_value_tree(valtree, ty), self.ctx.lower_ty(ty)),
+                ty,
+            ),
         }
     }
 
@@ -161,6 +162,47 @@ impl<'a, 'b, 'ir> FunctionCtx<'a, 'b, 'ir> {
             self.get_basic_block(bb_idx).create_load(operand, ty_idx),
             ty,
         )
+    }
+
+    fn lower_value_tree(&self, valtree: &ir::ValueTree, ty: &'ir ir::Ty<'ir>) -> repr::Const {
+        match valtree {
+            ir::ValueTree::Leaf(c) => match c {
+                ir::Const::Bool(value) => repr::Const::Int(*value as u64),
+                ir::Const::I8(value) => repr::Const::Int(*value as u64),
+                ir::Const::I16(value) => repr::Const::Int(*value as u64),
+                ir::Const::I32(value) => repr::Const::Int(*value as u64),
+                ir::Const::I64(value) => repr::Const::Int(*value as u64),
+                ir::Const::U8(value) => repr::Const::Int(*value as u64),
+                ir::Const::U16(value) => repr::Const::Int(*value as u64),
+                ir::Const::U32(value) => repr::Const::Int(*value as u64),
+                ir::Const::U64(value) => repr::Const::Int(*value as u64),
+            },
+            ir::ValueTree::Branch(valtrees) => {
+                let tys: Vec<_> = match ty {
+                    ir::Ty::Adt(idx) => {
+                        let adt = self.ctx.ctx.get_adt(*idx);
+
+                        match adt.kind {
+                            ir::AdtKind::Struct => adt.variants[0]
+                                .fields
+                                .iter()
+                                .map(|field| field.ty)
+                                .collect(),
+                            _ => todo!(),
+                        }
+                    }
+                    _ => unreachable!(),
+                };
+
+                repr::Const::Aggregate(
+                    valtrees
+                        .iter()
+                        .enumerate()
+                        .map(|(idx, valtree)| self.lower_value_tree(valtree, tys[idx]))
+                        .collect(),
+                )
+            }
+        }
     }
 }
 

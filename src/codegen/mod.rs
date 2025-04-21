@@ -34,6 +34,7 @@ impl<'a, 'ir> Codegen<'a, 'ir> {
     fn lower_ty(&mut self, ty: &'ir ir::Ty<'ir>) -> repr::ty::TyIdx {
         match ty {
             ir::Ty::Void => self.tja_ctx.ty_storage.void_ty,
+            ir::Ty::Bool => self.tja_ctx.ty_storage.i8_ty,
             ir::Ty::Int(ty) => match ty {
                 IntTy::I8 => self.tja_ctx.ty_storage.i8_ty,
                 IntTy::I16 => self.tja_ctx.ty_storage.i16_ty,

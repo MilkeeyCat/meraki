@@ -658,7 +658,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
                 Ok(Expr::new(ExprKind::Lit(ExprLit::Bool(true)), span))
             }
             Some(TokenKind::False) => {
-                let span = self.expect(&TokenKind::True)?;
+                let span = self.expect(&TokenKind::False)?;
 
                 Ok(Expr::new(ExprKind::Lit(ExprLit::Bool(false)), span))
             }

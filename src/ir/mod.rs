@@ -2,7 +2,7 @@ pub mod ty;
 
 use crate::ast::{BinOp, UnOp};
 use ty::FieldIdx;
-pub use ty::{AdtIdx, Ty, TyArray};
+pub use ty::{AdtIdx, AdtKind, Ty, TyArray};
 
 pub type FunctionIdx = usize;
 pub type LocalIdx = usize;
@@ -57,7 +57,7 @@ pub struct Global<'ir> {
 #[derive(Debug)]
 pub struct Function<'ir> {
     pub name: String,
-    pub basic_blocks: Vec<BasicBlock>,
+    pub basic_blocks: Vec<BasicBlock<'ir>>,
     pub locals: Vec<&'ir Ty<'ir>>,
     pub arg_count: usize,
     pub ret_ty: &'ir Ty<'ir>,
@@ -71,7 +71,7 @@ impl<'ir> Function<'ir> {
         idx
     }
 
-    pub fn get_block_mut(&mut self, idx: BasicBlockIdx) -> &mut BasicBlock {
+    pub fn get_block_mut(&mut self, idx: BasicBlockIdx) -> &mut BasicBlock<'ir> {
         &mut self.basic_blocks[idx]
     }
 
@@ -84,12 +84,12 @@ impl<'ir> Function<'ir> {
 }
 
 #[derive(Debug)]
-pub struct BasicBlock {
-    pub statements: Vec<Statement>,
-    pub terminator: Terminator,
+pub struct BasicBlock<'ir> {
+    pub statements: Vec<Statement<'ir>>,
+    pub terminator: Terminator<'ir>,
 }
 
-impl BasicBlock {
+impl<'ir> BasicBlock<'ir> {
     pub fn new() -> Self {
         Self {
             statements: Vec::new(),
@@ -99,26 +99,33 @@ impl BasicBlock {
 }
 
 #[derive(Debug)]
-pub enum Statement {
-    Assign(Place, Rvalue),
+pub enum Statement<'ir> {
+    Assign(Place<'ir>, Rvalue<'ir>),
 }
 
 #[derive(Debug)]
-pub enum Terminator {
+pub enum Terminator<'ir> {
     Goto(BasicBlockIdx),
-    Return(Option<Rvalue>),
+    Return(Option<Rvalue<'ir>>),
 }
 
 #[derive(Debug)]
 pub enum Const {
+    Bool(bool),
     I8(i8),
+    I16(i16),
+    I32(i32),
+    I64(i64),
     U8(u8),
+    U16(u16),
+    U32(u32),
+    U64(u64),
 }
 
 #[derive(Debug)]
-pub enum Operand {
-    Place(Place),
-    Const(ValueTree),
+pub enum Operand<'ir> {
+    Place(Place<'ir>),
+    Const(ValueTree, &'ir Ty<'ir>),
 }
 
 #[derive(Debug)]
@@ -134,26 +141,26 @@ pub enum Storage {
 }
 
 #[derive(Debug)]
-pub struct Place {
+pub struct Place<'ir> {
     pub storage: Storage,
-    pub projection: Vec<Projection>,
+    pub projection: Vec<Projection<'ir>>,
 }
 
 #[derive(Debug)]
-pub enum Projection {
+pub enum Projection<'ir> {
     Deref,
     Field(FieldIdx),
-    Index(Operand),
+    Index(Operand<'ir>),
 }
 
 #[derive(Debug)]
-pub enum Rvalue {
-    Use(Operand),
-    BinaryOp(BinOp, Operand, Operand),
-    UnaryOp(UnOp, Operand),
+pub enum Rvalue<'ir> {
+    Use(Operand<'ir>),
+    BinaryOp(BinOp, Operand<'ir>, Operand<'ir>),
+    UnaryOp(UnOp, Operand<'ir>),
     Call {
         fn_idx: FunctionIdx,
-        args: Vec<Rvalue>,
-        destination: Place,
+        args: Vec<Rvalue<'ir>>,
+        destination: Place<'ir>,
     },
 }

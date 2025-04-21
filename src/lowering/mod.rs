@@ -231,7 +231,7 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
         }
     }
 
-    fn lower_expr(&mut self, expr: ast::Expr) -> ir::Rvalue {
+    fn lower_expr(&mut self, expr: ast::Expr) -> ir::Rvalue<'ir> {
         match expr.kind {
             ast::ExprKind::Ident(ident) => {
                 let variable = self
@@ -244,6 +244,40 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                     projection: Vec::new(),
                 }))
             }
+            ast::ExprKind::Lit(lit) => ir::Rvalue::Use(ir::Operand::Const(
+                ir::ValueTree::Leaf(match lit {
+                    ast::ExprLit::Int(_expr) => {
+                        // ExprLit::Int is never created in parser yet
+                        todo!()
+                    }
+                    ast::ExprLit::UInt(value) => match self.nodes_types[&expr.id] {
+                        ir::Ty::Int(ty) => match ty {
+                            ast::IntTy::I8 => ir::Const::I8(value as i8),
+                            ast::IntTy::I16 => ir::Const::I16(value as i16),
+                            ast::IntTy::I32 => ir::Const::I32(value as i32),
+                            ast::IntTy::I64 => ir::Const::I64(value as i64),
+                            ast::IntTy::Isize => ir::Const::I64(value as i64),
+                        },
+                        ir::Ty::UInt(ty) => match ty {
+                            ast::UintTy::U8 => ir::Const::U8(value as u8),
+                            ast::UintTy::U16 => ir::Const::U16(value as u16),
+                            ast::UintTy::U32 => ir::Const::U32(value as u32),
+                            ast::UintTy::U64 => ir::Const::U64(value as u64),
+                            ast::UintTy::Usize => ir::Const::U64(value as u64),
+                        },
+                        _ => unreachable!(),
+                    },
+                    ast::ExprLit::Bool(value) => ir::Const::Bool(value),
+                    ast::ExprLit::String(expr) => {
+                        todo!()
+                    }
+                    ast::ExprLit::Null => {
+                        todo!()
+                    }
+                }),
+                self.nodes_types[&expr.id],
+            )),
+
             _ => unreachable!(),
         }
     }
@@ -295,7 +329,7 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
         &mut self.module.functions[self.fn_idx]
     }
 
-    fn get_basic_block(&mut self) -> &mut ir::BasicBlock {
+    fn get_basic_block(&mut self) -> &mut ir::BasicBlock<'ir> {
         self.module.functions[self.fn_idx].get_block_mut(self.block_idx)
     }
 }
