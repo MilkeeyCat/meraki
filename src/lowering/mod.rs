@@ -216,6 +216,7 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
 
                 if let Some(expr) = variable.value {
                     let rvalue = self.lower_expr(expr);
+
                     self.get_basic_block()
                         .statements
                         .push(ir::Statement::Assign(
@@ -227,12 +228,44 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                         ));
                 }
             }
+            ast::StmtKind::Expr(expr) => _ = self.lower_expr(expr),
+            ast::StmtKind::Return(expr) => {
+                self.get_basic_block().terminator =
+                    ir::Terminator::Return(expr.map(|expr| self.lower_expr(expr)))
+            }
             _ => todo!(),
         }
     }
 
     fn lower_expr(&mut self, expr: ast::Expr) -> ir::Rvalue<'ir> {
         match expr.kind {
+            ast::ExprKind::Binary { op, left, right } => {
+                let ty = self.nodes_types[&left.id];
+                let lhs_idx = self.get_fn().create_local(ty);
+                let ty = self.nodes_types[&right.id];
+                let rhs_idx = self.get_fn().create_local(ty);
+
+                let lhs = ir::Place {
+                    storage: ir::Storage::Local(lhs_idx),
+                    projection: Vec::new(),
+                };
+                let rhs = ir::Place {
+                    storage: ir::Storage::Local(rhs_idx),
+                    projection: Vec::new(),
+                };
+
+                let lhs_expr = self.lower_expr(*left);
+                self.get_basic_block()
+                    .statements
+                    .push(ir::Statement::Assign(lhs.clone(), lhs_expr));
+
+                let rhs_expr = self.lower_expr(*right);
+                self.get_basic_block()
+                    .statements
+                    .push(ir::Statement::Assign(rhs.clone(), rhs_expr));
+
+                ir::Rvalue::BinaryOp(op, ir::Operand::Place(lhs), ir::Operand::Place(rhs))
+            }
             ast::ExprKind::Ident(ident) => {
                 let variable = self
                     .scopes

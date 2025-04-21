@@ -109,7 +109,7 @@ pub enum Terminator<'ir> {
     Return(Option<Rvalue<'ir>>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Const {
     Bool(bool),
     I8(i8),
@@ -122,31 +122,31 @@ pub enum Const {
     U64(u64),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Operand<'ir> {
     Place(Place<'ir>),
     Const(ValueTree, &'ir Ty<'ir>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ValueTree {
     Leaf(Const),
     Branch(Vec<Self>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Storage {
     Local(LocalIdx),
     Global(GlobalIdx),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Place<'ir> {
     pub storage: Storage,
     pub projection: Vec<Projection<'ir>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Projection<'ir> {
     Deref,
     Field(FieldIdx),

@@ -91,6 +91,12 @@ impl<'ast> Visitor<'ast> for Collector<'_, '_, '_> {
                     .scopes
                     .insert_local(variable.name.clone(), ty, DUMMY_LOCAL_IDX);
             }
+            StmtKind::Expr(expr) => self.visit_expr(expr),
+            StmtKind::Return(expr) => {
+                if let Some(expr) = expr {
+                    self.visit_expr(expr);
+                }
+            }
             _ => unimplemented!(),
         }
     }
