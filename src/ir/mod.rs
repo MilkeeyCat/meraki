@@ -156,6 +156,7 @@ pub enum Projection<'ir> {
 #[derive(Debug)]
 pub enum Rvalue<'ir> {
     Use(Operand<'ir>),
+    Ptr(Place<'ir>),
     BinaryOp(BinOp, Operand<'ir>, Operand<'ir>),
     UnaryOp(UnOp, Operand<'ir>),
     Call {

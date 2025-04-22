@@ -112,6 +112,11 @@ impl<'a, 'b, 'ir> FunctionCtx<'a, 'b, 'ir> {
     ) -> repr::Operand {
         match rvalue {
             Rvalue::Use(operand) => self.lower_operand(bb_idx, operand).0,
+            Rvalue::Ptr(place) => {
+                let (operand, _) = self.lower_place(bb_idx, place);
+
+                self.get_basic_block(bb_idx).create_copy(operand)
+            }
             Rvalue::BinaryOp(op, lhs, rhs) => {
                 let (lhs, ty) = self.lower_operand(bb_idx, lhs);
                 let (rhs, _) = self.lower_operand(bb_idx, rhs);

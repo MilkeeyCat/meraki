@@ -241,30 +241,14 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
         match expr.kind {
             ast::ExprKind::Binary { op, left, right } => {
                 let ty = self.nodes_types[&left.id];
-                let lhs_idx = self.get_fn().create_local(ty);
+                let rvalue = self.lower_expr(*left);
+                let lhs = self.rvalue_to_operand(rvalue, ty);
+
                 let ty = self.nodes_types[&right.id];
-                let rhs_idx = self.get_fn().create_local(ty);
+                let rvalue = self.lower_expr(*right);
+                let rhs = self.rvalue_to_operand(rvalue, ty);
 
-                let lhs = ir::Place {
-                    storage: ir::Storage::Local(lhs_idx),
-                    projection: Vec::new(),
-                };
-                let rhs = ir::Place {
-                    storage: ir::Storage::Local(rhs_idx),
-                    projection: Vec::new(),
-                };
-
-                let lhs_expr = self.lower_expr(*left);
-                self.get_basic_block()
-                    .statements
-                    .push(ir::Statement::Assign(lhs.clone(), lhs_expr));
-
-                let rhs_expr = self.lower_expr(*right);
-                self.get_basic_block()
-                    .statements
-                    .push(ir::Statement::Assign(rhs.clone(), rhs_expr));
-
-                ir::Rvalue::BinaryOp(op, ir::Operand::Place(lhs), ir::Operand::Place(rhs))
+                ir::Rvalue::BinaryOp(op, lhs, rhs)
             }
             ast::ExprKind::Ident(ident) => {
                 let variable = self
@@ -310,8 +294,76 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                 }),
                 self.nodes_types[&expr.id],
             )),
+            ast::ExprKind::Unary { op, expr } => match op {
+                ast::UnOp::Negative => {
+                    let ty = self.nodes_types[&expr.id];
+                    let rvalue = self.lower_expr(*expr);
+                    let operand = self.rvalue_to_operand(rvalue, ty);
 
+                    let lhs = match ty {
+                        ir::Ty::Int(ty) => match ty {
+                            ast::IntTy::I8 => ir::Const::I8(0),
+                            ast::IntTy::I16 => ir::Const::I16(0),
+                            ast::IntTy::I32 => ir::Const::I32(0),
+                            ast::IntTy::I64 => ir::Const::I64(0),
+                            ast::IntTy::Isize => ir::Const::I64(0),
+                        },
+                        ty => panic!("can't negate {ty:?}"),
+                    };
+
+                    ir::Rvalue::BinaryOp(
+                        ast::BinOp::Sub,
+                        ir::Operand::Const(ir::ValueTree::Leaf(lhs), ty),
+                        operand,
+                    )
+                }
+                ast::UnOp::Address => {
+                    let rvalue = self.lower_expr(*expr);
+                    let place = match rvalue {
+                        ir::Rvalue::Use(ir::Operand::Place(place)) => place,
+                        rvalue => panic!("can't take address of {rvalue:?}"),
+                    };
+
+                    ir::Rvalue::Ptr(place)
+                }
+                ast::UnOp::Deref => {
+                    let mut place = match self.lower_expr(*expr) {
+                        ir::Rvalue::Use(ir::Operand::Place(place)) => place,
+                        ir::Rvalue::Ptr(place) => {
+                            return ir::Rvalue::Use(ir::Operand::Place(place));
+                        }
+                        rvalue => panic!("can't deref {rvalue:?}"),
+                    };
+                    place.projection.push(ir::Projection::Deref);
+
+                    ir::Rvalue::Use(ir::Operand::Place(place))
+                }
+                _ => todo!(),
+            },
             _ => unreachable!(),
+        }
+    }
+
+    fn rvalue_to_operand(
+        &mut self,
+        rvalue: ir::Rvalue<'ir>,
+        ty: &'ir ir::Ty<'ir>,
+    ) -> ir::Operand<'ir> {
+        match rvalue {
+            ir::Rvalue::Use(operand) => operand,
+            rvalue => {
+                let idx = self.get_fn().create_local(ty);
+                let place = ir::Place {
+                    storage: ir::Storage::Local(idx),
+                    projection: Vec::new(),
+                };
+
+                self.get_basic_block()
+                    .statements
+                    .push(ir::Statement::Assign(place.clone(), rvalue));
+
+                ir::Operand::Place(place)
+            }
         }
     }
 
