@@ -15,6 +15,7 @@ struct Codegen<'a, 'ir> {
     module: &'a ir::Module<'ir>,
     module_idx: repr::ModuleIdx,
     functions: HashMap<ir::FunctionIdx, repr::FunctionIdx>,
+    adt: HashMap<ir::AdtIdx, repr::ty::TyIdx>,
 }
 
 impl<'a, 'ir> Codegen<'a, 'ir> {
@@ -28,6 +29,7 @@ impl<'a, 'ir> Codegen<'a, 'ir> {
             module,
             module_idx,
             functions: HashMap::new(),
+            adt: HashMap::new(),
         }
     }
 
@@ -50,6 +52,30 @@ impl<'a, 'ir> Codegen<'a, 'ir> {
                 UintTy::Usize => self.tja_ctx.ty_storage.i64_ty,
             },
             ir::Ty::Ptr(_) => self.tja_ctx.ty_storage.ptr_ty,
+            ir::Ty::Adt(idx) => match self.adt.get(&idx) {
+                Some(ty) => *ty,
+                None => {
+                    let adt = self.ctx.get_adt(*idx);
+
+                    match adt.kind {
+                        ir::AdtKind::Struct => {
+                            let variant = &adt.variants[0];
+                            let fields = variant
+                                .fields
+                                .iter()
+                                .map(|def| self.lower_ty(def.ty))
+                                .collect();
+                            let ty_idx =
+                                self.tja_ctx.ty_storage.add_ty(repr::ty::Ty::Struct(fields));
+
+                            self.adt.insert(*idx, ty_idx);
+
+                            ty_idx
+                        }
+                        _ => unimplemented!(),
+                    }
+                }
+            },
             ir::Ty::Infer(_) => unreachable!(),
             _ => todo!(),
         }

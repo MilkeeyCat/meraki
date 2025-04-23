@@ -215,17 +215,13 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                 };
 
                 if let Some(expr) = variable.value {
-                    let rvalue = self.lower_expr(expr);
-
-                    self.get_basic_block()
-                        .statements
-                        .push(ir::Statement::Assign(
-                            ir::Place {
-                                storage: ir::Storage::Local(idx),
-                                projection: Vec::new(),
-                            },
-                            rvalue,
-                        ));
+                    self.init_place(
+                        ir::Place {
+                            storage: ir::Storage::Local(idx),
+                            projection: Vec::new(),
+                        },
+                        expr,
+                    );
                 }
             }
             ast::StmtKind::Expr(expr) => _ = self.lower_expr(expr),
@@ -340,7 +336,60 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                 }
                 _ => todo!(),
             },
+            ast::ExprKind::Struct { fields, .. } => {
+                let ty = self.nodes_types[&expr.id];
+                let idx = self.get_fn().create_local(ty);
+                let place = ir::Place {
+                    storage: ir::Storage::Local(idx),
+                    projection: Vec::new(),
+                };
+                let adt_idx = ty.adt_idx();
+
+                for (field, expr) in fields {
+                    let (field_idx, _) = self.ctx.get_adt(adt_idx).variants[0]
+                        .get_field_by_name(&field)
+                        .unwrap();
+                    let mut field_place = place.clone();
+                    field_place
+                        .projection
+                        .push(ir::Projection::Field(field_idx));
+                    let rvalue = self.lower_expr(expr);
+
+                    self.get_basic_block()
+                        .statements
+                        .push(ir::Statement::Assign(field_place, rvalue));
+                }
+
+                ir::Rvalue::Use(ir::Operand::Place(place))
+            }
             _ => unreachable!(),
+        }
+    }
+
+    fn init_place(&mut self, place: ir::Place<'ir>, expr: ast::Expr) {
+        match expr.kind {
+            ast::ExprKind::Struct { fields, .. } => {
+                let ty = self.nodes_types[&expr.id];
+
+                for (field, expr) in fields {
+                    let (field_idx, _) = self.ctx.get_adt(ty.adt_idx()).variants[0]
+                        .get_field_by_name(&field)
+                        .unwrap();
+                    let mut field_place = place.clone();
+                    field_place
+                        .projection
+                        .push(ir::Projection::Field(field_idx));
+
+                    self.init_place(field_place, expr);
+                }
+            }
+            _ => {
+                let rvalue = self.lower_expr(expr);
+
+                self.get_basic_block()
+                    .statements
+                    .push(ir::Statement::Assign(place, rvalue));
+            }
         }
     }
 

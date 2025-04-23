@@ -166,8 +166,15 @@ impl<'ast> Visitor<'ast> for Collector<'_, '_, '_> {
                 }
             }
             ExprKind::Struct { name, fields } => {
-                for (_, expr) in fields {
+                for (field, expr) in fields {
                     self.visit_expr(expr);
+
+                    let expr_ty_var_id =
+                        self.tys_ty_var_id(self.lowering.scopes.get_ty(&name).unwrap());
+                    let field_ty_var_id = self.tys_ty_var_id(self.nodes_types[&expr.id]);
+
+                    self.ty_problem
+                        .field(expr_ty_var_id, field_ty_var_id, field.clone());
                 }
 
                 self.lowering.scopes.get_ty(&name).unwrap()

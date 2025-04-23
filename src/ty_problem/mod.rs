@@ -210,7 +210,7 @@ impl<'ir> TyProblem<'ir> {
                 TyVar::Typed(ty) => match ty {
                     Ty::Adt(idx) => {
                         let variant = &ctx.get_adt(*idx).variants[0];
-                        let field = variant.get_field_by_name(&field_name).unwrap();
+                        let (_, field) = variant.get_field_by_name(&field_name).unwrap();
 
                         *self.get_ty_var_mut(*field_ty) = TyVar::Typed(field.ty);
                         progress |= true;

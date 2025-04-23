@@ -67,8 +67,11 @@ pub struct VariantDef<'ir> {
 }
 
 impl<'ir> VariantDef<'ir> {
-    pub fn get_field_by_name(&self, name: &str) -> Option<&FieldDef<'ir>> {
-        self.fields.iter().find(|field| field.name == name)
+    pub fn get_field_by_name(&self, name: &str) -> Option<(FieldIdx, &FieldDef<'ir>)> {
+        self.fields
+            .iter()
+            .enumerate()
+            .find(|(_, field)| field.name == name)
     }
 }
 
@@ -129,6 +132,13 @@ impl<'ir> Ty<'ir> {
     pub fn pointee(&self) -> &'ir Ty<'ir> {
         match self {
             Self::Ptr(ty) => ty,
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn adt_idx(&self) -> AdtIdx {
+        match self {
+            Self::Adt(idx) => *idx,
             _ => unreachable!(),
         }
     }

@@ -98,6 +98,23 @@ impl<'a, 'b, 'ir> FunctionCtx<'a, 'b, 'ir> {
 
                     self.get_basic_block(bb_idx).create_load(operand, ty)
                 }
+                ir::Projection::Field(idx) => {
+                    let lowered_ty = self.ctx.lower_ty(ty);
+                    let mut bb = self.get_basic_block(bb_idx);
+
+                    let operand = bb.create_gep(
+                        lowered_ty,
+                        operand,
+                        vec![
+                            repr::Operand::const_i64(0, &bb.ty_storage),
+                            repr::Operand::const_i64(*idx as u64, &bb.ty_storage),
+                        ],
+                    );
+
+                    ty = self.ctx.ctx.get_adt(ty.adt_idx()).variants[0].fields[*idx].ty;
+
+                    operand
+                }
                 _ => todo!(),
             }
         }
