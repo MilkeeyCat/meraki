@@ -244,7 +244,20 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                 let rvalue = self.lower_expr(*right);
                 let rhs = self.rvalue_to_operand(rvalue, ty);
 
-                ir::Rvalue::BinaryOp(op, lhs, rhs)
+                if op == ast::BinOp::Assign {
+                    let place = match &lhs {
+                        ir::Operand::Place(place) => place.clone(),
+                        rvalue => panic!("can't assign to {rvalue:?}"),
+                    };
+
+                    self.get_basic_block()
+                        .statements
+                        .push(ir::Statement::Assign(place, ir::Rvalue::Use(rhs)));
+
+                    ir::Rvalue::Use(lhs)
+                } else {
+                    ir::Rvalue::BinaryOp(op, lhs, rhs)
+                }
             }
             ast::ExprKind::Ident(ident) => {
                 let variable = self
@@ -359,6 +372,21 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                         .statements
                         .push(ir::Statement::Assign(field_place, rvalue));
                 }
+
+                ir::Rvalue::Use(ir::Operand::Place(place))
+            }
+            ast::ExprKind::Field { expr, field } => {
+                let ty = self.nodes_types[&expr.id];
+                let mut place = match self.lower_expr(*expr) {
+                    ir::Rvalue::Use(ir::Operand::Place(place)) => place,
+                    rvalue => panic!("can't access field of {rvalue:?}"),
+                };
+
+                let adt_idx = ty.adt_idx();
+                let (idx, _) = self.ctx.get_adt(adt_idx).variants[0]
+                    .get_field_by_name(&field)
+                    .unwrap();
+                place.projection.push(ir::Projection::Field(idx));
 
                 ir::Rvalue::Use(ir::Operand::Place(place))
             }
