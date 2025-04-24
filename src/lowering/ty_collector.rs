@@ -219,7 +219,7 @@ pub fn collect_nodes_types<'ctx, 'ir>(
         ty: &'ir Ty<'ir>,
     ) -> &'ir Ty<'ir> {
         match ty {
-            Ty::Infer(id) => types[id],
+            Ty::Infer(id) => resolve_ty(lowering, types, types[id]),
             Ty::Ptr(ty) => lowering
                 .ctx
                 .allocator

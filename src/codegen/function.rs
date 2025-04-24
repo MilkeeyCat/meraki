@@ -93,10 +93,14 @@ impl<'a, 'b, 'ir> FunctionCtx<'a, 'b, 'ir> {
         for proj in &place.projection {
             operand = match proj {
                 ir::Projection::Deref => {
-                    ty = ty.pointee();
-                    let ty = self.ctx.lower_ty(ty);
+                    let lowered_ty = self.ctx.lower_ty(ty);
+                    let operand = self
+                        .get_basic_block(bb_idx)
+                        .create_load(operand, lowered_ty);
 
-                    self.get_basic_block(bb_idx).create_load(operand, ty)
+                    ty = ty.pointee();
+
+                    operand
                 }
                 ir::Projection::Field(idx) => {
                     let lowered_ty = self.ctx.lower_ty(ty);
