@@ -47,7 +47,11 @@ impl<'a, 'b, 'ir> FunctionCtx<'a, 'b, 'ir> {
                 .map(|idx| (idx, repr::Operand::Local(idx))),
         );
 
-        Self { ctx, idx, locals }
+        Self {
+            ctx,
+            idx: fn_idx,
+            locals,
+        }
     }
 
     fn local_ty(&self, idx: ir::LocalIdx) -> &'ir ir::Ty<'ir> {

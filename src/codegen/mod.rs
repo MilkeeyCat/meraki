@@ -105,6 +105,7 @@ pub fn compile<'ir>(ctx: &Context<'ir>, module: &ir::Module<'ir>) {
 
     tja::compile(
         codegen.tja_ctx.get_module(codegen.module_idx),
+        &tja::codegen::abi::sysv_amd64::SysVAmd64::new(),
         CompileArgs {
             assembly_only: true,
             object_only: false,
