@@ -3,7 +3,7 @@ use crate::{
     ast,
     ir::{self, FunctionIdx, Rvalue},
 };
-use std::{collections::HashMap, rc::Rc};
+use std::collections::HashMap;
 use tja::repr;
 
 pub struct FunctionCtx<'a, 'b, 'ir> {
@@ -89,7 +89,7 @@ impl<'a, 'b, 'ir> FunctionCtx<'a, 'b, 'ir> {
         let (mut operand, mut ty) = match place.storage {
             ir::Storage::Local(idx) => (self.locals[&idx].clone(), self.local_ty(idx)),
             ir::Storage::Global(idx) => (
-                repr::Operand::Global(Rc::clone(&self.ctx.get_module().globals[idx])),
+                repr::Operand::const_global(idx, &self.ctx.tja_ctx.ty_storage),
                 self.ctx.module.globals[idx].ty,
             ),
         };

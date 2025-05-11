@@ -6,7 +6,7 @@ use crate::{
     ir,
 };
 use function::compile_function;
-use std::{collections::HashMap, rc::Rc};
+use std::collections::HashMap;
 use tja::{CompileArgs, repr};
 
 struct Codegen<'a, 'ir> {
@@ -92,11 +92,11 @@ pub fn compile<'ir>(ctx: &Context<'ir>, module: &ir::Module<'ir>) {
     for global in &module.globals {
         let ty = codegen.lower_ty(global.ty);
 
-        codegen.get_module().globals.push(Rc::new(repr::Global {
+        codegen.get_module().globals.push(repr::Global {
             name: global.name.clone(),
             ty,
             value: None,
-        }));
+        });
     }
 
     for idx in 0..module.functions.len() {
