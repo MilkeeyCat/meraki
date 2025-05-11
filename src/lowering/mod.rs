@@ -260,15 +260,19 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                 }
             }
             ast::ExprKind::Ident(ident) => {
-                let variable = self
-                    .scopes
-                    .get_variable(&ident)
-                    .expect(&format!("ident `{ident}` not found"));
-
-                ir::Rvalue::Use(ir::Operand::Place(ir::Place {
-                    storage: variable.kind.clone().into(),
-                    projection: Vec::new(),
-                }))
+                if let Some(variable) = self.scopes.get_variable(&ident) {
+                    ir::Rvalue::Use(ir::Operand::Place(ir::Place {
+                        storage: variable.kind.clone().into(),
+                        projection: Vec::new(),
+                    }))
+                } else if let Some(func) = self.scopes.get_fn(&ident) {
+                    ir::Rvalue::Use(ir::Operand::Const(
+                        ir::ValueTree::Leaf(ir::Const::Function(func.idx)),
+                        self.nodes_types[&expr.id],
+                    ))
+                } else {
+                    panic!("ident `{ident}` not found");
+                }
             }
             ast::ExprKind::Lit(lit) => ir::Rvalue::Use(ir::Operand::Const(
                 ir::ValueTree::Leaf(match lit {

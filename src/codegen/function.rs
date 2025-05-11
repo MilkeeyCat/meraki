@@ -206,6 +206,7 @@ impl<'a, 'b, 'ir> FunctionCtx<'a, 'b, 'ir> {
                 ir::Const::U16(value) => repr::Const::Int(*value as u64),
                 ir::Const::U32(value) => repr::Const::Int(*value as u64),
                 ir::Const::U64(value) => repr::Const::Int(*value as u64),
+                ir::Const::Function(idx) => repr::Const::Function(*idx),
             },
             ir::ValueTree::Branch(valtrees) => {
                 let tys: Vec<_> = match ty {

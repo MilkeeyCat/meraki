@@ -136,7 +136,11 @@ impl<'ast> Visitor<'ast> for Collector<'_, '_, '_> {
                     }
                 }
             }
-            ExprKind::Ident(ident) => self.lowering.scopes.get_variable(&ident).unwrap().ty,
+            ExprKind::Ident(ident) => self
+                .lowering
+                .scopes
+                .get_symbol_ty(&ident, self.lowering.ctx)
+                .unwrap(),
             ExprKind::Lit(_) => self.expr_ty(expr),
             ExprKind::Unary { op, expr } => {
                 self.visit_expr(expr);

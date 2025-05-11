@@ -1,4 +1,5 @@
 use crate::{
+    Context,
     ast::node_id::NodeId,
     ir::{self, FunctionIdx, ty::Ty},
 };
@@ -24,8 +25,8 @@ struct FnSig<'ir> {
 
 #[derive(Debug)]
 pub struct Function<'ir> {
-    idx: FunctionIdx,
-    signature: FnSig<'ir>,
+    pub idx: FunctionIdx,
+    pub signature: FnSig<'ir>,
 }
 
 #[derive(Debug)]
@@ -161,5 +162,22 @@ impl<'ir> ScopeTable<'ir> {
 
     pub fn get_fn(&self, name: &str) -> Option<&Function<'ir>> {
         self.find(|scope| scope.functions.get(name))
+    }
+
+    pub fn get_symbol_ty(&self, name: &str, ctx: &mut Context<'ir>) -> Option<&'ir Ty<'ir>> {
+        self.find(|scope| {
+            scope
+                .variables
+                .get(name)
+                .map(|variable| variable.ty)
+                .or_else(|| {
+                    scope.functions.get(name).map(|func| {
+                        &*ctx.allocator.alloc(Ty::Fn(
+                            ctx.allocator.alloc_slice_copy(&func.signature.params),
+                            func.signature.ret_ty,
+                        ))
+                    })
+                })
+        })
     }
 }

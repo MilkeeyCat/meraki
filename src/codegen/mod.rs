@@ -52,6 +52,7 @@ impl<'a, 'ir> Codegen<'a, 'ir> {
                 UintTy::Usize => self.tja_ctx.ty_storage.i64_ty,
             },
             ir::Ty::Ptr(_) => self.tja_ctx.ty_storage.ptr_ty,
+            ir::Ty::Fn(_, _) => self.tja_ctx.ty_storage.ptr_ty,
             ir::Ty::Adt(idx) => match self.adt.get(&idx) {
                 Some(ty) => *ty,
                 None => {
