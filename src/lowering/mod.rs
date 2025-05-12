@@ -394,6 +394,18 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
 
                 ir::Rvalue::Use(ir::Operand::Place(place))
             }
+            ast::ExprKind::FunctionCall { expr, arguments } => {
+                let id = self.nodes_types[&expr.id];
+                let rvalue = self.lower_expr(*expr);
+
+                ir::Rvalue::Call {
+                    operand: self.rvalue_to_operand(rvalue, id),
+                    args: arguments
+                        .into_iter()
+                        .map(|expr| self.lower_expr(expr))
+                        .collect(),
+                }
+            }
             _ => unreachable!(),
         }
     }

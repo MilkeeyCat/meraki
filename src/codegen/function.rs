@@ -162,7 +162,23 @@ impl<'a, 'b, 'ir> FunctionCtx<'a, 'b, 'ir> {
                 self.get_basic_block(bb_idx).create_bin(lhs, rhs, op)
             }
             Rvalue::UnaryOp(_, _) => todo!(),
-            Rvalue::Call { .. } => todo!(),
+            Rvalue::Call { operand, args } => {
+                let (operand, ty) = self.lower_operand(bb_idx, operand);
+                let ret_ty = match ty {
+                    ir::Ty::Fn(_, ty) => ty,
+                    _ => unreachable!(),
+                };
+                let ty = self.ctx.lower_ty(ret_ty);
+                let args = args
+                    .iter()
+                    .map(|rvalue| self.lower_rvalue(bb_idx, rvalue))
+                    .collect();
+
+                //FIXME: what to do when the function returns void? what Operand to return?
+                self.get_basic_block(bb_idx)
+                    .create_call(operand, ty, args)
+                    .unwrap_or_else(|| repr::Operand::const_i8(0, &self.ctx.tja_ctx.ty_storage))
+            }
         }
     }
 

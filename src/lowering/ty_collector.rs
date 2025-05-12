@@ -95,6 +95,12 @@ impl<'ast> Visitor<'ast> for Collector<'_, '_, '_> {
             StmtKind::Return(expr) => {
                 if let Some(expr) = expr {
                     self.visit_expr(expr);
+
+                    let expr_ty_var_id = self.tys_ty_var_id(self.nodes_types[&expr.id]);
+                    let ty = self.lowering.get_fn().ret_ty;
+                    let ret_ty_var_id = self.tys_ty_var_id(ty);
+
+                    self.ty_problem.eq(expr_ty_var_id, ret_ty_var_id);
                 }
             }
             _ => unimplemented!(),
@@ -200,6 +206,30 @@ impl<'ast> Visitor<'ast> for Collector<'_, '_, '_> {
                 self.visit_expr(expr);
 
                 self.lower_ty(ty.clone())
+            }
+            ExprKind::FunctionCall {
+                expr: func,
+                arguments,
+            } => {
+                self.visit_expr(func);
+
+                for (idx, arg) in arguments.iter_mut().enumerate() {
+                    self.visit_expr(arg);
+
+                    let expr_ty_var_id = self.tys_ty_var_id(self.nodes_types[&func.id]);
+                    let arg_ty_var_id = self.tys_ty_var_id(self.nodes_types[&arg.id]);
+
+                    self.ty_problem
+                        .fn_argument(expr_ty_var_id, arg_ty_var_id, idx);
+                }
+
+                let fn_ty_var_id = self.tys_ty_var_id(self.nodes_types[&func.id]);
+                let ty = self.lower_ty(ast::Ty::Infer);
+                let expr_ty_var_id = self.tys_ty_var_id(ty);
+
+                self.ty_problem.ret(fn_ty_var_id, expr_ty_var_id);
+
+                ty
             }
             _ => unimplemented!(),
         };

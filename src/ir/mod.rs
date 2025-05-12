@@ -161,8 +161,7 @@ pub enum Rvalue<'ir> {
     BinaryOp(BinOp, Operand<'ir>, Operand<'ir>),
     UnaryOp(UnOp, Operand<'ir>),
     Call {
-        fn_idx: FunctionIdx,
+        operand: Operand<'ir>,
         args: Vec<Rvalue<'ir>>,
-        destination: Place<'ir>,
     },
 }

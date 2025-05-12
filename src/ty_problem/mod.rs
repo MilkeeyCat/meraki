@@ -46,6 +46,15 @@ enum Constraint {
         field_ty: Id,
         field_name: String,
     },
+    FunctionArgument {
+        expr: Id,
+        argument_ty: Id,
+        argument_idx: usize,
+    },
+    Return {
+        function: Id,
+        expr: Id,
+    },
 }
 
 #[derive(Debug)]
@@ -106,6 +115,18 @@ impl<'ir> TyProblem<'ir> {
             field_ty,
             field_name,
         });
+    }
+
+    pub fn fn_argument(&mut self, expr_ty_var: Id, argument_ty: Id, argument_idx: usize) {
+        self.constraints.push(Constraint::FunctionArgument {
+            expr: expr_ty_var,
+            argument_ty,
+            argument_idx,
+        });
+    }
+
+    pub fn ret(&mut self, function: Id, expr: Id) {
+        self.constraints.push(Constraint::Return { function, expr });
     }
 
     fn unify(&mut self, lhs: TyVar<'ir>, rhs: TyVar<'ir>) -> bool {
@@ -213,6 +234,34 @@ impl<'ir> TyProblem<'ir> {
                         let (_, field) = variant.get_field_by_name(&field_name).unwrap();
 
                         *self.get_ty_var_mut(*field_ty) = TyVar::Typed(field.ty);
+                        progress |= true;
+
+                        false
+                    }
+                    _ => unreachable!(),
+                },
+                TyVar::Infer(_) => true,
+            },
+            Constraint::FunctionArgument {
+                expr,
+                argument_ty,
+                argument_idx,
+            } => match self.get_ty_var(*expr) {
+                TyVar::Typed(ty) => match ty {
+                    Ty::Fn(params, _) => {
+                        *self.get_ty_var_mut(*argument_ty) = TyVar::Typed(params[*argument_idx]);
+                        progress |= true;
+
+                        false
+                    }
+                    _ => unreachable!(),
+                },
+                TyVar::Infer(_) => true,
+            },
+            Constraint::Return { function, expr } => match self.get_ty_var(*function) {
+                TyVar::Typed(ty) => match ty {
+                    Ty::Fn(_, ty) => {
+                        *self.get_ty_var_mut(*expr) = TyVar::Typed(ty);
                         progress |= true;
 
                         false
