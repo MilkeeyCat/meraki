@@ -4,12 +4,12 @@ use crate::{
     ir::{self, FunctionIdx, Rvalue},
 };
 use std::collections::HashMap;
-use tja::repr;
+use tja::hir;
 
 pub struct FunctionCtx<'a, 'b, 'ir> {
     ctx: &'a mut Codegen<'b, 'ir>,
     idx: FunctionIdx,
-    locals: HashMap<ir::LocalIdx, repr::Operand>,
+    locals: HashMap<ir::LocalIdx, hir::Operand>,
 }
 
 impl<'a, 'b, 'ir> FunctionCtx<'a, 'b, 'ir> {
@@ -35,17 +35,19 @@ impl<'a, 'b, 'ir> FunctionCtx<'a, 'b, 'ir> {
             bb.create_br(idx + 1);
         }
 
-        let mut locals: HashMap<ir::LocalIdx, repr::Operand> = locals[arg_count..]
-            .iter()
+        let locals: HashMap<ir::LocalIdx, hir::Operand> = locals
+            .into_iter()
             .enumerate()
-            .map(|(idx, ty)| (idx + arg_count, bb.create_alloca(*ty)))
-            .collect();
+            .map(|(idx, ty)| {
+                let operand = bb.create_alloca(ty);
 
-        locals.extend(
-            (0..arg_count)
-                .into_iter()
-                .map(|idx| (idx, repr::Operand::Local(idx))),
-        );
+                if idx < arg_count {
+                    bb.create_store(operand.clone(), hir::Operand::Local(idx));
+                }
+
+                (idx, operand)
+            })
+            .collect();
 
         Self {
             ctx,
@@ -58,23 +60,20 @@ impl<'a, 'b, 'ir> FunctionCtx<'a, 'b, 'ir> {
         self.ctx.module.functions[self.idx].locals[idx]
     }
 
-    fn get_fn(&mut self) -> repr::Wrapper<&mut repr::Function> {
-        let repr::Wrapper { ty_storage, inner } = self.ctx.tja_ctx.get_module(self.ctx.module_idx);
+    fn get_fn(&mut self) -> hir::Wrapper<&mut hir::Function> {
+        let hir::Wrapper { ty_storage, inner } = self.ctx.tja_ctx.get_module(self.ctx.module_idx);
 
-        repr::Wrapper {
+        hir::Wrapper {
             ty_storage,
             inner: inner.get_fn_mut(self.idx),
         }
     }
 
-    fn get_basic_block(
-        &mut self,
-        bb_idx: repr::basic_block::BlockIdx,
-    ) -> repr::basic_block::Wrapper {
-        let repr::Wrapper { ty_storage, inner } = self.ctx.get_module();
+    fn get_basic_block(&mut self, bb_idx: hir::basic_block::BlockIdx) -> hir::basic_block::Wrapper {
+        let hir::Wrapper { ty_storage, inner } = self.ctx.get_module();
         let func = inner.get_fn_mut(self.idx);
 
-        repr::basic_block::Wrapper {
+        hir::basic_block::Wrapper {
             ty_storage,
             fn_locals: &mut func.locals,
             block: &mut func.blocks[bb_idx],
@@ -83,13 +82,13 @@ impl<'a, 'b, 'ir> FunctionCtx<'a, 'b, 'ir> {
 
     fn lower_place(
         &mut self,
-        bb_idx: repr::basic_block::BlockIdx,
+        bb_idx: hir::basic_block::BlockIdx,
         place: &ir::Place,
-    ) -> (repr::Operand, &'ir ir::Ty<'ir>) {
+    ) -> (hir::Operand, &'ir ir::Ty<'ir>) {
         let (mut operand, mut ty) = match place.storage {
             ir::Storage::Local(idx) => (self.locals[&idx].clone(), self.local_ty(idx)),
             ir::Storage::Global(idx) => (
-                repr::Operand::const_global(idx, &self.ctx.tja_ctx.ty_storage),
+                hir::Operand::const_global(idx, &self.ctx.tja_ctx.ty_storage),
                 self.ctx.module.globals[idx].ty,
             ),
         };
@@ -114,8 +113,8 @@ impl<'a, 'b, 'ir> FunctionCtx<'a, 'b, 'ir> {
                         lowered_ty,
                         operand,
                         vec![
-                            repr::Operand::const_i64(0, &bb.ty_storage),
-                            repr::Operand::const_i64(*idx as u64, &bb.ty_storage),
+                            hir::Operand::const_i64(0, &bb.ty_storage),
+                            hir::Operand::const_i64(*idx as u64, &bb.ty_storage),
                         ],
                     );
 
@@ -132,28 +131,24 @@ impl<'a, 'b, 'ir> FunctionCtx<'a, 'b, 'ir> {
 
     fn lower_rvalue(
         &mut self,
-        bb_idx: repr::basic_block::BlockIdx,
+        bb_idx: hir::basic_block::BlockIdx,
         rvalue: &Rvalue<'ir>,
-    ) -> repr::Operand {
+    ) -> hir::Operand {
         match rvalue {
             Rvalue::Use(operand) => self.lower_operand(bb_idx, operand).0,
-            Rvalue::Ptr(place) => {
-                let (operand, _) = self.lower_place(bb_idx, place);
-
-                self.get_basic_block(bb_idx).create_copy(operand)
-            }
+            Rvalue::Ptr(place) => self.lower_place(bb_idx, place).0,
             Rvalue::BinaryOp(op, lhs, rhs) => {
                 let (lhs, ty) = self.lower_operand(bb_idx, lhs);
                 let (rhs, _) = self.lower_operand(bb_idx, rhs);
                 let op = match op {
-                    ast::BinOp::Add => repr::op::BinOp::Add,
-                    ast::BinOp::Sub => repr::op::BinOp::Sub,
-                    ast::BinOp::Mul => repr::op::BinOp::Mul,
+                    ast::BinOp::Add => hir::op::BinOp::Add,
+                    ast::BinOp::Sub => hir::op::BinOp::Sub,
+                    ast::BinOp::Mul => hir::op::BinOp::Mul,
                     ast::BinOp::Div => {
                         if ty.signed() {
-                            repr::op::BinOp::SDiv
+                            hir::op::BinOp::SDiv
                         } else {
-                            repr::op::BinOp::UDiv
+                            hir::op::BinOp::UDiv
                         }
                     }
                     _ => unreachable!(),
@@ -177,20 +172,20 @@ impl<'a, 'b, 'ir> FunctionCtx<'a, 'b, 'ir> {
                 //FIXME: what to do when the function returns void? what Operand to return?
                 self.get_basic_block(bb_idx)
                     .create_call(operand, ty, args)
-                    .unwrap_or_else(|| repr::Operand::const_i8(0, &self.ctx.tja_ctx.ty_storage))
+                    .unwrap_or_else(|| hir::Operand::const_i8(0, &self.ctx.tja_ctx.ty_storage))
             }
         }
     }
 
     fn lower_operand(
         &mut self,
-        bb_idx: repr::basic_block::BlockIdx,
+        bb_idx: hir::basic_block::BlockIdx,
         operand: &ir::Operand<'ir>,
-    ) -> (repr::Operand, &'ir ir::Ty<'ir>) {
+    ) -> (hir::Operand, &'ir ir::Ty<'ir>) {
         match operand {
             ir::Operand::Place(place) => self.load_place(bb_idx, place),
             ir::Operand::Const(valtree, ty) => (
-                repr::Operand::Const(self.lower_value_tree(valtree, ty), self.ctx.lower_ty(ty)),
+                hir::Operand::Const(self.lower_value_tree(valtree, ty), self.ctx.lower_ty(ty)),
                 ty,
             ),
         }
@@ -198,9 +193,9 @@ impl<'a, 'b, 'ir> FunctionCtx<'a, 'b, 'ir> {
 
     fn load_place(
         &mut self,
-        bb_idx: repr::basic_block::BlockIdx,
+        bb_idx: hir::basic_block::BlockIdx,
         place: &ir::Place,
-    ) -> (repr::Operand, &'ir ir::Ty<'ir>) {
+    ) -> (hir::Operand, &'ir ir::Ty<'ir>) {
         let (operand, ty) = self.lower_place(bb_idx, place);
         let ty_idx = self.ctx.lower_ty(ty);
 
@@ -210,19 +205,19 @@ impl<'a, 'b, 'ir> FunctionCtx<'a, 'b, 'ir> {
         )
     }
 
-    fn lower_value_tree(&self, valtree: &ir::ValueTree, ty: &'ir ir::Ty<'ir>) -> repr::Const {
+    fn lower_value_tree(&self, valtree: &ir::ValueTree, ty: &'ir ir::Ty<'ir>) -> hir::Const {
         match valtree {
             ir::ValueTree::Leaf(c) => match c {
-                ir::Const::Bool(value) => repr::Const::Int(*value as u64),
-                ir::Const::I8(value) => repr::Const::Int(*value as u64),
-                ir::Const::I16(value) => repr::Const::Int(*value as u64),
-                ir::Const::I32(value) => repr::Const::Int(*value as u64),
-                ir::Const::I64(value) => repr::Const::Int(*value as u64),
-                ir::Const::U8(value) => repr::Const::Int(*value as u64),
-                ir::Const::U16(value) => repr::Const::Int(*value as u64),
-                ir::Const::U32(value) => repr::Const::Int(*value as u64),
-                ir::Const::U64(value) => repr::Const::Int(*value as u64),
-                ir::Const::Function(idx) => repr::Const::Function(*idx),
+                ir::Const::Bool(value) => hir::Const::Int(*value as u64),
+                ir::Const::I8(value) => hir::Const::Int(*value as u64),
+                ir::Const::I16(value) => hir::Const::Int(*value as u64),
+                ir::Const::I32(value) => hir::Const::Int(*value as u64),
+                ir::Const::I64(value) => hir::Const::Int(*value as u64),
+                ir::Const::U8(value) => hir::Const::Int(*value as u64),
+                ir::Const::U16(value) => hir::Const::Int(*value as u64),
+                ir::Const::U32(value) => hir::Const::Int(*value as u64),
+                ir::Const::U64(value) => hir::Const::Int(*value as u64),
+                ir::Const::Function(idx) => hir::Const::Function(*idx),
             },
             ir::ValueTree::Branch(valtrees) => {
                 let tys: Vec<_> = match ty {
@@ -241,7 +236,7 @@ impl<'a, 'b, 'ir> FunctionCtx<'a, 'b, 'ir> {
                     _ => unreachable!(),
                 };
 
-                repr::Const::Aggregate(
+                hir::Const::Aggregate(
                     valtrees
                         .iter()
                         .enumerate()

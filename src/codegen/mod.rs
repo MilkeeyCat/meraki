@@ -7,20 +7,20 @@ use crate::{
 };
 use function::compile_function;
 use std::collections::HashMap;
-use tja::{CompileArgs, repr};
+use tja::{hir, targets::amd64::emit_binary};
 
 struct Codegen<'a, 'ir> {
     ctx: &'a Context<'ir>,
-    tja_ctx: repr::Context,
+    tja_ctx: hir::Context,
     module: &'a ir::Module<'ir>,
-    module_idx: repr::ModuleIdx,
-    functions: HashMap<ir::FunctionIdx, repr::FunctionIdx>,
-    adt: HashMap<ir::AdtIdx, repr::ty::TyIdx>,
+    module_idx: hir::ModuleIdx,
+    functions: HashMap<ir::FunctionIdx, hir::FunctionIdx>,
+    adt: HashMap<ir::AdtIdx, hir::ty::TyIdx>,
 }
 
 impl<'a, 'ir> Codegen<'a, 'ir> {
     fn new(ctx: &'a Context<'ir>, module: &'a ir::Module<'ir>) -> Self {
-        let mut tja_ctx = repr::Context::new();
+        let mut tja_ctx = hir::Context::new();
         let module_idx = tja_ctx.create_module("main".into());
 
         Self {
@@ -33,7 +33,7 @@ impl<'a, 'ir> Codegen<'a, 'ir> {
         }
     }
 
-    fn lower_ty(&mut self, ty: &'ir ir::Ty<'ir>) -> repr::ty::TyIdx {
+    fn lower_ty(&mut self, ty: &'ir ir::Ty<'ir>) -> hir::ty::TyIdx {
         match ty {
             ir::Ty::Void => self.tja_ctx.ty_storage.void_ty,
             ir::Ty::Bool => self.tja_ctx.ty_storage.i8_ty,
@@ -67,7 +67,7 @@ impl<'a, 'ir> Codegen<'a, 'ir> {
                                 .map(|def| self.lower_ty(def.ty))
                                 .collect();
                             let ty_idx =
-                                self.tja_ctx.ty_storage.add_ty(repr::ty::Ty::Struct(fields));
+                                self.tja_ctx.ty_storage.add_ty(hir::ty::Ty::Struct(fields));
 
                             self.adt.insert(*idx, ty_idx);
 
@@ -82,7 +82,7 @@ impl<'a, 'ir> Codegen<'a, 'ir> {
         }
     }
 
-    fn get_module(&mut self) -> repr::Wrapper<&mut repr::Module> {
+    fn get_module(&mut self) -> hir::Wrapper<&mut hir::Module> {
         self.tja_ctx.get_module(self.module_idx)
     }
 }
@@ -93,7 +93,7 @@ pub fn compile<'ir>(ctx: &Context<'ir>, module: &ir::Module<'ir>) {
     for global in &module.globals {
         let ty = codegen.lower_ty(global.ty);
 
-        codegen.get_module().globals.push(repr::Global {
+        codegen.get_module().globals.push(hir::Global {
             name: global.name.clone(),
             ty,
             value: None,
@@ -104,14 +104,29 @@ pub fn compile<'ir>(ctx: &Context<'ir>, module: &ir::Module<'ir>) {
         compile_function(&mut codegen, idx);
     }
 
-    tja::compile(
-        codegen.tja_ctx.get_module(codegen.module_idx),
-        &tja::codegen::abi::sysv_amd64::SysVAmd64::new(),
-        CompileArgs {
-            assembly_only: true,
-            object_only: false,
-            shared: false,
-        },
-    )
-    .expect("failed to compile")
+    let target = tja::targets::amd64::Target::new();
+    let mut hir_pass_manager = tja::hir::pass::ModulePassManager::new();
+    let mut mir_pass_manager = tja::mir::pass::ModulePassManager::new();
+    let mut ctx = tja::pass::Context::new(&codegen.tja_ctx.ty_storage, &target);
+
+    target.add_hir_passes(&mut hir_pass_manager);
+    target.add_mir_passes(&mut mir_pass_manager);
+
+    for module in &mut codegen.tja_ctx.modules {
+        hir_pass_manager.run(module, &mut ctx);
+
+        let mut module = ctx.mir_module.take().unwrap();
+
+        mir_pass_manager.run(&mut module, &mut ctx);
+        tja::targets::amd64::emit_binary::emit_binary(
+            &mut module,
+            &target,
+            emit_binary::Options {
+                assembly_only: true,
+                object_only: false,
+                shared: false,
+            },
+        )
+        .expect("failed to compile")
+    }
 }

@@ -159,12 +159,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
-name = "impl_ops"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90f97a5f38dd3ccfbe7aa80f4a0c00930f21b922c74195be0201c51028f22dcf"
-
-[[package]]
 name = "indoc"
 version = "2.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -321,10 +315,9 @@ dependencies = [
 [[package]]
 name = "tja"
 version = "0.1.0"
-source = "git+https://github.com/MilkeeyCat/tja#19c274a32d3ae97b2473f75fa92a47d113250e35"
+source = "git+https://github.com/MilkeeyCat/tja#6130a77331de101765037ed098760b04d2942e3a"
 dependencies = [
  "derive_more 2.0.1",
- "impl_ops",
  "paste",
 ]
 
