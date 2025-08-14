@@ -60,7 +60,7 @@ impl<'a, 'b, 'ir> FunctionCtx<'a, 'b, 'ir> {
         self.ctx.module.functions[self.idx].locals[idx]
     }
 
-    fn get_fn(&mut self) -> hir::Wrapper<&mut hir::Function> {
+    fn get_fn(&mut self) -> hir::Wrapper<'_, &mut hir::Function> {
         let hir::Wrapper { ty_storage, inner } = self.ctx.tja_ctx.get_module(self.ctx.module_idx);
 
         hir::Wrapper {
@@ -69,7 +69,10 @@ impl<'a, 'b, 'ir> FunctionCtx<'a, 'b, 'ir> {
         }
     }
 
-    fn get_basic_block(&mut self, bb_idx: hir::basic_block::BlockIdx) -> hir::basic_block::Wrapper {
+    fn get_basic_block(
+        &mut self,
+        bb_idx: hir::basic_block::BlockIdx,
+    ) -> hir::basic_block::Wrapper<'_> {
         let hir::Wrapper { ty_storage, inner } = self.ctx.get_module();
         let func = inner.get_fn_mut(self.idx);
 

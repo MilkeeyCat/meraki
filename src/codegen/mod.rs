@@ -82,7 +82,7 @@ impl<'a, 'ir> Codegen<'a, 'ir> {
         }
     }
 
-    fn get_module(&mut self) -> hir::Wrapper<&mut hir::Module> {
+    fn get_module(&mut self) -> hir::Wrapper<'_, &mut hir::Module> {
         self.tja_ctx.get_module(self.module_idx)
     }
 }
