@@ -1,9 +1,7 @@
-pub mod node_id;
 pub mod visitor;
 
 use crate::lexer::{Token, TokenKind, span::Span};
 use derive_more::derive::Display;
-use node_id::{DUMMY_NODE_ID, NodeId};
 use thiserror::Error;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -21,22 +19,7 @@ pub struct Block {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Item {
-    pub id: NodeId,
-    pub kind: ItemKind,
-}
-
-impl Item {
-    pub fn new(kind: ItemKind) -> Self {
-        Self {
-            id: DUMMY_NODE_ID,
-            kind,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum ItemKind {
+pub enum Item {
     Global(Variable),
     Fn {
         ret_ty: Ty,
@@ -51,22 +34,7 @@ pub enum ItemKind {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Stmt {
-    pub id: NodeId,
-    pub kind: StmtKind,
-}
-
-impl Stmt {
-    pub fn new(kind: StmtKind) -> Self {
-        Self {
-            id: DUMMY_NODE_ID,
-            kind,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum StmtKind {
+pub enum Stmt {
     Local(Variable),
     Item(Item),
     Expr(Expr),
@@ -92,19 +60,8 @@ pub enum StmtKind {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Expr {
-    pub id: NodeId,
     pub kind: ExprKind,
     pub span: Span,
-}
-
-impl Expr {
-    pub fn new(kind: ExprKind, span: Span) -> Self {
-        Self {
-            id: DUMMY_NODE_ID,
-            kind,
-            span,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
