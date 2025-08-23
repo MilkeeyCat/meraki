@@ -22,7 +22,7 @@ impl<'ir> TyVar<'ir> {
 impl<'ir> From<&'ir Ty<'ir>> for TyVar<'ir> {
     fn from(value: &'ir Ty<'ir>) -> Self {
         match value {
-            Ty::Infer(id) => Self::Infer(*id),
+            Ty::Infer(id) => Self::Infer(id.unwrap()),
             ty => Self::Typed(ty),
         }
     }

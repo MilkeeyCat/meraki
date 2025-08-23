@@ -1,4 +1,4 @@
-use super::{Block, Expr, ExprKind, Item, ItemKind, Stmt, StmtKind, Ty};
+use super::{Block, Expr, ExprKind, Item, Stmt, Ty};
 
 pub trait Visitor<'ast>: Sized {
     fn visit_expr(&mut self, expr: &'ast mut Expr) {
@@ -71,21 +71,21 @@ pub fn walk_expr<'ast, T: Visitor<'ast>>(visitor: &mut T, expr: &'ast mut Expr) 
 }
 
 pub fn walk_stmt<'ast, T: Visitor<'ast>>(visitor: &mut T, stmt: &'ast mut Stmt) {
-    match &mut stmt.kind {
-        StmtKind::Local(variable) => {
+    match stmt {
+        Stmt::Local(variable) => {
             visitor.visit_ty(&mut variable.ty);
             if let Some(expr) = &mut variable.value {
                 visitor.visit_expr(expr);
             }
         }
-        StmtKind::Item(item) => visitor.visit_item(item),
-        StmtKind::Expr(expr) => visitor.visit_expr(expr),
-        StmtKind::Return(expr) => {
+        Stmt::Item(item) => visitor.visit_item(item),
+        Stmt::Expr(expr) => visitor.visit_expr(expr),
+        Stmt::Return(expr) => {
             if let Some(expr) = expr {
                 visitor.visit_expr(expr);
             }
         }
-        StmtKind::If {
+        Stmt::If {
             condition,
             consequence,
             alternative,
@@ -96,11 +96,11 @@ pub fn walk_stmt<'ast, T: Visitor<'ast>>(visitor: &mut T, stmt: &'ast mut Stmt) 
                 visitor.visit_block(alternative);
             }
         }
-        StmtKind::While { condition, block } => {
+        Stmt::While { condition, block } => {
             visitor.visit_expr(condition);
             visitor.visit_block(block);
         }
-        StmtKind::For {
+        Stmt::For {
             initializer,
             condition,
             increment,
@@ -117,19 +117,19 @@ pub fn walk_stmt<'ast, T: Visitor<'ast>>(visitor: &mut T, stmt: &'ast mut Stmt) 
             }
             visitor.visit_block(block);
         }
-        StmtKind::Continue | StmtKind::Break => (),
+        Stmt::Continue | Stmt::Break => (),
     }
 }
 
 pub fn walk_item<'ast, T: Visitor<'ast>>(visitor: &mut T, item: &'ast mut Item) {
-    match &mut item.kind {
-        ItemKind::Global(variable) => {
+    match item {
+        Item::Global(variable) => {
             visitor.visit_ty(&mut variable.ty);
             if let Some(expr) = &mut variable.value {
                 visitor.visit_expr(expr);
             }
         }
-        ItemKind::Fn {
+        Item::Fn {
             ret_ty,
             params,
             block,
@@ -143,7 +143,7 @@ pub fn walk_item<'ast, T: Visitor<'ast>>(visitor: &mut T, item: &'ast mut Item) 
                 visitor.visit_block(block);
             }
         }
-        ItemKind::Struct { fields, .. } => {
+        Item::Struct { fields, .. } => {
             for (_, ty) in fields {
                 visitor.visit_ty(ty);
             }

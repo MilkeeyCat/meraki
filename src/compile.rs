@@ -1,7 +1,4 @@
-use crate::{
-    Context, ast::node_id::assign_node_ids, codegen, diagnostics::Diagnostics, lexer::Lexer,
-    lowering::Lowering, parser,
-};
+use crate::{Context, diagnostics::Diagnostics, lexer::Lexer, lowering, parser};
 use bumpalo::Bump;
 use clap::Parser;
 use std::{fs::File, io::Read, path::PathBuf};
@@ -46,7 +43,7 @@ pub fn compile(args: CompileArgs) -> Result<(), Box<dyn std::error::Error>> {
 
     let mut diagnostics = Diagnostics::new(&source_code);
     let lexer = Lexer::new(&source_code);
-    let mut ast = match parser::Parser::new(lexer, &mut diagnostics).parse() {
+    let ast = match parser::Parser::new(lexer, &mut diagnostics).parse() {
         Ok(ast) => ast,
         Err(_) => report_diag_and_exit(&diagnostics),
     };
@@ -58,11 +55,13 @@ pub fn compile(args: CompileArgs) -> Result<(), Box<dyn std::error::Error>> {
     let allocator = Bump::new();
     let mut ctx = Context::new(&allocator);
 
-    assign_node_ids(&mut ast);
-    let module = Lowering::new(&mut ctx).lower(ast);
-    codegen::compile(&ctx, &module);
+    let package = lowering::lower(&mut ctx, ast);
+    dbg!(&package);
 
-    dbg!(module);
+    //let module = Lowering::new(&mut ctx).lower(ast);
+    //codegen::compile(&ctx, &module);
+
+    //dbg!(module);
 
     //MacroExpansion::new(args.macro_libs).run_pass(&mut stmts, &mut scope);
     //SymbolResolver::new(()).run_pass(&mut stmts, &mut scope)?;

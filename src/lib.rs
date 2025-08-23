@@ -4,18 +4,13 @@ pub mod diagnostics;
 pub mod ir;
 pub mod lexer;
 pub mod lowering;
-//pub mod macros;
-pub mod codegen;
 pub mod parser;
 pub mod passes;
-pub mod ty_problem;
+pub mod typecheck;
 
 use ast::{IntTy, UintTy};
 use bumpalo::Bump;
-use ir::{
-    Ty,
-    ty::{AdtDef, AdtIdx, AdtKind},
-};
+use ir::ty::{AdtDef, AdtIdx, AdtKind, Ty};
 
 #[derive(Debug)]
 pub struct CommonTypes<'ir> {
@@ -58,7 +53,7 @@ impl<'ir> CommonTypes<'ir> {
 pub struct Context<'ir> {
     allocator: &'ir Bump,
     types: CommonTypes<'ir>,
-    aggregates: Vec<AdtDef<'ir>>,
+    pub aggregates: Vec<AdtDef<'ir>>,
 }
 
 impl<'ir> Context<'ir> {

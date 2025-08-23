@@ -1,6 +1,6 @@
 use crate::{
     ast::{IntTy, UintTy},
-    ty_problem,
+    typecheck::ty_problem,
 };
 
 pub type AdtIdx = usize;
@@ -92,7 +92,7 @@ pub enum Ty<'ir> {
     Array(TyArray<'ir>),
     Fn(&'ir [&'ir Ty<'ir>], &'ir Ty<'ir>),
     Adt(AdtIdx),
-    Infer(ty_problem::Id),
+    Infer(Option<ty_problem::Id>),
 }
 
 impl Ty<'_> {
