@@ -17,6 +17,15 @@ impl From<Id> for SymbolId {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Hash, Eq)]
+pub struct ExprId(Id);
+
+impl From<Id> for ExprId {
+    fn from(value: Id) -> Self {
+        Self(value)
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct Expr<'ir> {
     pub id: Id,
@@ -109,6 +118,7 @@ impl<'ir> Symbol<'ir> {
 pub struct Package<'ir> {
     pub items: Vec<Item<'ir>>,
     pub symbols: HashMap<SymbolId, Symbol<'ir>>,
+    pub expr_tys: HashMap<ExprId, &'ir Ty<'ir>>,
 }
 
 impl<'ir> Package<'ir> {
@@ -116,6 +126,7 @@ impl<'ir> Package<'ir> {
         Package {
             items: Vec::new(),
             symbols: HashMap::new(),
+            expr_tys: HashMap::new(),
         }
     }
 

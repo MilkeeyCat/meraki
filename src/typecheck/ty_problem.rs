@@ -283,18 +283,16 @@ impl<'ir> TyProblem<'ir> {
             }
         }
 
-        assert!(self.constraints.is_empty());
+        assert!(
+            self.constraints.is_empty(),
+            "Failed to infer variables' types"
+        );
         self.ty_vars
             .into_iter()
             .enumerate()
-            .map(|(idx, ty_var)| {
-                let ty = if let TyVar::Typed(ty) = ty_var {
-                    ty
-                } else {
-                    unreachable!()
-                };
-
-                (Id(idx), ty)
+            .map(|(id, ty_var)| match ty_var {
+                TyVar::Typed(ty) => (Id(id), ty),
+                TyVar::Infer(_) => unreachable!(),
             })
             .collect()
     }
