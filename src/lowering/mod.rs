@@ -105,6 +105,7 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                 let ty = self.lower_ty(ty);
 
                 self.ir.add_symbol(id.into(), Symbol::Variable(ty));
+                self.symbol_table.insert_symbol(name.to_string(), id);
 
                 ir::Stmt {
                     id,
@@ -115,6 +116,14 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                     }),
                 }
             }
+            ast::Stmt::Expr(expr) => ir::Stmt {
+                id: self.next_id(),
+                kind: ir::StmtKind::Expr(self.lower_expr(expr)),
+            },
+            ast::Stmt::Return(expr) => ir::Stmt {
+                id: self.next_id(),
+                kind: ir::StmtKind::Return(expr.as_ref().map(|expr| self.lower_expr(expr))),
+            },
             _ => unimplemented!(),
         }
     }

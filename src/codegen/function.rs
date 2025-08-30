@@ -1,11 +1,12 @@
 use crate::{
+    ast,
     codegen::module::ModuleCtx,
-    ir::{Expr, ExprKind, ExprLit, ItemFn, Package, Stmt, StmtKind, SymbolId},
+    ir::{Expr, ExprKind, ExprLit, ItemFn, Package, Stmt, StmtKind, SymbolId, Ty},
 };
 use std::collections::HashMap;
 use tja::{
     FunctionIdx,
-    hir::{self, BlockIdx},
+    hir::{self, BlockIdx, op},
 };
 
 struct FunctionCtx<'a, 'b, 'ir> {
@@ -81,11 +82,67 @@ impl<'a, 'b, 'ir> FunctionCtx<'a, 'b, 'ir> {
         self.get_bb(self.cur_bb_idx)
     }
 
-    fn lower_expr(&mut self, expr: &Expr<'ir>) -> Option<hir::Operand> {
+    fn lower_expr(&mut self, expr: &Expr<'ir>, rvalue: bool) -> Option<hir::Operand> {
         match expr.kind.as_ref() {
-            //ExprKind::Binary(BinOp, Expr<'ir>, Expr<'ir>),
+            ExprKind::Binary(op, lhs, rhs) => {
+                let op = match op {
+                    ast::BinOp::Add => op::BinOp::Add,
+                    ast::BinOp::Sub => op::BinOp::Sub,
+                    ast::BinOp::Mul => op::BinOp::Mul,
+                    ast::BinOp::Div => {
+                        if matches!(self.package.expr_tys[&expr.id.into()], Ty::UInt(_)) {
+                            op::BinOp::UDiv
+                        } else {
+                            op::BinOp::SDiv
+                        }
+                    }
+                    ast::BinOp::Assign => {
+                        let lhs = self.lower_expr(lhs, false).unwrap();
+                        let rhs = self.lower_expr(rhs, true).unwrap();
+
+                        self.get_cur_bb().create_store(lhs.clone(), rhs);
+
+                        return Some(lhs);
+                    }
+                    _ => unimplemented!(),
+                };
+                let lhs = self.lower_expr(lhs, true).unwrap();
+                let rhs = self.lower_expr(rhs, true).unwrap();
+
+                Some(self.get_cur_bb().create_bin(lhs, rhs, op))
+            }
             //ExprKind::Unary(UnOp, Expr<'ir>),
-            //ExprKind::Ident(SymbolId)
+            ExprKind::Ident(id) => {
+                let ty = self.package.symbols[id].ty();
+                let ty = self.mod_ctx.lower_ty(ty);
+
+                Some(
+                    self.locals
+                        .get(id)
+                        .cloned()
+                        .map(|operand| {
+                            if rvalue {
+                                self.get_cur_bb().create_load(operand, ty)
+                            } else {
+                                operand
+                            }
+                        })
+                        .or_else(|| {
+                            self.mod_ctx.globals.get(id).map(|idx| {
+                                hir::Operand::const_global(*idx, &self.mod_ctx.tja_ctx.ty_storage)
+                            })
+                        })
+                        .or_else(|| {
+                            self.mod_ctx.functions.get(id).map(|idx| {
+                                hir::Operand::Const(
+                                    tja::Const::Function(*idx),
+                                    self.mod_ctx.tja_ctx.ty_storage.ptr_ty,
+                                )
+                            })
+                        }),
+                )
+                .unwrap()
+            }
             ExprKind::Lit(lit) => match lit {
                 ExprLit::Int(value) => Some(hir::Operand::const_int(
                     (*value) as u64,
@@ -119,7 +176,7 @@ impl<'a, 'b, 'ir> FunctionCtx<'a, 'b, 'ir> {
                 let value = variable
                     .value
                     .as_ref()
-                    .map(|expr| self.lower_expr(expr).unwrap());
+                    .map(|expr| self.lower_expr(expr, true).unwrap());
                 let mut bb = self.get_cur_bb();
                 let operand = bb.create_alloca(ty);
 
@@ -128,6 +185,15 @@ impl<'a, 'b, 'ir> FunctionCtx<'a, 'b, 'ir> {
                 }
 
                 self.locals.insert(stmt.id.into(), operand);
+            }
+            StmtKind::Expr(expr) => _ = self.lower_expr(expr, true),
+            StmtKind::Return(expr) => {
+                let value = expr
+                    .as_ref()
+                    .map(|expr| self.lower_expr(expr, true))
+                    .flatten();
+
+                self.get_cur_bb().create_ret(value);
             }
             _ => unimplemented!(),
         }

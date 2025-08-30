@@ -73,7 +73,11 @@ impl<'ir> Visitor<'ir> for InferCtx<'_, 'ir> {
             }
             StmtKind::Item(item) => unimplemented!(),
             StmtKind::Expr(expr) => self.visit_expr(expr),
-            StmtKind::Return(expr) => unimplemented!(),
+            StmtKind::Return(expr) => {
+                if let Some(expr) = expr {
+                    self.visit_expr(expr)
+                }
+            }
         }
     }
 
