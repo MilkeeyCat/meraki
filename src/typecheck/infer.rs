@@ -49,7 +49,7 @@ impl<'ir> Visitor<'ir> for InferCtx<'_, 'ir> {
             ExprKind::Unary(op, expr) => todo!(),
             ExprKind::Ident(id) => self
                 .types
-                .get(id)
+                .get(&(*id).into())
                 .map(|ty| *ty)
                 .unwrap_or_else(|| self.symbols[&(*id).into()].ty()),
             ExprKind::Lit(lit) => match lit {

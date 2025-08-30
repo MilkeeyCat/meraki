@@ -1,4 +1,6 @@
-use crate::{Context, diagnostics::Diagnostics, lexer::Lexer, lowering, parser, typecheck};
+use crate::{
+    Context, codegen, diagnostics::Diagnostics, lexer::Lexer, lowering, parser, typecheck,
+};
 use bumpalo::Bump;
 use clap::Parser;
 use std::{fs::File, io::Read, path::PathBuf};
@@ -56,17 +58,10 @@ pub fn compile(args: CompileArgs) -> Result<(), Box<dyn std::error::Error>> {
     let mut ctx = Context::new(&allocator);
 
     let mut package = lowering::lower(&mut ctx, ast);
-    dbg!(&package);
     typecheck::typecheck(&mut ctx, &mut package);
+    dbg!(&package);
 
-    //let module = Lowering::new(&mut ctx).lower(ast);
-    //codegen::compile(&ctx, &module);
-
-    //dbg!(module);
-
-    //MacroExpansion::new(args.macro_libs).run_pass(&mut stmts, &mut scope);
-    //SymbolResolver::new(()).run_pass(&mut stmts, &mut scope)?;
-    //TypeChecker::new(()).run_pass(&mut stmts, &mut scope)?;
+    codegen::compile(&ctx, &package);
 
     Ok(())
 }

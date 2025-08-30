@@ -8,6 +8,12 @@ pub use ty::{Ty, TyArray};
 #[derive(Debug, Clone, Copy, PartialEq, Hash, Eq)]
 pub struct Id(pub usize);
 
+impl From<SymbolId> for Id {
+    fn from(value: SymbolId) -> Self {
+        value.0
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Hash, Eq)]
 pub struct SymbolId(Id);
 
@@ -36,7 +42,7 @@ pub struct Expr<'ir> {
 pub enum ExprKind<'ir> {
     Binary(BinOp, Expr<'ir>, Expr<'ir>),
     Unary(UnOp, Expr<'ir>),
-    Ident(Id),
+    Ident(SymbolId),
     Lit(ExprLit),
     Struct(Vec<(String, Expr<'ir>)>),
     Field(Expr<'ir>, String),

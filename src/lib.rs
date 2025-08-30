@@ -1,4 +1,5 @@
 pub mod ast;
+pub mod codegen;
 pub mod compile;
 pub mod diagnostics;
 pub mod ir;

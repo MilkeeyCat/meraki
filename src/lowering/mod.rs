@@ -91,7 +91,7 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
             ast::ExprKind::Ident(ident) => ir::Expr {
                 id: self.next_id(),
                 kind: Box::new(ir::ExprKind::Ident(
-                    self.symbol_table.find_symbol(ident).unwrap(),
+                    self.symbol_table.find_symbol(ident).unwrap().into(),
                 )),
             },
             _ => unimplemented!(),
