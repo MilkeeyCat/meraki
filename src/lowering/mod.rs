@@ -157,10 +157,12 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                     .iter()
                     .map(|(name, ty)| {
                         let id = self.next_id();
+                        let ty = self.lower_ty(ty);
 
                         assert!(self.symbol_table.insert_symbol(name.to_string(), id));
+                        self.ir.add_symbol(id.into(), Symbol::Variable(ty));
 
-                        (id, self.lower_ty(ty))
+                        (id, ty)
                     })
                     .collect();
                 let ret_ty = self.lower_ty(ret_ty);
