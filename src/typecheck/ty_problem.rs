@@ -1,66 +1,46 @@
-use crate::{Context, ast::IntTy, ir::Ty};
+use crate::{
+    Context,
+    ast::IntTy,
+    ir::{Ty, ty::InferTy},
+};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Id(usize);
 
-#[derive(Debug, Clone)]
-pub enum TyVar<'ir> {
-    Typed(&'ir Ty<'ir>),
-    Infer(Id),
-}
-
-impl<'ir> TyVar<'ir> {
-    pub fn ty(&self) -> Option<&'ir Ty<'ir>> {
-        match self {
-            Self::Typed(ty) => Some(ty),
-            Self::Infer(_) => None,
-        }
-    }
-}
-
-impl<'ir> From<&'ir Ty<'ir>> for TyVar<'ir> {
-    fn from(value: &'ir Ty<'ir>) -> Self {
-        match value {
-            Ty::Infer(id) => Self::Infer(id.unwrap()),
-            ty => Self::Typed(ty),
-        }
-    }
-}
-
 #[derive(Debug)]
-enum Constraint {
-    Eq(Id, Id),
+enum Constraint<'ir> {
+    Eq(&'ir Ty<'ir>, &'ir Ty<'ir>),
     BinAdd {
-        expr: Id,
-        lhs: Id,
-        rhs: Id,
+        expr: &'ir Ty<'ir>,
+        lhs: &'ir Ty<'ir>,
+        rhs: &'ir Ty<'ir>,
     },
     BinSub {
-        expr: Id,
-        lhs: Id,
-        rhs: Id,
+        expr: &'ir Ty<'ir>,
+        lhs: &'ir Ty<'ir>,
+        rhs: &'ir Ty<'ir>,
     },
     Field {
-        expr: Id,
-        field_ty: Id,
+        expr: &'ir Ty<'ir>,
+        field_ty: &'ir Ty<'ir>,
         field_name: String,
     },
     FunctionArgument {
-        expr: Id,
-        argument_ty: Id,
+        expr: &'ir Ty<'ir>,
+        argument_ty: &'ir Ty<'ir>,
         argument_idx: usize,
     },
     Return {
-        function: Id,
-        expr: Id,
+        function: &'ir Ty<'ir>,
+        expr: &'ir Ty<'ir>,
     },
 }
 
 #[derive(Debug)]
 pub struct TyProblem<'ir> {
-    ty_vars: Vec<TyVar<'ir>>,
-    constraints: Vec<Constraint>,
+    ty_vars: Vec<Option<&'ir Ty<'ir>>>,
+    constraints: Vec<Constraint<'ir>>,
 }
 
 impl<'ir> TyProblem<'ir> {
@@ -71,84 +51,101 @@ impl<'ir> TyProblem<'ir> {
         }
     }
 
-    fn new_ty_var(&mut self, ty_var: TyVar<'ir>) -> Id {
-        let i = self.ty_vars.len();
+    fn new_ty_var(&mut self, ty: Option<&'ir Ty<'ir>>) -> Id {
+        let id = self.ty_vars.len();
 
-        self.ty_vars.push(ty_var);
+        self.ty_vars.push(ty);
 
-        Id(i)
+        Id(id)
     }
 
     pub fn new_infer_ty_var(&mut self) -> Id {
-        let i = self.ty_vars.len();
-
-        self.new_ty_var(TyVar::Infer(Id(i)))
+        self.new_ty_var(None)
     }
 
     pub fn new_typed_ty_var(&mut self, ty: &'ir Ty<'ir>) -> Id {
-        self.new_ty_var(TyVar::Typed(ty))
+        self.new_ty_var(Some(ty))
     }
 
-    pub fn get_ty_var(&self, id: Id) -> &TyVar<'ir> {
-        &self.ty_vars[id.0]
-    }
-
-    pub fn get_ty_var_mut(&mut self, id: Id) -> &mut TyVar<'ir> {
-        &mut self.ty_vars[id.0]
-    }
-
-    pub fn eq(&mut self, lhs: Id, rhs: Id) {
+    pub fn eq(&mut self, lhs: &'ir Ty<'ir>, rhs: &'ir Ty<'ir>) {
         self.constraints.push(Constraint::Eq(lhs, rhs));
     }
 
-    pub fn bin_add(&mut self, expr: Id, lhs: Id, rhs: Id) {
+    pub fn bin_add(&mut self, expr: &'ir Ty<'ir>, lhs: &'ir Ty<'ir>, rhs: &'ir Ty<'ir>) {
         self.constraints.push(Constraint::BinAdd { expr, lhs, rhs });
     }
 
-    pub fn bin_sub(&mut self, expr: Id, lhs: Id, rhs: Id) {
+    pub fn bin_sub(&mut self, expr: &'ir Ty<'ir>, lhs: &'ir Ty<'ir>, rhs: &'ir Ty<'ir>) {
         self.constraints.push(Constraint::BinSub { expr, lhs, rhs });
     }
 
-    pub fn field(&mut self, expr_ty_var: Id, field_ty: Id, field_name: String) {
+    pub fn field(&mut self, expr_ty: &'ir Ty<'ir>, field_ty: &'ir Ty<'ir>, field_name: String) {
         self.constraints.push(Constraint::Field {
-            expr: expr_ty_var,
+            expr: expr_ty,
             field_ty,
             field_name,
         });
     }
 
-    pub fn fn_argument(&mut self, expr_ty_var: Id, argument_ty: Id, argument_idx: usize) {
+    pub fn fn_argument(
+        &mut self,
+        expr_ty: &'ir Ty<'ir>,
+        argument_ty: &'ir Ty<'ir>,
+        argument_idx: usize,
+    ) {
         self.constraints.push(Constraint::FunctionArgument {
-            expr: expr_ty_var,
+            expr: expr_ty,
             argument_ty,
             argument_idx,
         });
     }
 
-    pub fn ret(&mut self, function: Id, expr: Id) {
+    pub fn ret(&mut self, function: &'ir Ty<'ir>, expr: &'ir Ty<'ir>) {
         self.constraints.push(Constraint::Return { function, expr });
     }
 
-    fn unify(&mut self, lhs: TyVar<'ir>, rhs: TyVar<'ir>) -> bool {
+    fn resolve_ty(&self, ty: &'ir Ty<'ir>) -> Option<&'ir Ty<'ir>> {
+        match ty {
+            Ty::Infer(Some(infer_ty)) => {
+                let id: Id = infer_ty.clone().into();
+
+                self.ty_vars[id.0].map(|ty| self.resolve_ty(ty)).flatten()
+            }
+            Ty::Infer(None) => unreachable!(),
+            ty => Some(ty),
+        }
+    }
+
+    fn bind_ty_var(&mut self, id: Id, ty: &'ir Ty<'ir>) {
+        assert!(
+            &self.ty_vars[id.0].is_none(),
+            "Type variable was already bound"
+        );
+
+        self.ty_vars[id.0] = Some(ty);
+    }
+
+    fn unify(&mut self, lhs: &'ir Ty<'ir>, rhs: &'ir Ty<'ir>) {
         match (lhs, rhs) {
-            (TyVar::Infer(lhs), TyVar::Infer(rhs)) => {
-                self.eq(lhs, rhs);
+            (lhs, rhs) if lhs == rhs => (),
 
-                false
-            }
-            (TyVar::Typed(ty), TyVar::Infer(id)) | (TyVar::Infer(id), TyVar::Typed(ty)) => {
-                *self.get_ty_var_mut(id) = TyVar::Typed(ty);
+            (Ty::Infer(Some(infer_ty)), ty) | (ty, Ty::Infer(Some(infer_ty))) => match infer_ty {
+                InferTy::TyVar(id) | InferTy::IntVar(id) if self.ty_vars[id.0].is_some() => {
+                    self.unify(self.ty_vars[id.0].unwrap(), ty);
+                }
+                InferTy::TyVar(id) => {
+                    self.bind_ty_var(*id, ty);
+                }
+                InferTy::IntVar(id) => {
+                    assert!(matches!(ty, Ty::UInt(_) | Ty::Int(_)), "Invalid int type");
 
-                true
-            }
-            (TyVar::Typed(lhs), TyVar::Typed(rhs)) => match (lhs, rhs) {
-                (Ty::Ptr(lhs), Ty::Ptr(rhs)) => self.unify((*lhs).into(), (*rhs).into()),
-                _ => {
-                    assert_eq!(lhs, rhs, "Failed to unify {lhs:?} and {rhs:?}");
-
-                    false
+                    self.bind_ty_var(*id, ty);
                 }
             },
+
+            (Ty::Ptr(lhs), Ty::Ptr(rhs)) => self.unify(lhs, rhs),
+
+            (lhs, rhs) => panic!("Failed to unify {lhs:?} and {rhs:?}"),
         }
     }
 
@@ -158,28 +155,28 @@ impl<'ir> TyProblem<'ir> {
 
         constraints.retain(|constraint| match constraint {
             Constraint::Eq(lhs, rhs) => {
-                progress |=
-                    self.unify(self.get_ty_var(*lhs).clone(), self.get_ty_var(*rhs).clone());
+                self.unify(lhs, rhs);
+                progress |= true;
 
                 false
             }
             Constraint::BinAdd { expr, lhs, rhs } => {
-                let (lhs, rhs) = if let Some(Ty::Ptr(_)) = self.get_ty_var(*rhs).ty() {
+                let (lhs, rhs) = if let Some(Ty::Ptr(_)) = self.resolve_ty(rhs) {
                     (rhs, lhs)
                 } else {
                     (lhs, rhs)
                 };
 
-                if let Some(ty) = self.get_ty_var(*lhs).ty() {
+                if let Some(ty) = self.resolve_ty(lhs) {
                     match ty {
                         Ty::Ptr(_) => {
-                            *self.get_ty_var_mut(*rhs) = TyVar::Typed(&Ty::Int(IntTy::Isize));
-                            *self.get_ty_var_mut(*expr) = TyVar::Typed(&Ty::Int(IntTy::Isize));
+                            self.unify(rhs, &Ty::Int(IntTy::Isize));
+                            self.unify(expr, &Ty::Int(IntTy::Isize));
                             progress |= true;
                         }
                         Ty::Int(_) | Ty::UInt(_) => {
-                            *self.get_ty_var_mut(*rhs) = TyVar::Typed(ty);
-                            *self.get_ty_var_mut(*expr) = TyVar::Typed(ty);
+                            self.unify(rhs, ty);
+                            self.unify(expr, ty);
                             progress |= true;
                         }
                         _ => unreachable!("Bad type, expected integer or pointer, got {ty:?}"),
@@ -187,34 +184,34 @@ impl<'ir> TyProblem<'ir> {
 
                     false
                 } else {
-                    self.eq(*expr, *lhs);
+                    self.unify(expr, lhs);
 
                     true
                 }
             }
             Constraint::BinSub { expr, lhs, rhs } => {
-                let (lhs, rhs) = if let Some(Ty::Ptr(_)) = self.get_ty_var(*rhs).ty() {
+                let (lhs, rhs) = if let Some(Ty::Ptr(_)) = self.resolve_ty(rhs) {
                     (rhs, lhs)
                 } else {
                     (lhs, rhs)
                 };
 
-                match (self.get_ty_var(*lhs).ty(), self.get_ty_var(*rhs).ty()) {
+                match (self.resolve_ty(lhs), self.resolve_ty(rhs)) {
                     (Some(Ty::Ptr(_)), Some(Ty::Ptr(_))) => {
-                        *self.get_ty_var_mut(*expr) = TyVar::Typed(&Ty::Int(IntTy::Isize));
+                        self.unify(expr, &Ty::Int(IntTy::Isize));
                         progress |= true;
 
                         false
                     }
                     (Some(ty @ Ty::Ptr(_)), Some(Ty::Int(_) | Ty::UInt(_))) => {
-                        *self.get_ty_var_mut(*expr) = TyVar::Typed(ty);
+                        self.unify(expr, ty);
                         progress |= true;
 
                         false
                     }
                     (None, None) => {
-                        self.eq(*expr, *lhs);
-                        self.eq(*lhs, *rhs);
+                        self.unify(expr, lhs);
+                        self.unify(lhs, rhs);
 
                         progress |= true;
 
@@ -227,48 +224,48 @@ impl<'ir> TyProblem<'ir> {
                 expr,
                 field_ty,
                 field_name,
-            } => match self.get_ty_var(*expr).clone() {
-                TyVar::Typed(ty) => match ty {
+            } => match self.resolve_ty(expr) {
+                Some(ty) => match ty {
                     Ty::Adt(idx) => {
                         let variant = &ctx.get_adt(*idx).variants[0];
                         let (_, field) = variant.get_field_by_name(&field_name).unwrap();
 
-                        *self.get_ty_var_mut(*field_ty) = TyVar::Typed(field.ty);
+                        self.unify(field_ty, field.ty);
                         progress |= true;
 
                         false
                     }
                     _ => unreachable!(),
                 },
-                TyVar::Infer(_) => true,
+                None => true,
             },
             Constraint::FunctionArgument {
                 expr,
                 argument_ty,
                 argument_idx,
-            } => match self.get_ty_var(*expr) {
-                TyVar::Typed(ty) => match ty {
+            } => match self.resolve_ty(expr) {
+                Some(ty) => match ty {
                     Ty::Fn(params, _) => {
-                        *self.get_ty_var_mut(*argument_ty) = TyVar::Typed(params[*argument_idx]);
+                        self.unify(argument_ty, params[*argument_idx]);
                         progress |= true;
 
                         false
                     }
                     _ => unreachable!(),
                 },
-                TyVar::Infer(_) => true,
+                None => true,
             },
-            Constraint::Return { function, expr } => match self.get_ty_var(*function) {
-                TyVar::Typed(ty) => match ty {
+            Constraint::Return { function, expr } => match self.resolve_ty(function) {
+                Some(ty) => match ty {
                     Ty::Fn(_, ty) => {
-                        *self.get_ty_var_mut(*expr) = TyVar::Typed(ty);
+                        self.unify(expr, ty);
                         progress |= true;
 
                         false
                     }
                     _ => unreachable!(),
                 },
-                TyVar::Infer(_) => true,
+                None => true,
             },
         });
         self.constraints.append(&mut constraints);
@@ -291,8 +288,8 @@ impl<'ir> TyProblem<'ir> {
             .into_iter()
             .enumerate()
             .map(|(id, ty_var)| match ty_var {
-                TyVar::Typed(ty) => (Id(id), ty),
-                TyVar::Infer(_) => unreachable!(),
+                Some(ty) => (Id(id), ty),
+                None => unreachable!(),
             })
             .collect()
     }

@@ -81,6 +81,21 @@ pub struct FieldDef<'ir> {
     pub ty: &'ir Ty<'ir>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum InferTy {
+    TyVar(ty_problem::Id),
+    IntVar(ty_problem::Id),
+}
+
+impl Into<ty_problem::Id> for InferTy {
+    fn into(self) -> ty_problem::Id {
+        match self {
+            Self::TyVar(id) => id,
+            Self::IntVar(id) => id,
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum Ty<'ir> {
     Void,
@@ -92,7 +107,7 @@ pub enum Ty<'ir> {
     Array(TyArray<'ir>),
     Fn(&'ir [&'ir Ty<'ir>], &'ir Ty<'ir>),
     Adt(AdtIdx),
-    Infer(Option<ty_problem::Id>),
+    Infer(Option<InferTy>),
 }
 
 impl Ty<'_> {

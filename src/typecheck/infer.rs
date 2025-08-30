@@ -4,6 +4,7 @@ use crate::{
     ir::{
         Expr, ExprKind, ExprLit, Id, Item, ItemKind, Stmt, StmtKind, Symbol, SymbolId, Ty, TyArray,
         Variable,
+        ty::InferTy,
         visitor::{Visitor, walk_expr, walk_item, walk_stmt},
     },
     typecheck::ty_problem::{self, TyProblem},
@@ -22,36 +23,29 @@ impl<'ir> Visitor<'ir> for InferCtx<'_, 'ir> {
         walk_expr(self, expr);
 
         let ty = match expr.kind.as_ref() {
-            ExprKind::Binary(op, lhs, rhs) => {
-                let lhs_ty_var_id = self.tys_ty_var_id(self.types[&lhs.id]);
-                let rhs_ty_var_id = self.tys_ty_var_id(self.types[&rhs.id]);
+            ExprKind::Binary(op, lhs, rhs) => match op {
+                BinOp::Add => {
+                    let ty = self.new_infer_ty();
 
-                match op {
-                    BinOp::Add => {
-                        let ty = self.new_infer_ty();
-                        let ty_var_id = self.tys_ty_var_id(ty);
+                    self.ty_problem
+                        .bin_add(ty, self.types[&lhs.id], self.types[&rhs.id]);
 
-                        self.ty_problem
-                            .bin_add(ty_var_id, lhs_ty_var_id, rhs_ty_var_id);
-
-                        ty
-                    }
-                    BinOp::Sub => {
-                        let ty = self.new_infer_ty();
-                        let ty_var_id = self.tys_ty_var_id(ty);
-
-                        self.ty_problem
-                            .bin_sub(ty_var_id, lhs_ty_var_id, rhs_ty_var_id);
-
-                        ty
-                    }
-                    _ => {
-                        self.ty_problem.eq(lhs_ty_var_id, rhs_ty_var_id);
-
-                        self.types[&lhs.id]
-                    }
+                    ty
                 }
-            }
+                BinOp::Sub => {
+                    let ty = self.new_infer_ty();
+
+                    self.ty_problem
+                        .bin_sub(ty, self.types[&lhs.id], self.types[&rhs.id]);
+
+                    ty
+                }
+                _ => {
+                    self.ty_problem.eq(self.types[&lhs.id], self.types[&rhs.id]);
+
+                    self.types[&lhs.id]
+                }
+            },
             ExprKind::Unary(op, expr) => todo!(),
             ExprKind::Ident(id) => self
                 .types
@@ -61,7 +55,8 @@ impl<'ir> Visitor<'ir> for InferCtx<'_, 'ir> {
             ExprKind::Lit(lit) => match lit {
                 ExprLit::Bool(_) => self.ctx.types.bool,
                 ExprLit::String(_) => self.ctx.allocator.alloc(Ty::Ptr(self.ctx.types.u8)),
-                _ => self.new_infer_ty(),
+                ExprLit::Int(_) | ExprLit::UInt(_) => self.new_infer_int_ty(),
+                ExprLit::Null => self.new_infer_ty(),
             },
             _ => unimplemented!(),
         };
@@ -105,27 +100,23 @@ impl<'ir> InferCtx<'_, 'ir> {
         }
     }
 
-    fn tys_ty_var_id(&mut self, ty: &'ir Ty<'ir>) -> ty_problem::Id {
-        match ty {
-            Ty::Infer(id) => id.unwrap(),
-            ty => self.ty_problem.new_typed_ty_var(ty),
-        }
+    fn new_infer_ty(&mut self) -> &'ir Ty<'ir> {
+        self.ctx.allocator.alloc(Ty::Infer(Some(InferTy::TyVar(
+            self.ty_problem.new_infer_ty_var(),
+        ))))
     }
 
-    fn new_infer_ty(&mut self) -> &'ir Ty<'ir> {
-        self.ctx
-            .allocator
-            .alloc(Ty::Infer(Some(self.ty_problem.new_infer_ty_var())))
+    fn new_infer_int_ty(&mut self) -> &'ir Ty<'ir> {
+        self.ctx.allocator.alloc(Ty::Infer(Some(InferTy::IntVar(
+            self.ty_problem.new_infer_ty_var(),
+        ))))
     }
 
     fn infer_var_decl(&mut self, id: Id, variable: &Variable<'ir>) {
         let ty = self.lower_ty(variable.ty);
 
         if let Some(expr) = &variable.value {
-            let let_ty_var_id = self.tys_ty_var_id(ty);
-            let expr_ty_var_id = self.tys_ty_var_id(self.types[&expr.id]);
-
-            self.ty_problem.eq(let_ty_var_id, expr_ty_var_id);
+            self.ty_problem.eq(ty, self.types[&expr.id]);
         }
 
         self.types.insert(id, ty);
@@ -161,7 +152,7 @@ fn resolve_ty<'ir>(
     ty: &'ir Ty<'ir>,
 ) -> &'ir Ty<'ir> {
     match ty {
-        Ty::Infer(id) => resolve_ty(ctx, types, types[&id.unwrap()]),
+        Ty::Infer(ty) => resolve_ty(ctx, types, types[&ty.clone().unwrap().into()]),
         Ty::Ptr(ty) => ctx.allocator.alloc(Ty::Ptr(resolve_ty(ctx, types, *ty))),
         ty => ty,
     }
