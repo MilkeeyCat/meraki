@@ -38,6 +38,13 @@ pub fn walk_expr<'ir, V: Visitor<'ir>>(visitor: &mut V, expr: &Expr<'ir>) {
         ExprKind::Field(expr, _) => {
             visitor.visit_expr(expr);
         }
+        ExprKind::Call(expr, arguments) => {
+            visitor.visit_expr(expr);
+
+            for expr in arguments {
+                visitor.visit_expr(expr);
+            }
+        }
         ExprKind::Lit(..) | ExprKind::Ident(..) => (),
     }
 }

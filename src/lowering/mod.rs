@@ -111,6 +111,13 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                     field.to_string(),
                 )),
             },
+            ast::ExprKind::FunctionCall { expr, arguments } => ir::Expr {
+                id: self.next_id(),
+                kind: Box::new(ir::ExprKind::Call(
+                    self.lower_expr(expr),
+                    arguments.iter().map(|expr| self.lower_expr(expr)).collect(),
+                )),
+            },
             _ => unimplemented!(),
         }
     }

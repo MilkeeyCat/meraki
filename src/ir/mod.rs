@@ -46,6 +46,7 @@ pub enum ExprKind<'ir> {
     Lit(ExprLit),
     Struct(&'ir Ty<'ir>, Vec<(String, Expr<'ir>)>),
     Field(Expr<'ir>, String),
+    Call(Expr<'ir>, Vec<Expr<'ir>>),
     Cast(Expr<'ir>, &'ir Ty<'ir>),
 }
 

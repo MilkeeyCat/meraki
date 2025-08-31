@@ -85,6 +85,14 @@ impl<'ir> Visitor<'ir> for InferCtx<'_, 'ir> {
 
                 ty
             }
+            ExprKind::Call(expr, arguments) => {
+                for (idx, arg) in arguments.iter().enumerate() {
+                    self.ty_problem
+                        .fn_argument(self.types[&expr.id], self.types[&arg.id], idx);
+                }
+
+                self.types[&expr.id]
+            }
             _ => unimplemented!(),
         };
 

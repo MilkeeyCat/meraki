@@ -213,6 +213,21 @@ impl<'a, 'b, 'ir> FunctionCtx<'a, 'b, 'ir> {
 
                 Some(bb.create_load(ptr, lowered_field_ty))
             }
+            ExprKind::Call(expr, arguments) => {
+                let ty = match self.package.expr_tys[&expr.id.into()] {
+                    Ty::Fn(_, ty) => ty,
+                    _ => unreachable!(),
+                };
+                let lowered_ty = self.mod_ctx.lower_ty(ty);
+                let operand = self.lower_expr(expr, true).unwrap();
+                let arguments = arguments
+                    .iter()
+                    .map(|expr| self.lower_expr(expr, true).unwrap())
+                    .collect();
+
+                self.get_cur_bb()
+                    .create_call(operand, lowered_ty, arguments)
+            }
             _ => unimplemented!(),
             //ExprKind::Cast(Expr<'ir>, &'ir Ty<'ir>),
         }
