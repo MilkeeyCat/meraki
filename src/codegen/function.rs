@@ -292,9 +292,9 @@ pub fn compile_function<'a, 'b, 'ir>(
     func: &ItemFn<'ir>,
     package: &'a Package<'ir>,
 ) {
-    let mut fn_ctx = FunctionCtx::new(mod_ctx, id, func, package);
-
     if let Some(block) = &func.block {
+        let mut fn_ctx = FunctionCtx::new(mod_ctx, id, func, package);
+
         for stmt in &block.0 {
             fn_ctx.lower_stmt(stmt);
         }
