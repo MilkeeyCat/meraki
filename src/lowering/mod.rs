@@ -74,6 +74,10 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                     self.lower_expr(right),
                 )),
             },
+            ast::ExprKind::Unary { op, expr } => ir::Expr {
+                id: self.next_id(),
+                kind: Box::new(ir::ExprKind::Unary(op.clone(), self.lower_expr(expr))),
+            },
             ast::ExprKind::Lit(lit) => {
                 let lit = match lit {
                     ast::ExprLit::Int(value) => ir::ExprLit::Int(*value),

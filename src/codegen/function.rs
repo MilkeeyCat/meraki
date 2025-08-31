@@ -1,5 +1,5 @@
 use crate::{
-    ast,
+    ast::{self, UnOp},
     codegen::module::ModuleCtx,
     ir::{Expr, ExprKind, ExprLit, ItemFn, Package, Stmt, StmtKind, SymbolId, Ty},
 };
@@ -111,7 +111,24 @@ impl<'a, 'b, 'ir> FunctionCtx<'a, 'b, 'ir> {
 
                 Some(self.get_cur_bb().create_bin(lhs, rhs, op))
             }
-            //ExprKind::Unary(UnOp, Expr<'ir>),
+            ExprKind::Unary(op, expr) => match op {
+                UnOp::LogicalNot => unimplemented!(),
+                UnOp::Negative => unimplemented!(),
+                UnOp::Address => Some(self.lower_expr(expr, false).unwrap()),
+                UnOp::Deref => {
+                    let ptr = self.lower_expr(expr, true).unwrap();
+                    let lowered_ty = self
+                        .mod_ctx
+                        .lower_ty(self.package.expr_tys[&expr.id.into()]);
+
+                    if rvalue {
+                        Some(self.get_cur_bb().create_load(ptr, lowered_ty))
+                    } else {
+                        Some(ptr)
+                    }
+                }
+                UnOp::BitwiseNot => unimplemented!(),
+            },
             ExprKind::Ident(id) => {
                 let ty = self.package.symbols[id].ty();
                 let ty = self.mod_ctx.lower_ty(ty);
@@ -211,7 +228,11 @@ impl<'a, 'b, 'ir> FunctionCtx<'a, 'b, 'ir> {
                     ],
                 );
 
-                Some(bb.create_load(ptr, lowered_field_ty))
+                if rvalue {
+                    Some(bb.create_load(ptr, lowered_field_ty))
+                } else {
+                    Some(ptr)
+                }
             }
             ExprKind::Call(expr, arguments) => {
                 let ty = match self.package.expr_tys[&expr.id.into()] {

@@ -1,6 +1,6 @@
 use crate::{
     Context,
-    ast::BinOp,
+    ast::{BinOp, UnOp},
     ir::{
         Expr, ExprKind, ExprLit, Id, Item, ItemKind, Stmt, StmtKind, Symbol, SymbolId, Ty, TyArray,
         Variable,
@@ -46,7 +46,18 @@ impl<'ir> Visitor<'ir> for InferCtx<'_, 'ir> {
                     self.types[&lhs.id]
                 }
             },
-            ExprKind::Unary(op, expr) => todo!(),
+            ExprKind::Unary(op, expr) => match op {
+                UnOp::Address => self.ctx.allocator.alloc(Ty::Ptr(self.types[&expr.id])),
+                UnOp::Deref => {
+                    let deref = self.new_infer_ty();
+                    let reference = self.ctx.allocator.alloc(Ty::Ptr(deref));
+
+                    self.ty_problem.eq(self.types[&expr.id], reference);
+
+                    deref
+                }
+                _ => self.types[&expr.id],
+            },
             ExprKind::Ident(id) => self
                 .types
                 .get(&(*id).into())
