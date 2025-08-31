@@ -161,9 +161,59 @@ impl<'a, 'b, 'ir> FunctionCtx<'a, 'b, 'ir> {
                 )),
                 ExprLit::String(_) | ExprLit::Null => unimplemented!(),
             },
+            ExprKind::Struct(ty, fields) => {
+                let lowered_ty = self.mod_ctx.lower_ty(ty);
+                let ptr = self.get_cur_bb().create_alloca(lowered_ty);
+                let variant = &self.mod_ctx.ctx.get_adt(ty.adt_idx()).variants[0];
+
+                for (name, expr) in fields {
+                    let operand = self.lower_expr(expr, true).unwrap();
+                    let mut bb = self.get_cur_bb();
+                    let ptr = bb.create_gep(
+                        lowered_ty,
+                        ptr.clone(),
+                        vec![
+                            hir::Operand::const_i64(0, bb.ty_storage),
+                            hir::Operand::const_i64(
+                                variant.get_field_by_name(name).unwrap().0 as u64,
+                                bb.ty_storage,
+                            ),
+                        ],
+                    );
+
+                    bb.create_store(ptr, operand);
+                }
+
+                Some(self.get_cur_bb().create_load(ptr, lowered_ty))
+            }
+            // This generates inefficient ir because GEP isn't utilized well
+            // Currently it creates a new vreg for each field access, e.g.
+            // foo.bar.baz would result in
+            // %foo = gep %struct_ptr, 0, {foo_field_idx}
+            // %bar = gep %foo, 0, {bar_field_idx}
+            // %baz = gep %bar, 0, {baz_field_idx}
+            // TODO: it would be nice to generate simply
+            // %baz = gep %struct_ptr, 0, {foo_field_idx}, {bar_field_idx}, {baz_field_idx}
+            ExprKind::Field(expr, field) => {
+                let struct_ty = self.package.expr_tys[&expr.id.into()];
+                let lowered_struct_ty = self.mod_ctx.lower_ty(struct_ty);
+                let variant = &self.mod_ctx.ctx.get_adt(struct_ty.adt_idx()).variants[0];
+                let (idx, field_def) = variant.get_field_by_name(field).unwrap();
+                let lowered_field_ty = self.mod_ctx.lower_ty(field_def.ty);
+                let ptr = self.lower_expr(expr, false).unwrap();
+                let mut bb = self.get_cur_bb();
+                let ptr = bb.create_gep(
+                    lowered_struct_ty,
+                    ptr,
+                    vec![
+                        hir::Operand::const_i64(0, bb.ty_storage),
+                        hir::Operand::const_i64(idx as u64, bb.ty_storage),
+                    ],
+                );
+
+                Some(bb.create_load(ptr, lowered_field_ty))
+            }
             _ => unimplemented!(),
-            //ExprKind::Struct(Vec<(String, Expr<'ir>)>),
-            //ExprKind::Field(Expr<'ir>, String),
             //ExprKind::Cast(Expr<'ir>, &'ir Ty<'ir>),
         }
     }

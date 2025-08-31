@@ -44,7 +44,7 @@ pub enum ExprKind<'ir> {
     Unary(UnOp, Expr<'ir>),
     Ident(SymbolId),
     Lit(ExprLit),
-    Struct(Vec<(String, Expr<'ir>)>),
+    Struct(&'ir Ty<'ir>, Vec<(String, Expr<'ir>)>),
     Field(Expr<'ir>, String),
     Cast(Expr<'ir>, &'ir Ty<'ir>),
 }

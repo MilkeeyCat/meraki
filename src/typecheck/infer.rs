@@ -4,7 +4,7 @@ use crate::{
     ir::{
         Expr, ExprKind, ExprLit, Id, Item, ItemKind, Stmt, StmtKind, Symbol, SymbolId, Ty, TyArray,
         Variable,
-        ty::InferTy,
+        ty::{AdtKind, InferTy},
         visitor::{Visitor, walk_expr, walk_item, walk_stmt},
     },
     typecheck::ty_problem::{self, TyProblem},
@@ -58,6 +58,33 @@ impl<'ir> Visitor<'ir> for InferCtx<'_, 'ir> {
                 ExprLit::Int(_) | ExprLit::UInt(_) => self.new_infer_int_ty(),
                 ExprLit::Null => self.new_infer_ty(),
             },
+            ExprKind::Struct(ty, fields) => {
+                let adt = self.ctx.get_adt(ty.adt_idx());
+
+                match adt.kind {
+                    AdtKind::Struct => {
+                        let variant = &adt.variants[0];
+
+                        for (name, expr) in fields {
+                            self.ty_problem.eq(
+                                self.types[&expr.id],
+                                variant.get_field_by_name(name).unwrap().1.ty,
+                            );
+                        }
+                    }
+                    _ => unimplemented!(),
+                }
+
+                ty
+            }
+            ExprKind::Field(expr, field) => {
+                let ty = self.new_infer_ty();
+
+                self.ty_problem
+                    .field(self.types[&expr.id], ty, field.to_string());
+
+                ty
+            }
             _ => unimplemented!(),
         };
 

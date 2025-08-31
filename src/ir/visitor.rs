@@ -30,7 +30,7 @@ pub fn walk_expr<'ir, V: Visitor<'ir>>(visitor: &mut V, expr: &Expr<'ir>) {
         ExprKind::Cast(expr, _) => {
             visitor.visit_expr(expr);
         }
-        ExprKind::Struct(fields) => {
+        ExprKind::Struct(_, fields) => {
             for (_, expr) in fields {
                 visitor.visit_expr(expr);
             }

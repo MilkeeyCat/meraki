@@ -94,6 +94,23 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                     self.symbol_table.find_symbol(ident).unwrap().into(),
                 )),
             },
+            ast::ExprKind::Struct { name, fields } => ir::Expr {
+                id: self.next_id(),
+                kind: Box::new(ir::ExprKind::Struct(
+                    self.lower_ty(&ast::Ty::Ident(name.to_string())),
+                    fields
+                        .iter()
+                        .map(|(name, expr)| (name.to_string(), self.lower_expr(expr)))
+                        .collect(),
+                )),
+            },
+            ast::ExprKind::Field { expr, field } => ir::Expr {
+                id: self.next_id(),
+                kind: Box::new(ir::ExprKind::Field(
+                    self.lower_expr(expr),
+                    field.to_string(),
+                )),
+            },
             _ => unimplemented!(),
         }
     }
