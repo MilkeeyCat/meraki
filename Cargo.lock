@@ -321,7 +321,7 @@ dependencies = [
 [[package]]
 name = "tja"
 version = "0.1.0"
-source = "git+https://github.com/MilkeeyCat/tja#07c9c5b8114199278ac1b0d40520c9a61adf2d71"
+source = "git+https://github.com/MilkeeyCat/tja#8639c3af7ae8283adad1ff0008a132f40423baef"
 dependencies = [
  "derive_more 2.0.1",
  "index_vec",
