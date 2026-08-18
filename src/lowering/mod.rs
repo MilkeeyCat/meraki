@@ -298,7 +298,7 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
     }
 }
 
-pub fn lower<'ir>(ctx: &mut Context<'ir>, items: Vec<ast::Item>) -> Package<'ir> {
+pub(crate) fn lower<'ir>(ctx: &mut Context<'ir>, items: Vec<ast::Item>) -> Package<'ir> {
     let mut lowering = Lowering::new(ctx);
 
     lowering.symbol_table.enter();

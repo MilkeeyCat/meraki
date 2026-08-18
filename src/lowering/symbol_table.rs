@@ -2,7 +2,7 @@ use crate::ir::{Id, Ty};
 use std::collections::HashMap;
 
 #[derive(Debug)]
-pub struct Scope<'ir> {
+pub(super) struct Scope<'ir> {
     types: HashMap<String, &'ir Ty<'ir>>,
     symbols: HashMap<String, Id>,
 }
@@ -17,18 +17,18 @@ impl<'ir> Scope<'ir> {
 }
 
 #[derive(Debug)]
-pub struct SymbolTable<'ir>(Vec<Scope<'ir>>);
+pub(super) struct SymbolTable<'ir>(Vec<Scope<'ir>>);
 
 impl<'ir> SymbolTable<'ir> {
-    pub fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self(Vec::new())
     }
 
-    pub fn enter(&mut self) {
+    pub(super) fn enter(&mut self) {
         self.0.push(Scope::new());
     }
 
-    pub fn leave(&mut self) {
+    pub(super) fn leave(&mut self) {
         self.0.pop();
     }
 
@@ -46,7 +46,7 @@ impl<'ir> SymbolTable<'ir> {
         self.0.iter_mut().rev().find_map(|scope| f(scope))
     }
 
-    pub fn find_symbol(&self, name: &str) -> Option<Id> {
+    pub(super) fn find_symbol(&self, name: &str) -> Option<Id> {
         self.find(|scope| {
             scope
                 .symbols
@@ -56,7 +56,7 @@ impl<'ir> SymbolTable<'ir> {
         })
     }
 
-    pub fn find_symbol_mut(&mut self, name: &str) -> Option<&mut Id> {
+    fn find_symbol_mut(&mut self, name: &str) -> Option<&mut Id> {
         self.find_mut(|scope| {
             scope
                 .symbols
@@ -66,7 +66,7 @@ impl<'ir> SymbolTable<'ir> {
         })
     }
 
-    pub fn insert_symbol(&mut self, name: String, node_id: Id) -> bool {
+    pub(super) fn insert_symbol(&mut self, name: String, node_id: Id) -> bool {
         self.0
             .last_mut()
             .unwrap()
@@ -75,7 +75,7 @@ impl<'ir> SymbolTable<'ir> {
             .is_none()
     }
 
-    pub fn find_ty(&self, name: &str) -> Option<&'ir Ty<'ir>> {
+    pub(super) fn find_ty(&self, name: &str) -> Option<&'ir Ty<'ir>> {
         self.find(|scope| {
             scope
                 .types
@@ -85,7 +85,7 @@ impl<'ir> SymbolTable<'ir> {
         })
     }
 
-    pub fn insert_ty(&mut self, name: String, ty: &'ir Ty<'ir>) -> bool {
+    pub(super) fn insert_ty(&mut self, name: String, ty: &'ir Ty<'ir>) -> bool {
         self.0.last_mut().unwrap().types.insert(name, ty).is_none()
     }
 }
