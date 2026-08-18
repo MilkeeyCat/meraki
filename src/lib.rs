@@ -1,33 +1,33 @@
-pub mod ast;
-pub mod codegen;
+mod ast;
+mod codegen;
 pub mod compile;
-pub mod diagnostics;
-pub mod ir;
-pub mod lexer;
-pub mod lowering;
-pub mod parser;
-pub mod passes;
-pub mod typecheck;
+mod diagnostics;
+mod ir;
+mod lexer;
+mod lowering;
+mod parser;
+mod passes;
+mod typecheck;
 
 use ast::{IntTy, UintTy};
 use bumpalo::Bump;
 use ir::ty::{AdtDef, AdtIdx, AdtKind, Ty};
 
 #[derive(Debug)]
-pub struct CommonTypes<'ir> {
-    null: &'ir Ty<'ir>,
-    void: &'ir Ty<'ir>,
-    bool: &'ir Ty<'ir>,
-    i8: &'ir Ty<'ir>,
-    i16: &'ir Ty<'ir>,
-    i32: &'ir Ty<'ir>,
-    i64: &'ir Ty<'ir>,
-    isize: &'ir Ty<'ir>,
-    u8: &'ir Ty<'ir>,
-    u16: &'ir Ty<'ir>,
-    u32: &'ir Ty<'ir>,
-    u64: &'ir Ty<'ir>,
-    usize: &'ir Ty<'ir>,
+pub(crate) struct CommonTypes<'ir> {
+    pub(crate) null: &'ir Ty<'ir>,
+    pub(crate) void: &'ir Ty<'ir>,
+    pub(crate) bool: &'ir Ty<'ir>,
+    pub(crate) i8: &'ir Ty<'ir>,
+    pub(crate) i16: &'ir Ty<'ir>,
+    pub(crate) i32: &'ir Ty<'ir>,
+    pub(crate) i64: &'ir Ty<'ir>,
+    pub(crate) isize: &'ir Ty<'ir>,
+    pub(crate) u8: &'ir Ty<'ir>,
+    pub(crate) u16: &'ir Ty<'ir>,
+    pub(crate) u32: &'ir Ty<'ir>,
+    pub(crate) u64: &'ir Ty<'ir>,
+    pub(crate) usize: &'ir Ty<'ir>,
 }
 
 impl<'ir> CommonTypes<'ir> {
@@ -51,14 +51,14 @@ impl<'ir> CommonTypes<'ir> {
 }
 
 #[derive(Debug)]
-pub struct Context<'ir> {
-    allocator: &'ir Bump,
-    types: CommonTypes<'ir>,
-    pub aggregates: Vec<AdtDef<'ir>>,
+pub(crate) struct Context<'ir> {
+    pub(crate) allocator: &'ir Bump,
+    pub(crate) types: CommonTypes<'ir>,
+    aggregates: Vec<AdtDef<'ir>>,
 }
 
 impl<'ir> Context<'ir> {
-    pub fn new(allocator: &'ir Bump) -> Self {
+    pub(crate) fn new(allocator: &'ir Bump) -> Self {
         Self {
             allocator,
             types: CommonTypes::new(allocator),
@@ -66,7 +66,7 @@ impl<'ir> Context<'ir> {
         }
     }
 
-    pub fn mk_adt(&mut self, name: String, kind: AdtKind) -> AdtIdx {
+    pub(crate) fn mk_adt(&mut self, name: String, kind: AdtKind) -> AdtIdx {
         let idx = self.aggregates.len();
 
         self.aggregates.push(AdtDef {
@@ -78,11 +78,11 @@ impl<'ir> Context<'ir> {
         idx
     }
 
-    pub fn get_adt(&self, idx: AdtIdx) -> &AdtDef<'ir> {
+    pub(crate) fn get_adt(&self, idx: AdtIdx) -> &AdtDef<'ir> {
         &self.aggregates[idx]
     }
 
-    pub fn get_adt_mut(&mut self, idx: AdtIdx) -> &mut AdtDef<'ir> {
+    pub(crate) fn get_adt_mut(&mut self, idx: AdtIdx) -> &mut AdtDef<'ir> {
         &mut self.aggregates[idx]
     }
 }

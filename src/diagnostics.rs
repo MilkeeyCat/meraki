@@ -2,7 +2,7 @@ use crate::lexer::{TokenKind, span::Span};
 use derive_more::derive::Display;
 
 #[derive(Debug, Display)]
-pub enum Diagnostic {
+pub(crate) enum Diagnostic {
     #[display("syntax error: unknown character")]
     UnknownChar,
     #[display("syntax error: expected {_0}")]
@@ -45,20 +45,20 @@ struct Message {
 }
 
 #[derive(Debug)]
-pub struct Diagnostics<'src> {
+pub(crate) struct Diagnostics<'src> {
     source: &'src str,
     messages: Vec<Message>,
 }
 
 impl<'src> Diagnostics<'src> {
-    pub fn new(source: &'src str) -> Self {
+    pub(crate) fn new(source: &'src str) -> Self {
         Self {
             source,
             messages: Vec::new(),
         }
     }
 
-    pub fn error(&mut self, diag: Diagnostic, span: Span) {
+    pub(crate) fn error(&mut self, diag: Diagnostic, span: Span) {
         self.messages.push(Message {
             level: Level::Error,
             diag,
@@ -66,7 +66,7 @@ impl<'src> Diagnostics<'src> {
         })
     }
 
-    pub fn warning(&mut self, diag: Diagnostic, span: Span) {
+    pub(crate) fn warning(&mut self, diag: Diagnostic, span: Span) {
         self.messages.push(Message {
             level: Level::Warning,
             diag,
@@ -74,7 +74,7 @@ impl<'src> Diagnostics<'src> {
         })
     }
 
-    pub fn has_errors(&self) -> bool {
+    pub(crate) fn has_errors(&self) -> bool {
         self.messages.iter().any(|msg| msg.level == Level::Error)
     }
 

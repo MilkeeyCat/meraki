@@ -1,7 +1,7 @@
 use meraki::compile::{CompileArgs, compile};
 use std::{path::Path, process::Output};
 
-pub fn run(path: &Path) -> std::io::Result<Output> {
+pub(crate) fn run(path: &Path) -> std::io::Result<Output> {
     let executable = path.with_extension("");
     let args = CompileArgs {
         file: path.to_path_buf(),
