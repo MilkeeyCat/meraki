@@ -1,6 +1,6 @@
 use super::{Block, Expr, ExprKind, Item, Stmt, Ty};
 
-pub trait Visitor<'ast>: Sized {
+pub(crate) trait Visitor<'ast>: Sized {
     fn visit_expr(&mut self, expr: &'ast mut Expr) {
         walk_expr(self, expr)
     }
@@ -22,7 +22,7 @@ pub trait Visitor<'ast>: Sized {
     }
 }
 
-pub fn walk_expr<'ast, T: Visitor<'ast>>(visitor: &mut T, expr: &'ast mut Expr) {
+pub(crate) fn walk_expr<'ast, T: Visitor<'ast>>(visitor: &mut T, expr: &'ast mut Expr) {
     match &mut expr.kind {
         ExprKind::Binary { left, right, .. } => {
             visitor.visit_expr(left);
@@ -70,7 +70,7 @@ pub fn walk_expr<'ast, T: Visitor<'ast>>(visitor: &mut T, expr: &'ast mut Expr) 
     }
 }
 
-pub fn walk_stmt<'ast, T: Visitor<'ast>>(visitor: &mut T, stmt: &'ast mut Stmt) {
+pub(crate) fn walk_stmt<'ast, T: Visitor<'ast>>(visitor: &mut T, stmt: &'ast mut Stmt) {
     match stmt {
         Stmt::Local(variable) => {
             visitor.visit_ty(&mut variable.ty);
@@ -121,7 +121,7 @@ pub fn walk_stmt<'ast, T: Visitor<'ast>>(visitor: &mut T, stmt: &'ast mut Stmt) 
     }
 }
 
-pub fn walk_item<'ast, T: Visitor<'ast>>(visitor: &mut T, item: &'ast mut Item) {
+pub(crate) fn walk_item<'ast, T: Visitor<'ast>>(visitor: &mut T, item: &'ast mut Item) {
     match item {
         Item::Global(variable) => {
             visitor.visit_ty(&mut variable.ty);
@@ -151,13 +151,13 @@ pub fn walk_item<'ast, T: Visitor<'ast>>(visitor: &mut T, item: &'ast mut Item) 
     }
 }
 
-pub fn walk_block<'ast, T: Visitor<'ast>>(visitor: &mut T, block: &'ast mut Block) {
+pub(crate) fn walk_block<'ast, T: Visitor<'ast>>(visitor: &mut T, block: &'ast mut Block) {
     for stmt in &mut block.stmts {
         visitor.visit_stmt(stmt);
     }
 }
 
-pub fn walk_ty<'ast, T: Visitor<'ast>>(visitor: &mut T, ty: &'ast mut Ty) {
+pub(crate) fn walk_ty<'ast, T: Visitor<'ast>>(visitor: &mut T, ty: &'ast mut Ty) {
     match ty {
         Ty::Ptr(ty) => visitor.visit_ty(ty),
         Ty::Array { ty, .. } => visitor.visit_ty(ty),

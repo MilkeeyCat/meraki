@@ -1,25 +1,25 @@
-pub mod visitor;
+pub(crate) mod visitor;
 
 use crate::lexer::{Token, TokenKind, span::Span};
 use derive_more::derive::Display;
 use thiserror::Error;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Variable {
-    pub ty: Ty,
-    pub name: String,
-    pub value: Option<Expr>,
+pub(crate) struct Variable {
+    pub(crate) ty: Ty,
+    pub(crate) name: String,
+    pub(crate) value: Option<Expr>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Block {
-    pub open_brace: Span,
-    pub stmts: Vec<Stmt>,
-    pub close_brace: Span,
+pub(crate) struct Block {
+    pub(crate) open_brace: Span,
+    pub(crate) stmts: Vec<Stmt>,
+    pub(crate) close_brace: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Item {
+pub(crate) enum Item {
     Global(Variable),
     Fn {
         ret_ty: Ty,
@@ -34,7 +34,7 @@ pub enum Item {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Stmt {
+pub(crate) enum Stmt {
     Local(Variable),
     Item(Item),
     Expr(Expr),
@@ -59,13 +59,13 @@ pub enum Stmt {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Expr {
-    pub kind: ExprKind,
-    pub span: Span,
+pub(crate) struct Expr {
+    pub(crate) kind: ExprKind,
+    pub(crate) span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ExprKind {
+pub(crate) enum ExprKind {
     Binary {
         op: BinOp,
         left: Box<Expr>,
@@ -110,7 +110,7 @@ pub enum ExprKind {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ExprLit {
+pub(crate) enum ExprLit {
     Int(i64),
     UInt(u64),
     Bool(bool),
@@ -119,7 +119,7 @@ pub enum ExprLit {
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash, Display)]
-pub enum IntTy {
+pub(crate) enum IntTy {
     #[display("i8")]
     I8,
     #[display("i16")]
@@ -133,7 +133,7 @@ pub enum IntTy {
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash, Display)]
-pub enum UintTy {
+pub(crate) enum UintTy {
     #[display("u8")]
     U8,
     #[display("u16")]
@@ -147,7 +147,7 @@ pub enum UintTy {
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash, Display)]
-pub enum Ty {
+pub(crate) enum Ty {
     #[display("null")]
     Null,
     #[display("void")]
@@ -176,7 +176,7 @@ pub enum Ty {
 }
 
 #[derive(Error, Debug)]
-pub enum OpParseError {
+pub(crate) enum OpParseError {
     #[error("Failed to parse binary operator from {0}")]
     Bin(TokenKind),
     #[error("Failed to parse unary operator from {0}")]
@@ -188,7 +188,7 @@ pub enum OpParseError {
 }
 
 #[derive(Debug, Clone, PartialEq, Copy)]
-pub enum BinOp {
+pub(crate) enum BinOp {
     Add,
     Sub,
     Mul,
@@ -236,7 +236,7 @@ impl TryFrom<&TokenKind> for BinOp {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum UnOp {
+pub(crate) enum UnOp {
     LogicalNot,
     Negative,
     Address,
@@ -259,7 +259,7 @@ impl TryFrom<&TokenKind> for UnOp {
     }
 }
 
-pub enum CmpOp {
+pub(crate) enum CmpOp {
     LessEqual,
     LessThan,
     GreaterEqual,
@@ -284,7 +284,7 @@ impl TryFrom<&BinOp> for CmpOp {
     }
 }
 
-pub enum BitwiseOp {
+pub(crate) enum BitwiseOp {
     And,
     Or,
 }
