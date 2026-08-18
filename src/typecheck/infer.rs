@@ -173,7 +173,7 @@ impl<'ir> InferCtx<'_, 'ir> {
     }
 }
 
-pub fn infer_types_in_item<'ir>(
+pub(super) fn infer_types_in_item<'ir>(
     ctx: &mut Context<'ir>,
     item: &Item<'ir>,
     symbols: &HashMap<SymbolId, Symbol<'ir>>,

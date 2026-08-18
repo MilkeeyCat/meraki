@@ -72,7 +72,7 @@ impl TypeCheck<'_, '_> {
     }
 }
 
-pub fn typecheck<'ir>(ctx: &mut Context<'ir>, package: &mut Package<'ir>) {
+pub(crate) fn typecheck<'ir>(ctx: &mut Context<'ir>, package: &mut Package<'ir>) {
     for item in &package.items {
         let types = infer_types_in_item(ctx, item, &package.symbols);
         let mut typecheck = TypeCheck {

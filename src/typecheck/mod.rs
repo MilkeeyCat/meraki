@@ -1,5 +1,5 @@
-pub mod infer;
-pub mod ty_problem;
+mod infer;
+pub(crate) mod ty_problem;
 mod typecheck;
 
-pub use typecheck::typecheck;
+pub(crate) use typecheck::typecheck;

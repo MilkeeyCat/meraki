@@ -6,7 +6,7 @@ use crate::{
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Id(usize);
+pub(crate) struct Id(usize);
 
 #[derive(Debug)]
 enum Constraint<'ir> {
@@ -38,13 +38,13 @@ enum Constraint<'ir> {
 }
 
 #[derive(Debug)]
-pub struct TyProblem<'ir> {
+pub(super) struct TyProblem<'ir> {
     ty_vars: Vec<Option<&'ir Ty<'ir>>>,
     constraints: Vec<Constraint<'ir>>,
 }
 
 impl<'ir> TyProblem<'ir> {
-    pub fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             ty_vars: Vec::new(),
             constraints: Vec::new(),
@@ -59,27 +59,32 @@ impl<'ir> TyProblem<'ir> {
         Id(id)
     }
 
-    pub fn new_infer_ty_var(&mut self) -> Id {
+    pub(super) fn new_infer_ty_var(&mut self) -> Id {
         self.new_ty_var(None)
     }
 
-    pub fn new_typed_ty_var(&mut self, ty: &'ir Ty<'ir>) -> Id {
+    fn new_typed_ty_var(&mut self, ty: &'ir Ty<'ir>) -> Id {
         self.new_ty_var(Some(ty))
     }
 
-    pub fn eq(&mut self, lhs: &'ir Ty<'ir>, rhs: &'ir Ty<'ir>) {
+    pub(super) fn eq(&mut self, lhs: &'ir Ty<'ir>, rhs: &'ir Ty<'ir>) {
         self.constraints.push(Constraint::Eq(lhs, rhs));
     }
 
-    pub fn bin_add(&mut self, expr: &'ir Ty<'ir>, lhs: &'ir Ty<'ir>, rhs: &'ir Ty<'ir>) {
+    pub(super) fn bin_add(&mut self, expr: &'ir Ty<'ir>, lhs: &'ir Ty<'ir>, rhs: &'ir Ty<'ir>) {
         self.constraints.push(Constraint::BinAdd { expr, lhs, rhs });
     }
 
-    pub fn bin_sub(&mut self, expr: &'ir Ty<'ir>, lhs: &'ir Ty<'ir>, rhs: &'ir Ty<'ir>) {
+    pub(super) fn bin_sub(&mut self, expr: &'ir Ty<'ir>, lhs: &'ir Ty<'ir>, rhs: &'ir Ty<'ir>) {
         self.constraints.push(Constraint::BinSub { expr, lhs, rhs });
     }
 
-    pub fn field(&mut self, expr_ty: &'ir Ty<'ir>, field_ty: &'ir Ty<'ir>, field_name: String) {
+    pub(super) fn field(
+        &mut self,
+        expr_ty: &'ir Ty<'ir>,
+        field_ty: &'ir Ty<'ir>,
+        field_name: String,
+    ) {
         self.constraints.push(Constraint::Field {
             expr: expr_ty,
             field_ty,
@@ -87,7 +92,7 @@ impl<'ir> TyProblem<'ir> {
         });
     }
 
-    pub fn fn_argument(
+    pub(super) fn fn_argument(
         &mut self,
         expr_ty: &'ir Ty<'ir>,
         argument_ty: &'ir Ty<'ir>,
@@ -100,7 +105,7 @@ impl<'ir> TyProblem<'ir> {
         });
     }
 
-    pub fn ret(&mut self, function: &'ir Ty<'ir>, expr: &'ir Ty<'ir>) {
+    fn ret(&mut self, function: &'ir Ty<'ir>, expr: &'ir Ty<'ir>) {
         self.constraints.push(Constraint::Return { function, expr });
     }
 
@@ -273,7 +278,7 @@ impl<'ir> TyProblem<'ir> {
         progress
     }
 
-    pub fn solve(mut self, ctx: &Context<'ir>) -> HashMap<Id, &'ir Ty<'ir>> {
+    pub(super) fn solve(mut self, ctx: &Context<'ir>) -> HashMap<Id, &'ir Ty<'ir>> {
         loop {
             if !self.apply_constraints(ctx) {
                 break;
