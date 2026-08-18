@@ -1,6 +1,6 @@
 use crate::ir::{Block, Expr, ExprKind, Item, ItemFn, ItemKind, Stmt, StmtKind};
 
-pub trait Visitor<'ir>: Sized {
+pub(crate) trait Visitor<'ir>: Sized {
     fn visit_expr(&mut self, expr: &Expr<'ir>) {
         walk_expr(self, expr)
     }
@@ -18,7 +18,7 @@ pub trait Visitor<'ir>: Sized {
     }
 }
 
-pub fn walk_expr<'ir, V: Visitor<'ir>>(visitor: &mut V, expr: &Expr<'ir>) {
+pub(crate) fn walk_expr<'ir, V: Visitor<'ir>>(visitor: &mut V, expr: &Expr<'ir>) {
     match expr.kind.as_ref() {
         ExprKind::Binary(_, lhs, rhs) => {
             visitor.visit_expr(lhs);
@@ -49,7 +49,7 @@ pub fn walk_expr<'ir, V: Visitor<'ir>>(visitor: &mut V, expr: &Expr<'ir>) {
     }
 }
 
-pub fn walk_stmt<'ir, V: Visitor<'ir>>(visitor: &mut V, stmt: &Stmt<'ir>) {
+pub(crate) fn walk_stmt<'ir, V: Visitor<'ir>>(visitor: &mut V, stmt: &Stmt<'ir>) {
     match &stmt.kind {
         StmtKind::Local(variable) => {
             if let Some(expr) = &variable.value {
@@ -66,7 +66,7 @@ pub fn walk_stmt<'ir, V: Visitor<'ir>>(visitor: &mut V, stmt: &Stmt<'ir>) {
     }
 }
 
-pub fn walk_item<'ir, V: Visitor<'ir>>(visitor: &mut V, item: &Item<'ir>) {
+pub(crate) fn walk_item<'ir, V: Visitor<'ir>>(visitor: &mut V, item: &Item<'ir>) {
     match &item.kind {
         ItemKind::Global(variable) => {
             if let Some(expr) = &variable.value {
@@ -81,7 +81,7 @@ pub fn walk_item<'ir, V: Visitor<'ir>>(visitor: &mut V, item: &Item<'ir>) {
     }
 }
 
-pub fn walk_block<'ir, V: Visitor<'ir>>(visitor: &mut V, block: &Block<'ir>) {
+pub(crate) fn walk_block<'ir, V: Visitor<'ir>>(visitor: &mut V, block: &Block<'ir>) {
     for stmt in &block.0 {
         visitor.visit_stmt(stmt);
     }

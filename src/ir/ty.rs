@@ -3,13 +3,13 @@ use crate::{
     typecheck::ty_problem,
 };
 
-pub type AdtIdx = usize;
-pub type FieldIdx = usize;
+pub(crate) type AdtIdx = usize;
+pub(crate) type FieldIdx = usize;
 
 #[derive(Debug, PartialEq)]
-pub struct TyArray<'ir> {
-    pub ty: &'ir Ty<'ir>,
-    pub len: usize,
+pub(crate) struct TyArray<'ir> {
+    pub(crate) ty: &'ir Ty<'ir>,
+    pub(crate) len: usize,
 }
 
 impl IntTy {
@@ -35,7 +35,7 @@ impl UintTy {
         })
     }
 
-    pub fn to_signed(self) -> IntTy {
+    fn to_signed(self) -> IntTy {
         match self {
             Self::U8 => IntTy::I8,
             Self::U16 => IntTy::I16,
@@ -47,27 +47,27 @@ impl UintTy {
 }
 
 #[derive(Debug)]
-pub struct AdtDef<'ir> {
-    pub name: String,
-    pub kind: AdtKind,
-    pub variants: Vec<VariantDef<'ir>>,
+pub(crate) struct AdtDef<'ir> {
+    pub(crate) name: String,
+    pub(crate) kind: AdtKind,
+    pub(crate) variants: Vec<VariantDef<'ir>>,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum AdtKind {
+pub(crate) enum AdtKind {
     Struct,
     Enum,
     Union,
 }
 
 #[derive(Debug)]
-pub struct VariantDef<'ir> {
-    pub name: String,
-    pub fields: Vec<FieldDef<'ir>>,
+pub(crate) struct VariantDef<'ir> {
+    pub(crate) name: String,
+    pub(crate) fields: Vec<FieldDef<'ir>>,
 }
 
 impl<'ir> VariantDef<'ir> {
-    pub fn get_field_by_name(&self, name: &str) -> Option<(FieldIdx, &FieldDef<'ir>)> {
+    pub(crate) fn get_field_by_name(&self, name: &str) -> Option<(FieldIdx, &FieldDef<'ir>)> {
         self.fields
             .iter()
             .enumerate()
@@ -76,13 +76,13 @@ impl<'ir> VariantDef<'ir> {
 }
 
 #[derive(Debug)]
-pub struct FieldDef<'ir> {
-    pub name: String,
-    pub ty: &'ir Ty<'ir>,
+pub(crate) struct FieldDef<'ir> {
+    pub(crate) name: String,
+    pub(crate) ty: &'ir Ty<'ir>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum InferTy {
+pub(crate) enum InferTy {
     TyVar(ty_problem::Id),
     IntVar(ty_problem::Id),
 }
@@ -97,7 +97,7 @@ impl Into<ty_problem::Id> for InferTy {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Ty<'ir> {
+pub(crate) enum Ty<'ir> {
     Void,
     Null,
     Bool,
@@ -111,7 +111,7 @@ pub enum Ty<'ir> {
 }
 
 impl Ty<'_> {
-    pub fn size<F>(&self, f: F) -> usize
+    fn size<F>(&self, f: F) -> usize
     where
         F: Fn(&Ty) -> usize,
     {
@@ -128,30 +128,30 @@ impl Ty<'_> {
 }
 
 impl<'ir> Ty<'ir> {
-    pub fn ptr(&self) -> bool {
+    fn ptr(&self) -> bool {
         matches!(self, Self::Ptr(..))
     }
 
-    pub fn arr(&self) -> bool {
+    fn arr(&self) -> bool {
         matches!(self, Self::Array(..))
     }
 
-    pub fn signed(&self) -> bool {
+    fn signed(&self) -> bool {
         matches!(self, Self::Int(..))
     }
 
-    pub fn int(&self) -> bool {
+    fn int(&self) -> bool {
         matches!(self, Self::UInt(_) | Self::Int(_))
     }
 
-    pub fn pointee(&self) -> &'ir Ty<'ir> {
+    fn pointee(&self) -> &'ir Ty<'ir> {
         match self {
             Self::Ptr(ty) => ty,
             _ => unreachable!(),
         }
     }
 
-    pub fn adt_idx(&self) -> AdtIdx {
+    pub(crate) fn adt_idx(&self) -> AdtIdx {
         match self {
             Self::Adt(idx) => *idx,
             _ => unreachable!(),
