@@ -1,7 +1,7 @@
 use crate::lexer::TokenKind;
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Default)]
-pub enum Precedence {
+pub(super) enum Precedence {
     #[default]
     Lowest,
     Assign,
@@ -45,7 +45,7 @@ impl From<&TokenKind> for Precedence {
 }
 
 impl Precedence {
-    pub fn lower(self) -> Self {
+    pub(super) fn lower(self) -> Self {
         match self {
             Self::Lowest => unreachable!(),
             Self::Assign => Self::Lowest,

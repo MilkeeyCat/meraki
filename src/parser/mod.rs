@@ -6,13 +6,13 @@ use crate::{
     diagnostics::{Diagnostic, Diagnostics},
     lexer::{Token, TokenKind, span::Span},
 };
-pub use precedence::Precedence;
+use precedence::Precedence;
 use std::collections::HashMap;
 
 type PrefixFn<'a, 'src, T> = fn(&mut Parser<'a, 'src, T>) -> Result<Expr, ()>;
 type InfixFn<'a, 'src, T> = fn(&mut Parser<'a, 'src, T>, left: Expr) -> Result<Expr, ()>;
 
-pub struct Parser<'a, 'src, T: Iterator<Item = Result<Token, Span>>> {
+pub(crate) struct Parser<'a, 'src, T: Iterator<Item = Result<Token, Span>>> {
     lexer: T,
     diag: &'a mut Diagnostics<'src>,
     prev_token: Option<Token>,
@@ -23,7 +23,7 @@ pub struct Parser<'a, 'src, T: Iterator<Item = Result<Token, Span>>> {
 }
 
 impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
-    pub fn new(lexer: T, diag: &'a mut Diagnostics<'src>) -> Self {
+    pub(crate) fn new(lexer: T, diag: &'a mut Diagnostics<'src>) -> Self {
         let mut parser = Self {
             prev_token: None,
             cur_token: None,
@@ -127,7 +127,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         }
     }
 
-    pub fn parse(&mut self) -> Result<Vec<Item>, ()> {
+    pub(crate) fn parse(&mut self) -> Result<Vec<Item>, ()> {
         let mut items = Vec::new();
 
         while let Some(token) = &self.cur_token {
@@ -151,7 +151,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         Ok(items)
     }
 
-    pub fn parse_expr(&mut self, precedence: Precedence) -> Result<Expr, ()> {
+    fn parse_expr(&mut self, precedence: Precedence) -> Result<Expr, ()> {
         let token = self.cur_token_unchecked();
 
         let mut left = match self.prefix_fns.get(&token.kind) {
@@ -274,19 +274,6 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
             stmts,
             close_brace,
         })
-    }
-
-    // This function is used only by macro expansion
-    pub fn parse_stmts(&mut self) -> Result<Vec<Stmt>, ()> {
-        let mut stmts = Vec::new();
-
-        while self.cur_token.is_some() {
-            if let Ok(stmt) = self.parse_stmt() {
-                stmts.push(stmt);
-            }
-        }
-
-        Ok(stmts)
     }
 
     fn parse_type(&mut self) -> Result<Ty, ()> {
