@@ -5,7 +5,7 @@ use std::{
 };
 
 #[derive(Debug, Clone, Eq, Display)]
-pub enum TokenKind {
+pub(crate) enum TokenKind {
     #[display("ident")]
     Ident(String),
     #[display("integer literal")]

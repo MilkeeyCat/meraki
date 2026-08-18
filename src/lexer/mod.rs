@@ -1,22 +1,23 @@
 mod token;
 
-use span::Span;
-pub use token::TokenKind;
+pub(crate) use token::TokenKind;
 
-pub mod span {
+use span::Span;
+
+pub(crate) mod span {
     #[derive(Debug, Clone, PartialEq)]
-    pub struct Span {
-        pub start: usize,
-        pub end: usize,
+    pub(crate) struct Span {
+        pub(crate) start: usize,
+        pub(crate) end: usize,
     }
 
     impl Span {
-        pub const DUMMY: Self = Self {
+        pub(crate) const DUMMY: Self = Self {
             start: usize::MAX,
             end: usize::MAX,
         };
 
-        pub fn to(self, end: Span) -> Span {
+        pub(crate) fn to(self, end: Span) -> Span {
             Span {
                 start: std::cmp::min(self.start, end.start),
                 end: std::cmp::max(self.end, end.end),
@@ -26,13 +27,13 @@ pub mod span {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Token {
-    pub kind: TokenKind,
-    pub span: Span,
+pub(crate) struct Token {
+    pub(crate) kind: TokenKind,
+    pub(crate) span: Span,
 }
 
 #[derive(Debug)]
-pub struct Lexer<'src> {
+pub(crate) struct Lexer<'src> {
     input: &'src str,
     position: usize,
     read_position: usize,
@@ -41,7 +42,7 @@ pub struct Lexer<'src> {
 }
 
 impl<'src> Lexer<'src> {
-    pub fn new(input: &'src str) -> Self {
+    pub(crate) fn new(input: &'src str) -> Self {
         let mut lexer = Self {
             input,
             ch: '\0',
@@ -281,8 +282,7 @@ impl<'src> Iterator for Lexer<'src> {
 
 #[cfg(test)]
 mod test {
-    use super::Lexer;
-    use crate::lexer::TokenKind;
+    use crate::lexer::{Lexer, TokenKind};
 
     #[test]
     fn source_into_tokens() {
