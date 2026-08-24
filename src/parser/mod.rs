@@ -738,7 +738,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         })?;
 
         Ok(Expr {
-            span: span.to(right.span.clone()),
+            span: left.span.clone().to(right.span.clone()),
             kind: ExprKind::Binary {
                 op,
                 left: Box::new(left),
@@ -950,170 +950,321 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
 mod test {
     use super::Parser;
     use crate::{
-        ast::{BinOp, ExprKind, ExprLit, IntTy, Stmt, Ty, UintTy, UnOp, Variable},
+        ast::{BinOp, Expr, ExprKind, ExprLit, IntTy, Stmt, Ty, UintTy, UnOp, Variable},
         diagnostics::Diagnostics,
-        lexer::Lexer,
+        lexer::{Lexer, span::Span},
     };
 
     #[test]
     fn parse_arithmetic_expression() {
-        //let tests = [
-        //    (
-        //        "
-        //        {
-        //            1 * 2 + 3 / (4 + 1 as u8);
-        //        }
-        //        ",
-        //        vec![Stmt::Expr(ExprKind::Binary {
-        //            op: BinOp::Add,
-        //            left: Box::new(ExprKind::Binary {
-        //                op: BinOp::Mul,
-        //                left: Box::new(ExprKind::Lit(ExprLit::UInt(1))),
-        //                right: Box::new(ExprKind::Lit(ExprLit::UInt(2))),
-        //            }),
-        //            right: Box::new(ExprKind::Binary {
-        //                op: BinOp::Div,
-        //                left: Box::new(ExprKind::Lit(ExprLit::UInt(3))),
-        //                right: Box::new(ExprKind::Binary {
-        //                    op: BinOp::Add,
-        //                    left: Box::new(ExprKind::Lit(ExprLit::UInt(4))),
-        //                    right: Box::new(ExprKind::Cast {
-        //                        ty: Ty::UInt(UintTy::U8),
-        //                        expr: Box::new(ExprKind::Lit(ExprLit::UInt(1))),
-        //                    }),
-        //                }),
-        //            }),
-        //        })],
-        //    ),
-        //    (
-        //        "
-        //        {
-        //            let foo: u8;
-        //            foo = -1 as u8 + 5;
-        //        }
-        //        ",
-        //        vec![
-        //            Stmt::Local(Variable {
-        //                name: "foo".to_owned(),
-        //                ty: Ty::UInt(UintTy::U8),
-        //                value: None,
-        //            }),
-        //            Stmt::Expr(ExprKind::Binary {
-        //                op: BinOp::Assign,
-        //                left: Box::new(ExprKind::Ident("foo".to_owned())),
-        //                right: Box::new(ExprKind::Binary {
-        //                    op: BinOp::Add,
-        //                    left: Box::new(ExprKind::Cast {
-        //                        ty: Ty::UInt(UintTy::U8),
-        //                        expr: Box::new(ExprKind::Unary {
-        //                            op: UnOp::Negative,
-        //                            expr: Box::new(ExprKind::Lit(ExprLit::UInt(1))),
-        //                        }),
-        //                    }),
-        //                    right: Box::new(ExprKind::Lit(ExprLit::UInt(5))),
-        //                }),
-        //            }),
-        //        ],
-        //    ),
-        //    (
-        //        "
-        //        {
-        //            let foo: u8;
-        //            let bar: i8;
-        //            bar = foo as i8 + 5 / 10;
-        //        }
-        //        ",
-        //        vec![
-        //            Stmt::Local(Variable {
-        //                name: "foo".to_owned(),
-        //                ty: Ty::UInt(UintTy::U8),
-        //                value: None,
-        //            }),
-        //            Stmt::Local(Variable {
-        //                name: "bar".to_owned(),
-        //                ty: Ty::Int(IntTy::I8),
-        //                value: None,
-        //            }),
-        //            Stmt::Expr(ExprKind::Binary {
-        //                op: BinOp::Assign,
-        //                left: Box::new(ExprKind::Ident("bar".to_owned())),
-        //                right: Box::new(ExprKind::Binary {
-        //                    op: BinOp::Add,
-        //                    left: Box::new(ExprKind::Cast {
-        //                        ty: Ty::Int(IntTy::I8),
-        //                        expr: Box::new(ExprKind::Ident("foo".to_owned())),
-        //                    }),
-        //                    right: Box::new(ExprKind::Binary {
-        //                        op: BinOp::Div,
-        //                        left: Box::new(ExprKind::Lit(ExprLit::UInt(5))),
-        //                        right: Box::new(ExprKind::Lit(ExprLit::UInt(10))),
-        //                    }),
-        //                }),
-        //            }),
-        //        ],
-        //    ),
-        //    (
-        //        "
-        //        {
-        //            1 as i8 + 2 / 3;
-        //        }
-        //        ",
-        //        vec![Stmt::Expr(ExprKind::Binary {
-        //            op: BinOp::Add,
-        //            left: Box::new(ExprKind::Cast {
-        //                ty: Ty::Int(IntTy::I8),
-        //                expr: Box::new(ExprKind::Lit(ExprLit::UInt(1))),
-        //            }),
-        //            right: Box::new(ExprKind::Binary {
-        //                op: BinOp::Div,
-        //                left: Box::new(ExprKind::Lit(ExprLit::UInt(2))),
-        //                right: Box::new(ExprKind::Lit(ExprLit::UInt(3))),
-        //            }),
-        //        })],
-        //    ),
-        //    (
-        //        "
-        //        {
-        //            let a: u8;
-        //            let b: u8;
+        let tests = [
+            (
+                "
+                {
+                    1 * 2 + 3 / (4 + 1 as u8);
+                }
+                ",
+                vec![Stmt::Expr(Expr {
+                    kind: ExprKind::Binary {
+                        op: BinOp::Add,
+                        left: Box::new(Expr {
+                            kind: ExprKind::Binary {
+                                op: BinOp::Mul,
+                                left: Box::new(Expr {
+                                    kind: ExprKind::Lit(ExprLit::UInt(1)),
+                                    span: Span { start: 39, end: 40 },
+                                }),
+                                right: Box::new(Expr {
+                                    kind: ExprKind::Lit(ExprLit::UInt(2)),
+                                    span: Span { start: 43, end: 44 },
+                                }),
+                            },
+                            span: Span { start: 39, end: 44 },
+                        }),
+                        right: Box::new(Expr {
+                            kind: ExprKind::Binary {
+                                op: BinOp::Div,
+                                left: Box::new(Expr {
+                                    kind: ExprKind::Lit(ExprLit::UInt(3)),
+                                    span: Span { start: 47, end: 48 },
+                                }),
+                                right: Box::new(Expr {
+                                    kind: ExprKind::Binary {
+                                        op: BinOp::Add,
+                                        left: Box::new(Expr {
+                                            kind: ExprKind::Lit(ExprLit::UInt(4)),
+                                            span: Span { start: 52, end: 53 },
+                                        }),
+                                        right: Box::new(Expr {
+                                            kind: ExprKind::Cast {
+                                                ty: Ty::UInt(UintTy::U8),
+                                                expr: Box::new(Expr {
+                                                    kind: ExprKind::Lit(ExprLit::UInt(1)),
+                                                    span: Span { start: 56, end: 57 },
+                                                }),
+                                            },
+                                            // FIXME: this span points to the `as` keyword, but it
+                                            // should point to the whole expression
+                                            span: Span { start: 58, end: 60 },
+                                        }),
+                                    },
+                                    span: Span { start: 52, end: 60 },
+                                }),
+                            },
+                            span: Span { start: 47, end: 60 },
+                        }),
+                    },
+                    span: Span { start: 39, end: 60 },
+                })],
+            ),
+            (
+                "
+                {
+                    let foo: u8;
+                    foo = -1 as u8 + 5;
+                }
+                ",
+                vec![
+                    Stmt::Local(Variable {
+                        name: "foo".to_owned(),
+                        ty: Ty::UInt(UintTy::U8),
+                        value: None,
+                    }),
+                    Stmt::Expr(Expr {
+                        kind: ExprKind::Binary {
+                            op: BinOp::Assign,
+                            left: Box::new(Expr {
+                                kind: ExprKind::Ident("foo".to_owned()),
+                                span: Span { start: 72, end: 75 },
+                            }),
+                            right: Box::new(Expr {
+                                kind: ExprKind::Binary {
+                                    op: BinOp::Add,
+                                    left: Box::new(Expr {
+                                        kind: ExprKind::Cast {
+                                            ty: Ty::UInt(UintTy::U8),
+                                            expr: Box::new(Expr {
+                                                kind: ExprKind::Unary {
+                                                    op: UnOp::Negative,
+                                                    expr: Box::new(Expr {
+                                                        kind: ExprKind::Lit(ExprLit::UInt(1)),
+                                                        span: Span { start: 79, end: 80 },
+                                                    }),
+                                                },
+                                                span: Span { start: 78, end: 80 },
+                                            }),
+                                        },
+                                        // FIXME: this span points to the `as` keyword, but it
+                                        // should point to the whole expression
+                                        span: Span { start: 81, end: 83 },
+                                    }),
+                                    right: Box::new(Expr {
+                                        kind: ExprKind::Lit(ExprLit::UInt(5)),
+                                        span: Span { start: 89, end: 90 },
+                                    }),
+                                },
+                                span: Span { start: 81, end: 90 },
+                            }),
+                        },
+                        span: Span { start: 72, end: 90 },
+                    }),
+                ],
+            ),
+            (
+                "
+                {
+                    let foo: u8;
+                    let bar: i8;
+                    bar = foo as i8 + 5 / 10;
+                }
+                ",
+                vec![
+                    Stmt::Local(Variable {
+                        name: "foo".to_owned(),
+                        ty: Ty::UInt(UintTy::U8),
+                        value: None,
+                    }),
+                    Stmt::Local(Variable {
+                        name: "bar".to_owned(),
+                        ty: Ty::Int(IntTy::I8),
+                        value: None,
+                    }),
+                    Stmt::Expr(Expr {
+                        kind: ExprKind::Binary {
+                            op: BinOp::Assign,
+                            left: Box::new(Expr {
+                                kind: ExprKind::Ident("bar".to_owned()),
+                                span: Span {
+                                    start: 105,
+                                    end: 108,
+                                },
+                            }),
+                            right: Box::new(Expr {
+                                kind: ExprKind::Binary {
+                                    op: BinOp::Add,
+                                    left: Box::new(Expr {
+                                        kind: ExprKind::Cast {
+                                            ty: Ty::Int(IntTy::I8),
+                                            expr: Box::new(Expr {
+                                                kind: ExprKind::Ident("foo".to_owned()),
+                                                span: Span {
+                                                    start: 111,
+                                                    end: 114,
+                                                },
+                                            }),
+                                        },
+                                        // FIXME: this span points to the `as` keyword, but it
+                                        // should point to the whole expression
+                                        span: Span {
+                                            start: 115,
+                                            end: 117,
+                                        },
+                                    }),
+                                    right: Box::new(Expr {
+                                        kind: ExprKind::Binary {
+                                            op: BinOp::Div,
+                                            left: Box::new(Expr {
+                                                kind: ExprKind::Lit(ExprLit::UInt(5)),
+                                                span: Span {
+                                                    start: 123,
+                                                    end: 124,
+                                                },
+                                            }),
+                                            right: Box::new(Expr {
+                                                kind: ExprKind::Lit(ExprLit::UInt(10)),
+                                                span: Span {
+                                                    start: 127,
+                                                    end: 129,
+                                                },
+                                            }),
+                                        },
+                                        span: Span {
+                                            start: 123,
+                                            end: 129,
+                                        },
+                                    }),
+                                },
+                                span: Span {
+                                    start: 115,
+                                    end: 129,
+                                },
+                            }),
+                        },
+                        span: Span {
+                            start: 105,
+                            end: 129,
+                        },
+                    }),
+                ],
+            ),
+            (
+                "
+                {
+                    1 as i8 + 2 / 3;
+                }
+                ",
+                vec![Stmt::Expr(Expr {
+                    kind: ExprKind::Binary {
+                        op: BinOp::Add,
+                        left: Box::new(Expr {
+                            kind: ExprKind::Cast {
+                                ty: Ty::Int(IntTy::I8),
+                                expr: Box::new(Expr {
+                                    kind: ExprKind::Lit(ExprLit::UInt(1)),
+                                    span: Span { start: 39, end: 40 },
+                                }),
+                            },
+                            // FIXME: this span points to the `as` keyword, but it
+                            // should point to the whole expression
+                            span: Span { start: 41, end: 43 },
+                        }),
+                        right: Box::new(Expr {
+                            kind: ExprKind::Binary {
+                                op: BinOp::Div,
+                                left: Box::new(Expr {
+                                    kind: ExprKind::Lit(ExprLit::UInt(2)),
+                                    span: Span { start: 49, end: 50 },
+                                }),
+                                right: Box::new(Expr {
+                                    kind: ExprKind::Lit(ExprLit::UInt(3)),
+                                    span: Span { start: 53, end: 54 },
+                                }),
+                            },
+                            span: Span { start: 49, end: 54 },
+                        }),
+                    },
+                    span: Span { start: 41, end: 54 },
+                })],
+            ),
+            (
+                "
+                {
+                    let a: u8;
+                    let b: u8;
 
-        //            a = b = 69;
-        //        }
-        //        ",
-        //        vec![
-        //            Stmt::Local(Variable {
-        //                name: "a".to_owned(),
-        //                ty: Ty::UInt(UintTy::U8),
-        //                value: None,
-        //            }),
-        //            Stmt::Local(Variable {
-        //                name: "b".to_owned(),
-        //                ty: Ty::UInt(UintTy::U8),
-        //                value: None,
-        //            }),
-        //            Stmt::Expr(ExprKind::Binary {
-        //                op: BinOp::Assign,
-        //                left: Box::new(ExprKind::Ident("a".to_owned())),
-        //                right: Box::new(ExprKind::Binary {
-        //                    op: BinOp::Assign,
-        //                    left: Box::new(ExprKind::Ident("b".to_owned())),
-        //                    right: Box::new(ExprKind::Lit(ExprLit::UInt(69))),
-        //                }),
-        //            }),
-        //        ],
-        //    ),
-        //];
+                    a = b = 69;
+                }
+                ",
+                vec![
+                    Stmt::Local(Variable {
+                        name: "a".to_owned(),
+                        ty: Ty::UInt(UintTy::U8),
+                        value: None,
+                    }),
+                    Stmt::Local(Variable {
+                        name: "b".to_owned(),
+                        ty: Ty::UInt(UintTy::U8),
+                        value: None,
+                    }),
+                    Stmt::Expr(Expr {
+                        kind: ExprKind::Binary {
+                            op: BinOp::Assign,
+                            left: Box::new(Expr {
+                                kind: ExprKind::Ident("a".to_owned()),
+                                span: Span {
+                                    start: 102,
+                                    end: 103,
+                                },
+                            }),
+                            right: Box::new(Expr {
+                                kind: ExprKind::Binary {
+                                    op: BinOp::Assign,
+                                    left: Box::new(Expr {
+                                        kind: ExprKind::Ident("b".to_owned()),
+                                        span: Span {
+                                            start: 106,
+                                            end: 107,
+                                        },
+                                    }),
+                                    right: Box::new(Expr {
+                                        kind: ExprKind::Lit(ExprLit::UInt(69)),
+                                        span: Span {
+                                            start: 110,
+                                            end: 112,
+                                        },
+                                    }),
+                                },
+                                span: Span {
+                                    start: 106,
+                                    end: 112,
+                                },
+                            }),
+                        },
+                        span: Span {
+                            start: 102,
+                            end: 112,
+                        },
+                    }),
+                ],
+            ),
+        ];
 
-        //for (input, expected) in tests {
-        //    let mut diagnostics = Diagnostics::new(input);
-        //    let mut parser = Parser::new(Lexer::new(input), &mut diagnostics);
-        //    let ast = parser.parse_block_stmt().unwrap();
+        for (input, expected) in tests {
+            let mut diagnostics = Diagnostics::new(input);
+            let mut parser = Parser::new(Lexer::new(input), &mut diagnostics);
+            let ast = parser.parse_block_stmt().unwrap();
 
-        //    assert_eq!(
-        //        &ast.stmts, &expected,
-        //        "expected: {:?}, got: {:?}",
-        //        expected, ast
-        //    );
-        //}
+            assert_eq!(&ast.stmts, &expected);
+        }
     }
 }
