@@ -115,8 +115,8 @@ impl std::fmt::Display for Diagnostics<'_> {
 
             writeln!(f, "{color}{}{RESET}: {}", message.level, message.diag)?;
 
-            let col = self.row(message.span.start);
-            let row = self.column(message.span.start);
+            let row = self.row(message.span.start);
+            let col = self.column(message.span.start);
 
             writeln!(f, "notarealfilename.rs:{}:{}", col + 1, row + 1)?;
 
@@ -126,8 +126,8 @@ impl std::fmt::Display for Diagnostics<'_> {
                 writeln!(
                     f,
                     "{BLUE_FG}{} |{RESET} {}",
-                    col + 1,
-                    self.source.lines().nth(col).unwrap()
+                    row + 1,
+                    self.source.lines().nth(row).unwrap()
                 )?;
                 writeln!(
                     f,
