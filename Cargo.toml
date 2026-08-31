@@ -6,6 +6,7 @@ edition = "2024"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+bitflags = "2.13.1"
 bumpalo = "3.16.0"
 clap = { version = "4.5.9", features = ["derive"] }
 derive_more = { version = "1.0.0", features = ["display"] }

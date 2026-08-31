@@ -6,8 +6,16 @@ use crate::{
     diagnostics::{Diagnostic, Diagnostics},
     lexer::{Token, TokenKind, span::Span},
 };
+use bitflags::bitflags;
 use precedence::Precedence;
 use std::collections::HashMap;
+
+bitflags! {
+    #[derive(Clone, Copy)]
+    struct Constraints: u8 {
+        const NO_STRUCT_LIT = 1 << 0;
+    }
+}
 
 type PrefixFn<'a, 'src, T> = fn(&mut Parser<'a, 'src, T>) -> Result<Expr, ()>;
 type InfixFn<'a, 'src, T> = fn(&mut Parser<'a, 'src, T>, left: Expr) -> Result<Expr, ()>;
@@ -15,6 +23,7 @@ type InfixFn<'a, 'src, T> = fn(&mut Parser<'a, 'src, T>, left: Expr) -> Result<E
 pub(crate) struct Parser<'a, 'src, T: Iterator<Item = Result<Token, Span>>> {
     lexer: T,
     diag: &'a mut Diagnostics<'src>,
+    constraints: Constraints,
     prev_token: Option<Token>,
     cur_token: Option<Token>,
     peek_token: Option<Token>,
@@ -30,6 +39,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
             peek_token: None,
             lexer,
             diag,
+            constraints: Constraints::empty(),
             prefix_fns: HashMap::from([
                 (
                     TokenKind::Ident(Default::default()),
@@ -125,6 +135,25 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
                 Err(())
             }
         }
+    }
+
+    fn with_constraints<O, F: FnOnce(&mut Self) -> O>(
+        &mut self,
+        constraints: Constraints,
+        f: F,
+    ) -> O {
+        let old = std::mem::replace(&mut self.constraints, constraints);
+        let result = f(self);
+
+        self.constraints = old;
+
+        result
+    }
+
+    fn parse_expr_no_struct_lit(&mut self) -> Result<Expr, ()> {
+        self.with_constraints(self.constraints | Constraints::NO_STRUCT_LIT, |this| {
+            this.parse_expr(Precedence::default())
+        })
     }
 
     pub(crate) fn parse(&mut self) -> Result<Vec<Item>, ()> {
@@ -390,7 +419,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
     fn parse_if_stmt(&mut self) -> Result<Stmt, ()> {
         self.expect(&TokenKind::If)?;
 
-        let condition = self.parse_expr(Precedence::default())?;
+        let condition = self.parse_expr_no_struct_lit()?;
         let consequence = self.parse_block_stmt()?;
         let alternative = if self.cur_token_is(&TokenKind::Else) {
             self.expect(&TokenKind::Else)?;
@@ -410,7 +439,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
     fn parse_while_stmt(&mut self) -> Result<Stmt, ()> {
         self.expect(&TokenKind::While)?;
 
-        let condition = self.parse_expr(Precedence::default())?;
+        let condition = self.parse_expr_no_struct_lit()?;
         let block = self.parse_block_stmt()?;
 
         Ok(Stmt::While { condition, block })
@@ -441,7 +470,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         let increment = if self.cur_token_is(&TokenKind::LBrace) {
             None
         } else {
-            Some(self.parse_expr(Precedence::default())?)
+            Some(self.parse_expr_no_struct_lit()?)
         };
 
         let block = self.parse_block_stmt()?;
@@ -572,7 +601,9 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
             Some(Token {
                 kind: TokenKind::LBrace,
                 ..
-            }) => self.parse_struct_expr(),
+            }) if !self.constraints.contains(Constraints::NO_STRUCT_LIT) => {
+                self.parse_struct_expr()
+            }
             _ => {
                 let (ident, span) = self.parse_ident()?;
 
@@ -858,11 +889,16 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
     }
 
     fn parse_grouped_expr(&mut self) -> Result<Expr, ()> {
-        self.expect(&TokenKind::LParen)?;
-        let expr = self.parse_expr(Precedence::default())?;
-        self.expect(&TokenKind::RParen)?;
+        self.with_constraints(
+            self.constraints.difference(Constraints::NO_STRUCT_LIT),
+            |this| {
+                this.expect(&TokenKind::LParen)?;
+                let expr = this.parse_expr(Precedence::default())?;
+                this.expect(&TokenKind::RParen)?;
 
-        Ok(expr)
+                Ok(expr)
+            },
+        )
     }
 
     fn parse_array_expr(&mut self) -> Result<Expr, ()> {
