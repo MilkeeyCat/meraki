@@ -118,7 +118,7 @@ impl std::fmt::Display for Diagnostics<'_> {
             let row = self.row(message.span.start);
             let col = self.column(message.span.start);
 
-            writeln!(f, "notarealfilename.rs:{}:{}", col + 1, row + 1)?;
+            writeln!(f, "notarealfilename.rs:{}:{}", row + 1, col + 1)?;
 
             if self.lines(&message.span) > 1 {
                 todo!("Dunno how to handle multiline diagnostics");
