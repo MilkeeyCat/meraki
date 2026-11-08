@@ -102,10 +102,10 @@ impl<'src> Diagnostics<'src> {
 
 impl std::fmt::Display for Diagnostics<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        const RED_FG: &'static str = "\x1b[1;31m";
-        const YELLOW_FG: &'static str = "\x1b[1;33m";
-        const BLUE_FG: &'static str = "\x1b[1;34m";
-        const RESET: &'static str = "\x1b[0m";
+        const RED_FG: &str = "\x1b[1;31m";
+        const YELLOW_FG: &str = "\x1b[1;33m";
+        const BLUE_FG: &str = "\x1b[1;34m";
+        const RESET: &str = "\x1b[0m";
 
         for message in &self.messages {
             let color = match message.level {

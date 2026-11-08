@@ -114,7 +114,7 @@ impl<'ir> TyProblem<'ir> {
             Ty::Infer(Some(infer_ty)) => {
                 let id: Id = infer_ty.clone().into();
 
-                self.ty_vars[id.0].map(|ty| self.resolve_ty(ty)).flatten()
+                self.ty_vars[id.0].and_then(|ty| self.resolve_ty(ty))
             }
             Ty::Infer(None) => unreachable!(),
             ty => Some(ty),
@@ -233,7 +233,7 @@ impl<'ir> TyProblem<'ir> {
                 Some(ty) => match ty {
                     Ty::Adt(idx) => {
                         let variant = &ctx.get_adt(*idx).variants[0];
-                        let (_, field) = variant.get_field_by_name(&field_name).unwrap();
+                        let (_, field) = variant.get_field_by_name(field_name).unwrap();
 
                         self.unify(field_ty, field.ty);
                         progress |= true;

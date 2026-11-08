@@ -43,7 +43,7 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                     assert!(
                         self.symbol_table.insert_symbol(variable.name.clone(), id),
                         "Symbol {} is defined multiple times",
-                        &variable.name
+                        variable.name
                     );
                 }
                 ast::Item::Fn { name, .. } => {
@@ -69,14 +69,14 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
             ast::ExprKind::Binary { op, left, right } => ir::Expr {
                 id: self.next_id(),
                 kind: Box::new(ir::ExprKind::Binary(
-                    op.clone(),
+                    *op,
                     self.lower_expr(left),
                     self.lower_expr(right),
                 )),
             },
             ast::ExprKind::Unary { op, expr } => ir::Expr {
                 id: self.next_id(),
-                kind: Box::new(ir::ExprKind::Unary(op.clone(), self.lower_expr(expr))),
+                kind: Box::new(ir::ExprKind::Unary(*op, self.lower_expr(expr))),
             },
             ast::ExprKind::Lit(lit) => {
                 let lit = match lit {
@@ -282,7 +282,7 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
                 ty: self.lower_ty(ty),
             })),
             ast::Ty::Fn(params, ret_ty) => {
-                let params: Vec<_> = params.into_iter().map(|ty| self.lower_ty(ty)).collect();
+                let params: Vec<_> = params.iter().map(|ty| self.lower_ty(ty)).collect();
                 let params = self.ctx.allocator.alloc_slice_copy(&params);
 
                 self.ctx
@@ -291,8 +291,8 @@ impl<'a, 'ir> Lowering<'a, 'ir> {
             }
             ast::Ty::Ident(ident) => self
                 .symbol_table
-                .find_ty(&ident)
-                .expect(&format!("Type `{ident}` not found")),
+                .find_ty(ident)
+                .unwrap_or_else(|| panic!("Type `{ident}` not found")),
             ast::Ty::Infer => &ir::Ty::Infer(None),
         }
     }

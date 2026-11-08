@@ -61,8 +61,8 @@ impl<'ir> Visitor<'ir> for InferCtx<'_, 'ir> {
             ExprKind::Ident(id) => self
                 .types
                 .get(&(*id).into())
-                .map(|ty| *ty)
-                .unwrap_or_else(|| self.symbols[&(*id).into()].ty()),
+                .copied()
+                .unwrap_or_else(|| self.symbols[id].ty()),
             ExprKind::Lit(lit) => match lit {
                 ExprLit::Bool(_) => self.ctx.types.bool,
                 ExprLit::String(_) => self.ctx.allocator.alloc(Ty::Ptr(self.ctx.types.u8)),
@@ -203,7 +203,7 @@ fn resolve_ty<'ir>(
 ) -> &'ir Ty<'ir> {
     match ty {
         Ty::Infer(ty) => resolve_ty(ctx, types, types[&ty.clone().unwrap().into()]),
-        Ty::Ptr(ty) => ctx.allocator.alloc(Ty::Ptr(resolve_ty(ctx, types, *ty))),
+        Ty::Ptr(ty) => ctx.allocator.alloc(Ty::Ptr(resolve_ty(ctx, types, ty))),
         ty => ty,
     }
 }

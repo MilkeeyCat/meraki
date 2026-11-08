@@ -35,7 +35,7 @@ impl<'ir> Visitor<'ir> for TypeCheck<'_, 'ir> {
                 let expr_ty = &expr
                     .as_ref()
                     .map(|expr| self.types[&expr.id])
-                    .unwrap_or(&&Ty::Void);
+                    .unwrap_or(&Ty::Void);
 
                 assert!(
                     *expr_ty == ret_ty,

@@ -36,14 +36,14 @@ impl<'ir> SymbolTable<'ir> {
     where
         F: Fn(&'a Scope<'ir>) -> Option<O>,
     {
-        self.0.iter().rev().find_map(|scope| f(scope))
+        self.0.iter().rev().find_map(f)
     }
 
     fn find_mut<F, O>(&mut self, f: F) -> Option<&mut O>
     where
         F: for<'s> Fn(&'s mut Scope<'ir>) -> Option<&'s mut O>,
     {
-        self.0.iter_mut().rev().find_map(|scope| f(scope))
+        self.0.iter_mut().rev().find_map(f)
     }
 
     pub(super) fn find_symbol(&self, name: &str) -> Option<Id> {

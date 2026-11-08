@@ -476,7 +476,7 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         let block = self.parse_block_stmt()?;
 
         Ok(Stmt::For {
-            initializer: initializer.map(|initializer| Box::new(initializer)),
+            initializer: initializer.map(Box::new),
             condition,
             increment,
             block,
@@ -738,8 +738,6 @@ impl<'a, 'src, T: Iterator<Item = Result<Token, Span>>> Parser<'a, 'src, T> {
         while !self.cur_token_is(&TokenKind::RParen) {
             tokens.push(self.cur_token.clone().ok_or_else(|| {
                 self.expected(&[&TokenKind::RParen]);
-
-                ()
             })?);
             self.bump();
         }
